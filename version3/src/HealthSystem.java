@@ -21,7 +21,7 @@ import java.util.List;
  * v3.0 UI: 侧边栏导航 + 玻璃态登录 + 增强卡片 + 贝塞尔曲线图表
  */
 public class HealthSystem {
-    static final String DB_URL = "jdbc:postgresql://localhost:5432/health_db";
+    static final String DB_URL = "jdbc:postgresql://localhost:5432/health_db?characterEncoding=UTF-8&client_encoding=UTF8";
     static final String DB_USER = "postgres";
     static final String DB_PASS = "12345678";
     static String currentUsername;
@@ -683,7 +683,7 @@ public class HealthSystem {
             JLabel lblHint=new JLabel("综合 BMI、体脂率、BMR、TDEE 等指标生成评估报告"); lblHint.setFont(Theme.FONT_SMALL); lblHint.setForeground(Theme.TEXT_GRAY);
             btnPanel.add(lblHint); btnCard.add(btnPanel,BorderLayout.CENTER); add(btnCard,BorderLayout.NORTH);
             RoundedPanel reportCard=Theme.createCardPanel("健康分析评估报告",Theme.PRIMARY);
-            taResult=new JTextArea(); taResult.setFont(new Font("Consolas",Font.PLAIN,13)); taResult.setEditable(false);
+            taResult=new JTextArea(); taResult.setFont(new Font(Theme.FONT_NAME,Font.PLAIN,13)); taResult.setEditable(false);
             taResult.setForeground(Theme.TEXT_DARK); taResult.setBackground(Theme.CARD_BG); taResult.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));
             JScrollPane scroll=new JScrollPane(taResult); scroll.setOpaque(false); scroll.getViewport().setOpaque(false); scroll.setBorder(BorderFactory.createEmptyBorder());
             reportCard.add(scroll,BorderLayout.CENTER); add(reportCard,BorderLayout.CENTER); refresh();
