@@ -1,0 +1,20 @@
+# BMI 体质评估与预测系统
+
+基于 Java Swing 的健康管理系统，采用版本化目录管理。
+
+## 版本列表
+| 版本 | 目录 | 说明 |
+|------|------|------|
+| v1.0 | [version1/](version1/) | 初始版本 |
+
+## 快速开始
+1. 进入对应版本目录（如 `version1/`）
+2. 按照 README.md 配置数据库
+3. 双击 `run.bat` 运行
+
+## 技术栈
+- Java (JDK 8+) + Java Swing
+- PostgreSQL 数据库
+
+## 版本变更记录
+详见 [CHANGELOG.md](CHANGELOG.md)
