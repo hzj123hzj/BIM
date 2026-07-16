@@ -7,11 +7,60 @@
 |------|------|------|------|
 | v1.0 | `version1/` | 初始版本：Java Swing 桌面应用，含 UI 升级（Nimbus + 主题系统） | ✅ 稳定 |
 | v2.0 | `version2/` | UI 全面改造升级：现代配色、圆角按钮、渐变图表、动画效果 | ✅ 稳定 |
-| v3.0 | `version3/` | （待开发） | 📋 规划中 |
+| v3.0 | `version3/` | Aurora 设计系统：深色侧边栏导航 + 玻璃态登录 + 贝塞尔曲线图表 + 渐变按钮 | ✅ 稳定 |
 
 ## Git 标签
 - `v1.0.0` - version1 初始发布
 - `v2.0.0` - version2 UI 全面升级
+- `v3.0.0` - version3 Aurora 设计系统
+
+---
+
+## v3.0.0 (2026-07-16)
+### Aurora 设计系统 — UI 全面重构
+
+#### 导航系统重构
+- **深色侧边栏导航**：取代 JTabbedPane，新增 `SidebarNav` + `NavItem` 组件
+- 侧边栏使用深紫渐变背景 (#161424 → #232038)，220px 固定宽度
+- NavItem 支持图标 + 文字，选中态使用渐变背景 (Indigo → Violet)，悬停态半透明白色
+- 顶部 Logo 区域：渐变圆形图标 + 品牌文字
+- 底部版本标识区域
+
+#### 登录窗口重构
+- **分屏玻璃态设计**：左侧 380px 三色渐变品牌面板 (TriGradientPanel) + 右侧白色表单
+- 左侧使用 GRAD_LOGIN 三色渐变 (Indigo → Purple → Magenta)
+- 品牌区域：大号 Logo 圆形图标 + 双行标题 + Aurora 标语 + 版权信息
+- 右侧表单区使用 JTabbedPane 切换登录/注册
+- 关闭按钮悬停变红色
+
+#### 图表系统升级
+- **贝塞尔平滑曲线**：折线图使用 `Path2D.curveTo()` 绘制三次贝塞尔曲线
+- 渐变填充区域使用贝塞尔路径闭合
+- 图表背景使用圆角矩形
+- 预测虚线保留直线样式
+
+#### 组件增强
+- **RoundButton 渐变模式**：新增 `setGradient(true)` 支持渐变填充 + 顶部半透明高光
+- **RoundedPanel 四层阴影**：从 3 层升级为 4 层渐进阴影 + 顶部白色描边高光
+- **TriGradientPanel**：新增三色线性渐变面板 (LinearGradientPaint)
+- **PieChartPanel 环形图**：饼图增加中心镂空形成环形效果，图例使用圆角方块
+- **createMetricCard 增强**：指标卡片增加 4 层外发光 + 渐变背景 + 顶部半透明覆盖层
+
+#### 配色系统更新
+- 强调色从 Teal (#14B8A6) 更改为 Rose (#F43F94)
+- 新增侧边栏配色：SIDEBAR_BG (#161424) / SIDEBAR_BG2 (#232038) / SIDEBAR_HOVER / SIDEBAR_TEXT
+- 新增 GRAD_LOGIN 三色渐变、GRAD_SIDEBAR 双色渐变
+- 所有按钮使用渐变模式
+
+#### MainFrame 架构变更
+- 使用 `CardLayout` 替代 `JTabbedPane` 进行内容切换
+- `switchToTab(int)` 调用 `cardLayout.show()` 切换面板
+- 8 个面板通过 SidebarNav 导航切换
+
+#### 业务逻辑保持不变
+- 完整保留 v2.0 全部业务逻辑：PasswordUtil / DBUtil / HealthCalculator
+- 数据库操作、健康计算、预测算法零改动
+- 所有 8 个功能模块业务逻辑一致
 
 ---
 
