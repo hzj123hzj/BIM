@@ -9,12 +9,43 @@
 | v2.0 | `version2/` | UI 全面改造升级：现代配色、圆角按钮、渐变图表、动画效果 | ✅ 稳定 |
 | v3.0 | `version3/` | Aurora 设计系统：深色侧边栏导航 + 玻璃态登录 + 贝塞尔曲线图表 + 渐变按钮 | ✅ 稳定 |
 | v4.0 | `version4/` | UI 全面重设计：Indigo/Emerald 设计令牌 + 深色侧边栏导航 + 自绘圆角按钮/表格 | ✅ 稳定 |
+| v5.0 | `version5/` | **Web 重构**：Vue 3 + Vite + TS 重写 UI，Botanical Calm 设计语言，算法 1:1 移植 | ✅ 稳定 |
 
 ## Git 标签
 - `v1.0.0` - version1 初始发布
 - `v2.0.0` - version2 UI 全面升级
 - `v3.0.0` - version3 Aurora 设计系统
 - `v4.0.0` - version4 UI 全面重设计
+- `v5.0.0` - version5 Web 重构（Vue 3 + Vite + TS）
+
+---
+
+## v5.0.0 (2026-07-16)
+### Web 化重构 — 用 Vue 替代丑陋的 Swing 桌面 UI
+
+> 缘起：version2 的 Java Swing 界面被评价「太丑」，且本质是桌面客户端而非 Web 应用。
+> v5 用 **Vue 3 + Vite + TypeScript** 重写了整套前端，并完整保留原有业务逻辑与全部健康算法。
+
+#### 设计语言：Botanical Calm（植物疗愈）
+- 深常绿（evergreen）深色侧边栏 + 暖奶油色画布，告别纯黑/纯白与「紫蓝渐变发光」的套壳 AI 风
+- 主色草本绿 `#1F8A6D`、强调色杏橘珊瑚 `#FF7A5C`、目标金 `#F4B740`
+- 字体：展示字体 Sora + 正文 Manrope（避开 Inter 套路）
+- 统一设计令牌：颜色 / 间距 / 圆角 / 阴影 / 缓动（ease-out-expo）
+
+#### 技术实现
+- **零 UI 组件库、零图表库**：侧边栏、指标卡、进度环、折线图、环形图、横向条全部手写 SVG，轻量且视觉可控
+- **算法 1:1 移植**：`src/lib/health.ts` 从 Java `HealthCalculator` 逐行移植（BMI / 体脂 / 内脏脂肪 / 身体年龄 / 五维健康评分 / 运动热量 MET / 线性回归预测 / 目标达成天数），web 端计算结果与 Java 端一致
+- **可切换数据层**：`src/services/api.ts` 默认 `mock` 模式（localStorage 持久化，含 80 种食物种子 + demo 体验账号 30 天样例数据），可一键切到 `http` 模式对接真实 Java 后端
+- **响应式 + 可访问性**：移动端抽屉式导航；语义标签、键盘可达、`focus-visible` 焦点环、尊重 `prefers-reduced-motion`
+- 路由懒加载、纯静态产物可直接部署
+
+#### 模块覆盖（与 Java 版 8 大模块对齐）
+数据大屏 / 数据录入 / 历史趋势 / 分析评估 / 预测分析 / 目标计划 / 饮食管理 / 成就徽章 + 登录注册
+
+#### 运行
+```bash
+cd version5 && npm install && npm run dev   # 体验账号 demo / demo123
+```
 
 ---
 
