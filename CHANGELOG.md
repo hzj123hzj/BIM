@@ -6,11 +6,34 @@
 | 版本 | 目录 | 说明 | 状态 |
 |------|------|------|------|
 | v1.0 | `version1/` | 初始版本：Java Swing 桌面应用，含 UI 升级（Nimbus + 主题系统） | ✅ 稳定 |
-| v2.0 | `version2/` | （待开发） | 🚧 计划中 |
+| v2.0 | `version2/` | UI 全面改造升级：现代配色、圆角按钮、渐变图表、动画效果 | ✅ 稳定 |
 | v3.0 | `version3/` | （待开发） | 📋 规划中 |
 
 ## Git 标签
 - `v1.0.0` - version1 初始发布
+- `v2.0.0` - version2 UI 全面升级
+
+---
+
+## v2.0.0 (2026-07-16)
+### UI 全面升级
+- **现代配色方案**：深靛蓝 (Indigo #6366F1) 主色 + 青绿 (Teal #14B8A6) 强调色，替代旧版青蓝+暖橙
+- **分级字体系统**：8 级字体 (H1/H2/Title/Header/Body/BodyB/Small/Tiny/BigNum)，优先 Microsoft YaHei UI
+- **RoundButton 组件**：自定义圆角按钮，带悬停色变效果和阴影
+- **输入框焦点动画**：获取焦点时边框变粗变为主色
+- **表格现代化**：斑马纹背景、无竖线、底部主色边框、32px 行高
+- **折线图升级**：渐变填充区域、白边数据点、现代配色
+- **淡入动画工具**：FadeIn 类实现窗口/面板淡入过渡
+- **登录窗口重构**：无边框全屏渐变、Logo 圆形图标、淡入动画
+- **主窗口升级**：深色渐变顶栏、浅色底部状态栏、emoji 用户信息
+- **DashboardPanel**：使用渐变指标卡片 (createMetricCard)
+- **响应式适配**：设置 minimumSize 支持窗口缩放
+
+### 技术改进
+- Theme 类新增 6 种渐变色对 (GRAD_PRIMARY/ACCENT/SUNSET/OCEAN/HEADER)
+- RoundedPanel 增强为多层柔和阴影
+- GradientPanel 支持数组构造
+- 新增 styleGhostButton、styleDangerButton、stylePasswordField、styleSpinner 方法
 
 ---
 
