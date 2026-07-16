@@ -106,7 +106,7 @@ public class HealthSystem {
         static void styleComboBox(JComboBox<?> cb) { cb.setFont(FONT_BODY); cb.setForeground(TEXT_DARK); cb.setBackground(CARD_BG); cb.setBorder(BorderFactory.createLineBorder(BORDER,1)); cb.setCursor(new Cursor(Cursor.HAND_CURSOR)); }
         static void styleSpinner(JSpinner sp) { sp.setFont(FONT_BODY); sp.setForeground(TEXT_DARK); sp.setBackground(CARD_BG); ((JSpinner.DefaultEditor)sp.getEditor()).getTextField().setBorder(BorderFactory.createEmptyBorder(5,8,5,8)); }
         static void styleTable(JTable table) { table.setFont(FONT_BODY); table.setForeground(TEXT_DARK); table.setBackground(CARD_BG); table.setRowHeight(36); table.setSelectionBackground(new Color(238,242,255)); table.setSelectionForeground(PRIMARY_D); table.setGridColor(BORDER_L); table.setShowVerticalLines(false); table.setShowHorizontalLines(true); table.setIntercellSpacing(new Dimension(0,0)); table.getTableHeader().setFont(FONT_HEADER); table.getTableHeader().setBackground(new Color(248,250,252)); table.getTableHeader().setForeground(TEXT_BODY); table.getTableHeader().setBorder(BorderFactory.createMatteBorder(0,0,2,0,PRIMARY)); table.getTableHeader().setReorderingAllowed(false); }
-        static JPanel createCardPanel(String title, Color stripeColor) {
+        static RoundedPanel createCardPanel(String title, Color stripeColor) {
             RoundedPanel card = new RoundedPanel(new BorderLayout(8,8), 16); card.setBackground(CARD_BG); card.setBorder(BorderFactory.createEmptyBorder(16,18,18,18));
             if (title != null && !title.isEmpty()) {
                 JPanel headerPanel = new JPanel(new BorderLayout()); headerPanel.setOpaque(false);
