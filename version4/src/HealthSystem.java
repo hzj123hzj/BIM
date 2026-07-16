@@ -160,6 +160,13 @@ public class HealthSystem {
         static final Color[] GRAD_OCEAN   = { new Color(56, 189, 248), new Color(59, 130, 246) };
         static final Color[] GRAD_HEADER  = { new Color(238, 242, 255), new Color(224, 231, 255) };
 
+        // Keep 风格鲜绿强调色 (报告 / 运动感)
+        static final Color KEEP      = new Color(18, 184, 71);
+        static final Color KEEP_D    = new Color(12, 150, 58);
+        static final Color KEEP_L    = new Color(64, 205, 110);
+        static final Color KEEP_BG   = new Color(244, 250, 246);
+        static final Color KEEP_SOFT = new Color(231, 245, 236);
+
         // Spacing scale (4px base)
         static final int SP1 = 4, SP2 = 8, SP3 = 12, SP4 = 16, SP5 = 20, SP6 = 24, SP8 = 32, SP10 = 40, SP12 = 48;
         // Radii
@@ -464,6 +471,130 @@ public class HealthSystem {
         }
         static RoundedPanel createMetricCard(String label, String value, Color[] gradient) {
             return createMetricCard("\uD83D\uDCCA", label, value, gradient);
+        }
+
+        // ---- 报告专用组件 (Keep 风格可视化) ----
+        static JLabel createBadge(String text, Color bg, Color fg) {
+            JLabel b = new JLabel(text, SwingConstants.CENTER);
+            b.setFont(FONT_TINY); b.setForeground(fg);
+            b.setOpaque(true); b.setBackground(bg);
+            b.setBorder(BorderFactory.createEmptyBorder(4, 12, 4, 12));
+            return b;
+        }
+
+        static RoundedPanel createStatCard(String label, String value, String unit, Color accent) {
+            RoundedPanel card = new RoundedPanel(new BorderLayout(0, 6), R_LG);
+            card.setBackground(CARD_BG);
+            card.setBorder(BorderFactory.createLineBorder(BORDER_L, 1));
+            JPanel strip = new JPanel(); strip.setOpaque(true); strip.setBackground(accent);
+            strip.setPreferredSize(new Dimension(5, 0));
+            JPanel inner = new JPanel(new BorderLayout(0, 6)); inner.setOpaque(false);
+            inner.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+            JLabel lblLabel = new JLabel(label); lblLabel.setFont(FONT_SMALL); lblLabel.setForeground(TEXT_GRAY);
+            JPanel valRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0)); valRow.setOpaque(false);
+            JLabel lblValue = new JLabel(value); lblValue.setFont(FONT_BIG_NUM); lblValue.setForeground(TEXT_DARK);
+            valRow.add(lblValue);
+            if (unit != null && !unit.isEmpty()) {
+                JLabel lblUnit = new JLabel(unit); lblUnit.setFont(FONT_SMALL); lblUnit.setForeground(TEXT_LIGHT);
+                lblUnit.setBorder(BorderFactory.createEmptyBorder(0, 4, 4, 0)); valRow.add(lblUnit);
+            }
+            inner.add(lblLabel, BorderLayout.NORTH); inner.add(valRow, BorderLayout.CENTER);
+            card.add(strip, BorderLayout.WEST); card.add(inner, BorderLayout.CENTER);
+            return card;
+        }
+
+        static JPanel createInfoRow(String label, String value) {
+            JPanel row = new JPanel(new BorderLayout(8, 0)); row.setOpaque(false);
+            row.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 1, 0, BORDER_L),
+                    BorderFactory.createEmptyBorder(9, 4, 9, 4)));
+            JLabel l = new JLabel(label); l.setFont(FONT_BODY); l.setForeground(TEXT_GRAY);
+            JLabel v = new JLabel(value); v.setFont(FONT_BODY_B); v.setForeground(TEXT_DARK);
+            v.setHorizontalAlignment(SwingConstants.RIGHT);
+            row.add(l, BorderLayout.WEST); row.add(v, BorderLayout.EAST);
+            return row;
+        }
+
+        static RoundedPanel createReportHeader(String title, String subtitle, String dateText, Color c1, Color c2) {
+            RoundedPanel header = new RoundedPanel(new BorderLayout(16, 0), R_LG) {
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    GradientPaint gp = new GradientPaint(0, 0, c1, getWidth(), getHeight(), c2);
+                    g2.setPaint(gp); g2.fillRoundRect(0, 0, getWidth(), getHeight(), R_LG, R_LG);
+                    g2.dispose();
+                }
+            };
+            header.setOpaque(false);
+            header.setBorder(BorderFactory.createEmptyBorder(20, 24, 20, 24));
+            JPanel icon = new JPanel() {
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(new Color(255, 255, 255, 45)); g2.fillOval(0, 0, getWidth(), getHeight());
+                    g2.dispose();
+                }
+            };
+            icon.setOpaque(false); icon.setPreferredSize(new Dimension(48, 48)); icon.setLayout(new BorderLayout());
+            JLabel il = new JLabel("\uD83D\uDCCB"); il.setFont(new Font(FONT_NAME, Font.PLAIN, 22));
+            il.setForeground(Color.WHITE); il.setHorizontalAlignment(SwingConstants.CENTER); icon.add(il);
+            JPanel txt = new JPanel(new BorderLayout(4, 2)); txt.setOpaque(false);
+            JLabel t = new JLabel(title); t.setFont(FONT_H1); t.setForeground(Color.WHITE);
+            JLabel s = new JLabel(subtitle); s.setFont(FONT_SMALL); s.setForeground(new Color(255, 255, 255, 215));
+            txt.add(t, BorderLayout.NORTH); txt.add(s, BorderLayout.CENTER);
+            JPanel right = new JPanel(new BorderLayout()); right.setOpaque(false);
+            JLabel d = new JLabel(dateText); d.setFont(FONT_SMALL); d.setForeground(Color.WHITE);
+            d.setOpaque(true); d.setBackground(new Color(255, 255, 255, 45));
+            d.setHorizontalAlignment(SwingConstants.CENTER);
+            d.setBorder(BorderFactory.createEmptyBorder(6, 14, 6, 14));
+            right.add(d, BorderLayout.NORTH);
+            header.add(icon, BorderLayout.WEST); header.add(txt, BorderLayout.CENTER); header.add(right, BorderLayout.EAST);
+            return header;
+        }
+
+        static class ProgressRing extends JPanel {
+            private int percent; private Color color; private String centerText; private String subText;
+            ProgressRing(int percent, Color color, String centerText, String subText) {
+                this.percent = Math.max(0, Math.min(100, percent)); this.color = color;
+                this.centerText = centerText; this.subText = subText;
+                setOpaque(false); setPreferredSize(new Dimension(150, 150));
+            }
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int w = getWidth(), h = getHeight();
+                int size = Math.min(w, h) - 26; int x = (w - size) / 2, y = (h - size) / 2;
+                g2.setStroke(new BasicStroke(14, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 38));
+                g2.drawArc(x, y, size, size, 0, 360);
+                g2.setColor(color);
+                int a = -(int) (percent / 100.0 * 360);
+                g2.drawArc(x, y, size, size, 90, a);
+                g2.setColor(TEXT_DARK); g2.setFont(FONT_BIG_NUM);
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString(centerText, (w - fm.stringWidth(centerText)) / 2, h / 2 + fm.getAscent() / 2 - 6);
+                g2.setColor(TEXT_GRAY); g2.setFont(FONT_SMALL);
+                FontMetrics fm2 = g2.getFontMetrics();
+                g2.drawString(subText, (w - fm2.stringWidth(subText)) / 2, h / 2 + fm.getAscent() / 2 + 16);
+                g2.dispose();
+            }
+        }
+
+        static RoundedPanel emptyReportCard(String icon, String title, String desc) {
+            RoundedPanel card = new RoundedPanel(new BorderLayout(12, 10), R_LG);
+            card.setBackground(CARD_BG);
+            card.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(BORDER_L, 1),
+                    BorderFactory.createEmptyBorder(44, 44, 44, 44)));
+            JLabel ic = new JLabel(icon, SwingConstants.CENTER);
+            ic.setFont(new Font(FONT_NAME, Font.PLAIN, 40)); ic.setForeground(TEXT_LIGHT);
+            JLabel t = new JLabel(title, SwingConstants.CENTER); t.setFont(FONT_H2); t.setForeground(TEXT_BODY);
+            JLabel d = new JLabel("<html><div style='text-align:center;line-height:1.6'>" + desc + "</div></html>", SwingConstants.CENTER);
+            d.setFont(FONT_SMALL); d.setForeground(TEXT_GRAY);
+            JPanel center = new JPanel(new BorderLayout(10, 10)); center.setOpaque(false);
+            center.add(ic, BorderLayout.NORTH); center.add(t, BorderLayout.CENTER); center.add(d, BorderLayout.SOUTH);
+            card.add(center, BorderLayout.CENTER);
+            return card;
         }
 
         static void addHoverEffect(JButton btn, Color normal, Color hover) { /* retained for compatibility */ }
@@ -2396,51 +2527,78 @@ public class HealthSystem {
     //             第八部分: Tab3 分析评估面板
     // ================================================================
 
-    /** 分析评估面板 — v2.0 现代报告布局 */
+        /** 分析评估面板 — Keep 风格可视化健康报告 */
     static class AnalysisPanel extends JPanel {
-        private JTextArea taResult;
+        private JPanel content;
+        private JScrollPane scroll;
+
+        private Color[] statusColors(String s) {
+            if (s == null) return new Color[]{Theme.TEXT_LIGHT, Theme.TEXT_GRAY};
+            if (s.contains("严重") || s.contains("肥胖") || s.contains("危险") || s.contains("过高")
+                    || s.contains("需改善") || s.contains("需关注"))
+                return new Color[]{new Color(254, 226, 226), new Color(185, 28, 28)};
+            if (s.contains("偏高") || s.contains("偏低") || s.contains("超重") || s.contains("过慢"))
+                return new Color[]{new Color(254, 243, 199), new Color(180, 83, 9)};
+            return new Color[]{new Color(231, 245, 236), new Color(12, 150, 58)};
+        }
+
+        private JPanel statCard(String label, String value, String unit, String status) {
+            RoundedPanel c = Theme.createStatCard(label, value, unit,
+                    status == null ? Theme.KEEP : statusColors(status)[1]);
+            JPanel wrap = new JPanel(new BorderLayout(0, 8));
+            wrap.setOpaque(false);
+            wrap.add(c, BorderLayout.CENTER);
+            if (status != null && !status.isEmpty()) {
+                Color[] st = statusColors(status);
+                JLabel badge = Theme.createBadge(status, st[0], st[1]);
+                JPanel bw = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+                bw.setOpaque(false); bw.add(badge);
+                wrap.add(bw, BorderLayout.SOUTH);
+            }
+            return wrap;
+        }
+
+        private JPanel sectionCard(String title, Component body) {
+            JPanel card = Theme.createCardPanel(title, Theme.KEEP);
+            card.add(body, BorderLayout.CENTER);
+            return card;
+        }
 
         AnalysisPanel() {
-            setLayout(new BorderLayout(10, 10));
-            setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+            setLayout(new BorderLayout(14, 14));
+            setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
             setBackground(Theme.BG);
 
-            // === 按钮卡片 ===
-            JPanel btnCard = Theme.createCardPanel("分析评估", Theme.PRIMARY);
-            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-            btnPanel.setOpaque(false);
-            JButton btnRefresh = new RoundButton("🔄 刷新分析结果", Theme.PRIMARY, Theme.PRIMARY_D);
+            JPanel topBar = new JPanel(new BorderLayout(10, 0));
+            topBar.setOpaque(false);
+            JButton btnRefresh = new RoundButton("\u21BB 重新生成报告", Theme.KEEP, Theme.KEEP_L, Theme.KEEP_D);
             btnRefresh.addActionListener(e -> refresh());
-            btnPanel.add(btnRefresh);
-            JLabel lblHint = new JLabel("综合 BMI、体脂率、BMR、TDEE 等指标生成评估报告");
-            lblHint.setFont(Theme.FONT_SMALL);
-            lblHint.setForeground(Theme.TEXT_GRAY);
-            btnPanel.add(lblHint);
-            btnCard.add(btnPanel, BorderLayout.CENTER);
-            add(btnCard, BorderLayout.NORTH);
+            JLabel hint = new JLabel("综合 BMI、体脂率、BMR、TDEE 等指标生成评估报告");
+            hint.setFont(Theme.FONT_SMALL); hint.setForeground(Theme.TEXT_GRAY);
+            topBar.add(btnRefresh, BorderLayout.WEST);
+            topBar.add(hint, BorderLayout.EAST);
+            add(topBar, BorderLayout.NORTH);
 
-            // === 报告卡片 ===
-            JPanel reportCard = Theme.createCardPanel("健康分析评估报告", Theme.PRIMARY);
-            taResult = new JTextArea();
-            taResult.setFont(new Font("Consolas", Font.PLAIN, 13));
-            taResult.setEditable(false);
-            taResult.setForeground(Theme.TEXT_DARK);
-            taResult.setBackground(Theme.CARD_BG);
-            taResult.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-            JScrollPane scroll = new JScrollPane(taResult);
-            scroll.setOpaque(false);
-            scroll.getViewport().setOpaque(false);
+            content = new JPanel();
+            content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+            content.setOpaque(false);
+            content.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
+            scroll = new JScrollPane(content);
             scroll.setBorder(BorderFactory.createEmptyBorder());
-            reportCard.add(scroll, BorderLayout.CENTER);
-            add(reportCard, BorderLayout.CENTER);
+            scroll.getViewport().setOpaque(false);
+            scroll.setOpaque(false);
+            add(scroll, BorderLayout.CENTER);
 
             refresh();
         }
 
         void refresh() {
+            content.removeAll();
             Map<String, Object> latest = DBUtil.getLatestHealthRecord();
             if (latest == null) {
-                taResult.setText("暂无健康记录, 请先在「数据录入」页面录入数据");
+                content.add(Theme.emptyReportCard("\uD83D\uDCEC", "尚未录入健康数据",
+                        "请先在「健康数据录入」页面添加一条记录，系统会自动生成这份分析报告。"));
+                content.revalidate(); content.repaint();
                 return;
             }
 
@@ -2457,88 +2615,83 @@ public class HealthSystem {
             int bodyAge = (int) latest.get("body_age");
             String bodyType = (String) latest.get("body_type");
 
-            // 计算三公式 BMR
             double bmrH = HealthCalculator.calcBMR_Harris(weight, currentHeight, currentAge, currentGender);
             double bmrM = HealthCalculator.calcBMR_Mifflin(weight, currentHeight, currentAge, currentGender);
             double bmrC = HealthCalculator.calcBMR_China(weight, currentAge, currentGender);
-
-            // 理想体重
             double idealWeight = HealthCalculator.calcIdealWeight(currentHeight);
-
-            // 健康评分
             int score = HealthCalculator.calcHealthScore(bmi, bodyFat, visceral, muscle, water, currentGender);
 
-            StringBuilder sb = new StringBuilder();
-            sb.append("═══════════════════════════════════════════\n");
-            sb.append("              健康分析评估报告\n");
-            sb.append("═══════════════════════════════════════════\n\n");
+            String dateStr = new SimpleDateFormat("yyyy-MM-dd").format((Date) latest.get("record_date"));
 
-            sb.append("【BMI 体质指数】\n");
-            sb.append("  BMI = ").append(df1.format(bmi)).append(" (").append(HealthCalculator.classifyBMI(bmi)).append(")\n");
-            sb.append("  中国标准: <18.5偏瘦 | 18.5-23.9正常 | 24-27.9超重 | >=28肥胖\n\n");
+            // 1. 报告头
+            content.add(Theme.createReportHeader("健康分析评估报告",
+                    "基于最新一次健康记录", "更新于 " + dateStr, Theme.KEEP, Theme.KEEP_D));
+            content.add(Box.createVerticalStrut(14));
 
-            sb.append("【基础代谢率 BMR (三种公式对比)】\n");
-            sb.append("  Harris-Benedict : ").append(df0.format(bmrH)).append(" kcal\n");
-            sb.append("  Mifflin-St Jeor : ").append(df0.format(bmrM)).append(" kcal\n");
-            sb.append("  中国营养学会    : ").append(df0.format(bmrC)).append(" kcal\n");
-            sb.append("  ────────────────────────────────\n");
-            sb.append("  平均值          : ").append(df0.format(bmr)).append(" kcal\n\n");
+            // 2. 综合评分环
+            Color scoreColor = statusColors(HealthCalculator.scoreLevel(score))[1];
+            JPanel scoreCard = Theme.createCardPanel(null, Theme.KEEP);
+            scoreCard.setLayout(new BorderLayout(20, 0));
+            Theme.ProgressRing ring = new Theme.ProgressRing(score, scoreColor, String.valueOf(score), "综合评分 / 100");
+            JPanel scoreRight = new JPanel(new BorderLayout(6, 8));
+            scoreRight.setOpaque(false);
+            JLabel scTitle = new JLabel("本次健康综合评分");
+            scTitle.setFont(Theme.FONT_HEADER); scTitle.setForeground(Theme.TEXT_DARK);
+            JPanel lvlRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0)); lvlRow.setOpaque(false);
+            lvlRow.add(Theme.createBadge(HealthCalculator.scoreLevel(score),
+                    statusColors(HealthCalculator.scoreLevel(score))[0], scoreColor));
+            JLabel scHint = new JLabel("评分维度：BMI(30) + 体脂率(25) + 内脏脂肪(20) + 肌肉量(15) + 水分率(10)");
+            scHint.setFont(Theme.FONT_TINY); scHint.setForeground(Theme.TEXT_GRAY);
+            scoreRight.add(scTitle, BorderLayout.NORTH);
+            scoreRight.add(lvlRow, BorderLayout.CENTER);
+            scoreRight.add(scHint, BorderLayout.SOUTH);
+            scoreCard.add(ring, BorderLayout.WEST);
+            scoreCard.add(scoreRight, BorderLayout.CENTER);
+            content.add(scoreCard);
+            content.add(Box.createVerticalStrut(14));
 
-            sb.append("【每日总能量消耗 TDEE】\n");
-            sb.append("  活动等级: ").append(currentActivityLevel);
-            sb.append(" (系数: ").append(df2.format(HealthCalculator.getActivityFactor(currentActivityLevel))).append(")\n");
-            sb.append("  TDEE = BMR × 活动系数 = ").append(df0.format(tdee)).append(" kcal\n\n");
+            // 3. 核心身体指标
+            JPanel grid = new JPanel(new GridLayout(0, 3, 14, 14));
+            grid.setOpaque(false);
+            grid.add(statCard("BMI 体质指数", df1.format(bmi), "", HealthCalculator.classifyBMI(bmi)));
+            grid.add(statCard("体脂率", df1.format(bodyFat), "%",
+                    currentGender.equals("男")
+                            ? (bodyFat < 12 ? "偏低" : bodyFat <= 25 ? "正常" : bodyFat <= 30 ? "偏高" : "严重偏高")
+                            : (bodyFat < 20 ? "偏低" : bodyFat <= 32 ? "正常" : bodyFat <= 38 ? "偏高" : "严重偏高")));
+            grid.add(statCard("内脏脂肪等级", String.valueOf(visceral), "级", HealthCalculator.assessVisceralFat(visceral)));
+            grid.add(statCard("身体年龄", bodyAge + " 岁", "", bodyAge < currentAge ? "年轻" : (bodyAge > currentAge ? "需关注" : "正常")));
+            grid.add(statCard("骨骼肌肉量", df1.format(boneMuscle), "kg", HealthCalculator.assessMuscle(boneMuscle, weight, currentGender)));
+            grid.add(statCard("水分率", df1.format(water), "%", water < 50 ? "偏低" : "正常"));
+            content.add(sectionCard("核心身体指标", grid));
+            content.add(Box.createVerticalStrut(14));
 
-            sb.append("【理想体重】\n");
-            sb.append("  理想体重 = 身高² × 22 = ").append(df1.format(idealWeight)).append(" kg\n");
-            sb.append("  正常范围: ").append(df1.format(currentHeight/100*currentHeight/100*18.5)).append(" - ");
-            sb.append(df1.format(currentHeight/100*currentHeight/100*23.9)).append(" kg\n\n");
+            // 4. 基础代谢率
+            JPanel bmrBody = new JPanel(); bmrBody.setLayout(new BoxLayout(bmrBody, BoxLayout.Y_AXIS)); bmrBody.setOpaque(false);
+            bmrBody.add(Theme.createInfoRow("Harris-Benedict 公式", df0.format(bmrH) + " kcal"));
+            bmrBody.add(Theme.createInfoRow("Mifflin-St Jeor 公式", df0.format(bmrM) + " kcal"));
+            bmrBody.add(Theme.createInfoRow("中国营养学会公式", df0.format(bmrC) + " kcal"));
+            bmrBody.add(Theme.createInfoRow("综合平均值", df0.format(bmr) + " kcal"));
+            content.add(sectionCard("基础代谢率 BMR（三种公式对比）", bmrBody));
+            content.add(Box.createVerticalStrut(14));
 
-            sb.append("【体脂率】\n");
-            sb.append("  体脂率: ").append(df1.format(bodyFat)).append("%\n");
-            String fatLevel = currentGender.equals("男")
-                    ? (bodyFat < 12 ? "偏低" : bodyFat <= 25 ? "正常" : bodyFat <= 30 ? "偏高" : "严重偏高")
-                    : (bodyFat < 20 ? "偏低" : bodyFat <= 32 ? "正常" : bodyFat <= 38 ? "偏高" : "严重偏高");
-            sb.append("  评级: ").append(fatLevel).append("\n\n");
+            // 5. 能量消耗与理想体重
+            JPanel energyBody = new JPanel(); energyBody.setLayout(new BoxLayout(energyBody, BoxLayout.Y_AXIS)); energyBody.setOpaque(false);
+            energyBody.add(Theme.createInfoRow("每日总能量消耗 TDEE", df0.format(tdee) + " kcal"));
+            energyBody.add(Theme.createInfoRow("活动等级", currentActivityLevel + "（系数 " + df2.format(HealthCalculator.getActivityFactor(currentActivityLevel)) + "）"));
+            energyBody.add(Theme.createInfoRow("理想体重（身高² × 22）", df1.format(idealWeight) + " kg"));
+            energyBody.add(Theme.createInfoRow("健康体重范围", df1.format(currentHeight/100*currentHeight/100*18.5) + " ~ " + df1.format(currentHeight/100*currentHeight/100*23.9) + " kg"));
+            content.add(sectionCard("能量消耗与理想体重", energyBody));
+            content.add(Box.createVerticalStrut(14));
 
-            sb.append("【内脏脂肪等级】\n");
-            sb.append("  等级: ").append(visceral).append(" 级 (").append(HealthCalculator.assessVisceralFat(visceral)).append(")\n");
-            sb.append("  标准: 1-4正常 | 5-8偏高 | 9-10过高\n\n");
-
-            sb.append("【骨骼肌肉量】\n");
-            sb.append("  骨骼肌肉量: ").append(df1.format(boneMuscle)).append(" kg (");
-            sb.append(HealthCalculator.assessMuscle(boneMuscle, weight, currentGender)).append(")\n\n");
-
-            sb.append("【身体年龄】\n");
-            sb.append("  身体年龄: ").append(bodyAge).append(" 岁 (实际年龄: ").append(currentAge).append(" 岁)\n");
-            if (bodyAge < currentAge) sb.append("  身体比实际年龄年轻 ").append(currentAge - bodyAge).append(" 岁!\n\n");
-            else if (bodyAge > currentAge) sb.append("  身体比实际年龄大 ").append(bodyAge - currentAge).append(" 岁, 需关注\n\n");
-            else sb.append("  身体年龄与实际年龄一致\n\n");
-
-            sb.append("【体质分类 (BMI + 体脂率 交叉矩阵)】\n");
-            sb.append("  分类: ").append(bodyType).append("\n");
-            sb.append("  分类说明:\n");
-            sb.append("    消瘦型    — 体重不足, 需增加营养摄入\n");
-            sb.append("    标准型    — 身体成分比例良好\n");
-            sb.append("    肌肉型    — BMI偏高但体脂低, 肌肉发达\n");
-            sb.append("    超重型    — 体重超标, 需控制\n");
-            sb.append("    肥胖型    — 体脂率过高, 需减脂\n");
-            sb.append("    隐性肥胖型 — 体重正常但体脂高, 建议力量训练\n\n");
-
-            sb.append("【身体形态评估】\n");
+            // 6. 体质与身体形态
+            JPanel shapeBody = new JPanel(); shapeBody.setLayout(new BoxLayout(shapeBody, BoxLayout.Y_AXIS)); shapeBody.setOpaque(false);
             double whtr = waist / currentHeight;
-            sb.append("  腰围身高比 WHtR = ").append(df2.format(whtr));
-            sb.append(" (").append(HealthCalculator.assessWHtR(waist, currentHeight)).append(")\n");
-            sb.append("  体型分类: ").append(HealthCalculator.classifyBodyShape(waist, currentGender)).append("\n\n");
+            shapeBody.add(Theme.createInfoRow("体质分类", bodyType));
+            shapeBody.add(Theme.createInfoRow("腰围身高比 WHtR", df2.format(whtr) + "（" + HealthCalculator.assessWHtR(waist, currentHeight) + "）"));
+            shapeBody.add(Theme.createInfoRow("体型分类", HealthCalculator.classifyBodyShape(waist, currentGender)));
+            content.add(sectionCard("体质分类与身体形态", shapeBody));
 
-            sb.append("【健康评分】\n");
-            sb.append("  总分: ").append(score).append("/100 (").append(HealthCalculator.scoreLevel(score)).append(")\n");
-            sb.append("  评分维度: BMI(30分) + 体脂率(25分) + 内脏脂肪(20分) + 肌肉量(15分) + 水分率(10分)\n");
-            sb.append("  等级: 90-100优秀 | 75-89良好 | 60-74及格 | <60需改善\n\n");
-
-            sb.append("═══════════════════════════════════════════\n");
-
-            taResult.setText(sb.toString());
+            content.revalidate(); content.repaint();
         }
     }
 
@@ -2546,56 +2699,64 @@ public class HealthSystem {
     //             第九部分: Tab4 预测分析面板 (新增)
     // ================================================================
 
-    /** 预测分析面板 — 趋势预测 + 目标预测 + 风险评估 */
+        /** 预测分析面板 — Keep 风格趋势与风险评估报告 */
     static class PredictionPanel extends JPanel {
-        private JTextArea taResult;
+        private JPanel content;
+        private JScrollPane scroll;
+
+        private Color[] statusColors(String s) {
+            if (s == null) return new Color[]{Theme.TEXT_LIGHT, Theme.TEXT_GRAY};
+            if (s.contains("严重") || s.contains("危险") || s.contains("高风险") || s.contains("无法") || s.contains("过慢"))
+                return new Color[]{new Color(254, 226, 226), new Color(185, 28, 28)};
+            if (s.contains("中风险") || s.contains("盈余") || s.contains("偏高") || s.contains("偏低"))
+                return new Color[]{new Color(254, 243, 199), new Color(180, 83, 9)};
+            return new Color[]{new Color(231, 245, 236), new Color(12, 150, 58)};
+        }
+
+        private JPanel sectionCard(String title, Component body) {
+            JPanel card = Theme.createCardPanel(title, Theme.KEEP);
+            card.add(body, BorderLayout.CENTER);
+            return card;
+        }
 
         PredictionPanel() {
-            setLayout(new BorderLayout(8, 8));
-            setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+            setLayout(new BorderLayout(14, 14));
+            setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
             setBackground(Theme.BG);
 
-            // === 按钮卡片 ===
-            JPanel btnCard = Theme.createCardPanel("预测分析", Theme.PRIMARY);
-            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-            btnPanel.setOpaque(false);
-            JButton btnRefresh = new RoundButton("🔄 刷新预测结果", Theme.PRIMARY, Theme.PRIMARY_D);
+            JPanel topBar = new JPanel(new BorderLayout(10, 0));
+            topBar.setOpaque(false);
+            JButton btnRefresh = new RoundButton("\u21BB 重新预测", Theme.KEEP, Theme.KEEP_L, Theme.KEEP_D);
             btnRefresh.addActionListener(e -> refresh());
-            btnPanel.add(btnRefresh);
-            JLabel lblHint = new JLabel("基于历史数据进行线性回归趋势预测");
-            lblHint.setFont(Theme.FONT_SMALL);
-            lblHint.setForeground(Theme.TEXT_GRAY);
-            btnPanel.add(lblHint);
-            btnCard.add(btnPanel, BorderLayout.CENTER);
-            add(btnCard, BorderLayout.NORTH);
+            JLabel hint = new JLabel("基于历史数据进行线性回归趋势预测");
+            hint.setFont(Theme.FONT_SMALL); hint.setForeground(Theme.TEXT_GRAY);
+            topBar.add(btnRefresh, BorderLayout.WEST);
+            topBar.add(hint, BorderLayout.EAST);
+            add(topBar, BorderLayout.NORTH);
 
-            // === 预测报告卡片 ===
-            JPanel reportCard = Theme.createCardPanel("预测分析报告", Theme.PRIMARY);
-            reportCard.setPreferredSize(new Dimension(700, 450));
-            reportCard.setMinimumSize(new Dimension(400, 250));
-            taResult = new JTextArea();
-            taResult.setFont(Theme.FONT_BODY);
-            taResult.setEditable(false);
-            taResult.setBackground(Theme.CARD_BG);
-            taResult.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-            JScrollPane scroll = new JScrollPane(taResult);
-            scroll.setOpaque(false);
-            scroll.getViewport().setOpaque(false);
+            content = new JPanel();
+            content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+            content.setOpaque(false);
+            content.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
+            scroll = new JScrollPane(content);
             scroll.setBorder(BorderFactory.createEmptyBorder());
-            reportCard.add(scroll, BorderLayout.CENTER);
-            add(reportCard, BorderLayout.CENTER);
+            scroll.getViewport().setOpaque(false);
+            scroll.setOpaque(false);
+            add(scroll, BorderLayout.CENTER);
 
             refresh();
         }
 
         void refresh() {
+            content.removeAll();
             List<Map<String, Object>> records = DBUtil.getHealthRecords(60);
             if (records.size() < 3) {
-                taResult.setText("数据不足, 至少需要 3 条健康记录才能进行预测分析\n当前记录数: " + records.size());
+                content.add(Theme.emptyReportCard("\uD83D\uDCC8", "数据不足，无法预测",
+                        "预测分析至少需要 3 条健康记录，当前仅有 " + records.size() + " 条。请继续在「健康数据录入」中积累数据。"));
+                content.revalidate(); content.repaint();
                 return;
             }
 
-            // 反转为正序
             List<Date> dates = new ArrayList<>();
             List<Double> weights = new ArrayList<>();
             List<Double> bmis = new ArrayList<>();
@@ -2613,104 +2774,119 @@ public class HealthSystem {
             double currentBMI = (double) latest.get("bmi");
             double tdee = (double) latest.get("tdee");
 
-            // 预测值
             double pred7 = HealthCalculator.predictTrend(dates, weights, 7);
             double pred14 = HealthCalculator.predictTrend(dates, weights, 14);
             double pred30 = HealthCalculator.predictTrend(dates, weights, 30);
             double predBMI30 = HealthCalculator.calcBMI(pred30, currentHeight);
 
-            String trend = HealthCalculator.trendDirection(dates, weights);
+            HealthCalculator.trendDirection(dates, weights);
 
-            // 热量差
             int exerciseCal = DBUtil.getTodayExerciseCalories();
             int[] diet = DBUtil.getTodayDietSummary();
             int intakeCal = diet[0];
             double dailyDeficit = tdee + exerciseCal - intakeCal;
 
-            // 目标预测
             Map<String, Object> goal = DBUtil.getGoal();
+            HealthCalculator.assessRisk(predBMI30);
 
-            // 风险评估
-            String risk = HealthCalculator.assessRisk(predBMI30);
+            // 1. 报告头
+            String dateStr = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            content.add(Theme.createReportHeader("预测分析报告",
+                    "线性回归趋势 · 热量差 · 目标达成 · 风险评估", "生成于 " + dateStr, Theme.KEEP, Theme.KEEP_D));
+            content.add(Box.createVerticalStrut(14));
 
-            StringBuilder sb = new StringBuilder();
-            sb.append("═══════════════════════════════════════════\n");
-            sb.append("              预测分析报告\n");
-            sb.append("═══════════════════════════════════════════\n\n");
+            // 2. 体重趋势总览
+            JPanel trendRow = new JPanel(new GridLayout(1, 4, 14, 14)); trendRow.setOpaque(false);
+            trendRow.add(trendCell("当前体重", df1.format(currentWeight) + " kg", "", Theme.KEEP));
+            trendRow.add(trendCell("7 天后", df1.format(pred7) + " kg", deltaText(pred7 - currentWeight), Theme.KEEP));
+            trendRow.add(trendCell("14 天后", df1.format(pred14) + " kg", deltaText(pred14 - currentWeight), Theme.KEEP));
+            trendRow.add(trendCell("30 天后", df1.format(pred30) + " kg", deltaText(pred30 - currentWeight), Theme.KEEP));
+            content.add(sectionCard("体重趋势预测（基于最近 " + dates.size() + " 条记录）", trendRow));
+            content.add(Box.createVerticalStrut(14));
 
-            sb.append("【趋势预测 (线性回归)】\n");
-            sb.append("  当前体重: ").append(df1.format(currentWeight)).append(" kg (BMI: ").append(df1.format(currentBMI)).append(")\n");
-            sb.append("  趋势方向: ").append(trend).append("\n\n");
-            sb.append("  预测结果:\n");
-            sb.append("    7天后  → 体重 ").append(df1.format(pred7)).append(" kg (BMI: ").append(df1.format(HealthCalculator.calcBMI(pred7, currentHeight))).append(")\n");
-            sb.append("   14天后  → 体重 ").append(df1.format(pred14)).append(" kg (BMI: ").append(df1.format(HealthCalculator.calcBMI(pred14, currentHeight))).append(")\n");
-            sb.append("   30天后  → 体重 ").append(df1.format(pred30)).append(" kg (BMI: ").append(df1.format(predBMI30)).append(")\n\n");
-            sb.append("  (预测基于最近 ").append(dates.size()).append(" 条记录, 实际结果受饮食和运动影响)\n\n");
+            // 3. 热量差分析
+            JPanel calBody = new JPanel(); calBody.setLayout(new BoxLayout(calBody, BoxLayout.Y_AXIS)); calBody.setOpaque(false);
+            calBody.add(Theme.createInfoRow("每日总消耗 TDEE", df0.format(tdee) + " kcal"));
+            calBody.add(Theme.createInfoRow("运动消耗", exerciseCal + " kcal"));
+            calBody.add(Theme.createInfoRow("饮食摄入", intakeCal + " kcal"));
+            calBody.add(Theme.createInfoRow("每日热量差", (dailyDeficit >= 0 ? "+" : "") + df0.format(dailyDeficit) + " kcal"));
+            JPanel estRow = new JPanel(new BorderLayout()); estRow.setOpaque(false);
+            estRow.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
+            JLabel est = new JLabel("预计每周" + (dailyDeficit >= 0 ? "减重" : "增重") + "约 " + df2.format(Math.abs(dailyDeficit) * 7 / 7700) + " kg");
+            est.setFont(Theme.FONT_BODY_B); est.setForeground(dailyDeficit >= 0 ? new Color(12, 150, 58) : new Color(180, 83, 9));
+            estRow.add(est, BorderLayout.WEST);
+            JPanel badgeWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0)); badgeWrap.setOpaque(false);
+            String deficitStatus = dailyDeficit > 0 ? "热量缺口 · 利于减脂" : (dailyDeficit < 0 ? "热量盈余 · 利于增肌" : "收支平衡");
+            Color[] ds = statusColors(deficitStatus);
+            badgeWrap.add(Theme.createBadge(deficitStatus, ds[0], ds[1]));
+            estRow.add(badgeWrap, BorderLayout.EAST);
+            calBody.add(estRow);
+            content.add(sectionCard("每日热量差分析", calBody));
+            content.add(Box.createVerticalStrut(14));
 
-            sb.append("【热量差分析】\n");
-            sb.append("  TDEE (每日消耗): ").append(df0.format(tdee)).append(" kcal\n");
-            sb.append("  运动消耗: ").append(exerciseCal).append(" kcal\n");
-            sb.append("  饮食摄入: ").append(intakeCal).append(" kcal\n");
-            sb.append("  每日热量差: ").append(dailyDeficit >= 0 ? "+" : "").append(df0.format(dailyDeficit)).append(" kcal\n");
-            if (dailyDeficit > 0) {
-                sb.append("  → 处于热量缺口状态, 有利于减脂/减重\n");
-                double kgPerWeek = dailyDeficit * 7 / 7700;
-                sb.append("  → 预计每周减重约 ").append(df2.format(kgPerWeek)).append(" kg\n");
-            } else if (dailyDeficit < 0) {
-                sb.append("  → 处于热量盈余状态, 有利于增肌但可能导致脂肪增加\n");
-                double kgPerWeek = Math.abs(dailyDeficit) * 7 / 7700;
-                sb.append("  → 预计每周增重约 ").append(df2.format(kgPerWeek)).append(" kg\n");
-            } else {
-                sb.append("  → 热量收支平衡, 体重将维持稳定\n");
-            }
-            sb.append("\n");
-
-            sb.append("【目标达成预测】\n");
+            // 4. 目标达成预测
+            JPanel goalBody = new JPanel(); goalBody.setLayout(new BoxLayout(goalBody, BoxLayout.Y_AXIS)); goalBody.setOpaque(false);
             if (goal != null) {
                 String goalType = (String) goal.get("goal_type");
                 double targetValue = (double) goal.get("target_value");
-                sb.append("  目标类型: ").append(goalType).append("\n");
-                sb.append("  目标体重: ").append(df1.format(targetValue)).append(" kg\n");
-                sb.append("  当前体重: ").append(df1.format(currentWeight)).append(" kg\n");
-
                 int days = HealthCalculator.predictGoalDays(currentWeight, targetValue, dailyDeficit, goalType);
+                goalBody.add(Theme.createInfoRow("目标类型", goalType));
+                goalBody.add(Theme.createInfoRow("目标体重", df1.format(targetValue) + " kg"));
+                goalBody.add(Theme.createInfoRow("当前体重", df1.format(currentWeight) + " kg"));
                 if (days == -2) {
-                    sb.append("  ⚠️ 当前进度过慢 (热量差<100kcal), 建议调整饮食或运动计划\n");
+                    goalBody.add(Theme.createInfoRow("预测结果", "进度过慢，建议调整计划"));
                 } else if (days == -1) {
-                    sb.append("  ⚠️ 当前饮食超过消耗, 无法达成目标, 需减少摄入或增加运动\n");
+                    goalBody.add(Theme.createInfoRow("预测结果", "当前摄入超消耗，无法达成"));
                 } else if (days == 0) {
-                    sb.append("  ✅ 已达成目标!\n");
+                    JPanel ok = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0)); ok.setOpaque(false);
+                    ok.add(Theme.createBadge("\u2705 已达成目标", new Color(231, 245, 236), new Color(12, 150, 58)));
+                    goalBody.add(ok);
                 } else {
-                    Calendar cal = Calendar.getInstance();
-                    cal.add(Calendar.DAY_OF_MONTH, days);
+                    Calendar cal = Calendar.getInstance(); cal.add(Calendar.DAY_OF_MONTH, days);
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-                    sb.append("  预测达成日期: ").append(sdf.format(cal.getTime()));
-                    sb.append(" (还需 ").append(days).append(" 天)\n");
+                    goalBody.add(Theme.createInfoRow("预计达成日期", sdf.format(cal.getTime()) + "（还需 " + days + " 天）"));
                 }
             } else {
-                sb.append("  尚未设置目标, 请到「目标计划」页面设置\n");
+                goalBody.add(Theme.createInfoRow("目标状态", "尚未设置目标"));
             }
-            sb.append("\n");
+            content.add(sectionCard("目标达成预测", goalBody));
+            content.add(Box.createVerticalStrut(14));
 
-            sb.append("【健康风险评估】\n");
-            sb.append("  预测30天后BMI: ").append(df1.format(predBMI30)).append("\n");
+            // 5. 风险评估
+            JPanel riskBody = new JPanel(new BorderLayout(10, 0)); riskBody.setOpaque(false);
             String riskLevel = predBMI30 >= 28.0 ? "高风险" : (predBMI30 >= 24.0 || predBMI30 < 18.5 ? "中风险" : "低风险");
-            sb.append("  风险等级: ").append(riskLevel).append("\n");
-            sb.append("  ").append(risk).append("\n\n");
+            JLabel rl = new JLabel(riskLevel); rl.setFont(new Font(Theme.FONT_NAME, Font.BOLD, 22));
+            rl.setForeground(statusColors(riskLevel)[1]);
+            JPanel rb = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0)); rb.setOpaque(false); rb.add(rl);
+            riskBody.add(rb, BorderLayout.WEST);
+            JLabel rd = new JLabel("<html>预测 30 天后 BMI 约 <b>" + df1.format(predBMI30) + "</b><br>依据当前趋势与热量差综合评估</html>");
+            rd.setFont(Theme.FONT_BODY); rd.setForeground(Theme.TEXT_GRAY);
+            riskBody.add(rd, BorderLayout.CENTER);
+            content.add(sectionCard("30 天健康风险评估", riskBody));
 
-            // 体脂率趋势
-            String fatTrend = HealthCalculator.trendDirection(dates, bodyFats);
-            sb.append("【体脂率趋势】\n");
-            sb.append("  当前体脂率: ").append(df1.format(bodyFats.get(bodyFats.size() - 1))).append("%\n");
-            sb.append("  趋势方向: ").append(fatTrend).append("\n");
-            if (fatTrend.equals("上升") && bodyFats.size() >= 30) {
-                sb.append("  ⚠️ 体脂率持续上升, 建议调整饮食结构\n");
+            content.revalidate(); content.repaint();
+        }
+
+        private String deltaText(double d) {
+            if (Math.abs(d) < 0.05) return "\u2192 持平";
+            return (d < 0 ? "\u25BC " : "\u25B2 ") + (d < 0 ? "" : "+") + df1.format(d) + " kg";
+        }
+
+        private JPanel trendCell(String label, String value, String delta, Color accent) {
+            RoundedPanel c = new RoundedPanel(new BorderLayout(4, 4), Theme.R_LG);
+            c.setBackground(Theme.CARD_BG);
+            c.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.BORDER_L, 1),
+                    BorderFactory.createEmptyBorder(14, 14, 14, 14)));
+            JLabel l = new JLabel(label); l.setFont(Theme.FONT_SMALL); l.setForeground(Theme.TEXT_GRAY);
+            JLabel v = new JLabel(value); v.setFont(Theme.FONT_BIG_NUM); v.setForeground(Theme.TEXT_DARK);
+            JPanel d = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0)); d.setOpaque(false);
+            if (delta != null && !delta.isEmpty()) {
+                Color dc = delta.startsWith("\u25BC") ? new Color(12, 150, 58) : delta.startsWith("\u25B2") ? new Color(180, 83, 9) : Theme.TEXT_GRAY;
+                JLabel dl = new JLabel(delta); dl.setFont(Theme.FONT_TINY); dl.setForeground(dc);
+                d.add(dl);
             }
-            sb.append("\n");
-
-            sb.append("═══════════════════════════════════════════\n");
-
-            taResult.setText(sb.toString());
+            c.add(l, BorderLayout.NORTH); c.add(v, BorderLayout.CENTER); c.add(d, BorderLayout.SOUTH);
+            return c;
         }
     }
 
