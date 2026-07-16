@@ -1,0 +1,24 @@
+# Java 编译产物
+*.class
+
+# 备份文件
+*.bak
+
+# WorkBuddy 工作区数据
+.workbuddy/
+
+# 日志和调试文件
+error_log.txt
+services.txt
+
+# IDE 文件
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# 系统文件
+Thumbs.db
+.DS_Store
