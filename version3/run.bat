@@ -22,6 +22,6 @@ echo [2/3] 编译成功！
 echo.
 
 echo [3/3] 启动系统...
-"%JDK_PATH%\java" -cp "%~dp0out;%LIB_PATH%" HealthSystem
+"%JDK_PATH%\java" -Dfile.encoding=UTF-8 -cp "%~dp0out;%LIB_PATH%" HealthSystem
 
 pause

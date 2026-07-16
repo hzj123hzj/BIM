@@ -117,11 +117,22 @@ public class HealthSystem {
                 headerPanel.setBorder(BorderFactory.createEmptyBorder(0,0,10,0)); card.add(headerPanel, BorderLayout.NORTH);
             } return card;
         }
+        static String metricIcon(String label){ switch(label){case"今日体重":return"重";case"BMI":return"B";case"体脂率":return"脂";case"水分率":return"水";case"肌肉率":return"肌";case"BMR":return"代";case"TDEE":return"耗";case"内脏脂肪":return"脏";case"身体年龄":return"龄";case"体质分类":return"型";case"今日摄入":return"食";case"运动消耗":return"动";case"热量差":return"差";case"健康评分":return"分";} return"●"; }
         static RoundedPanel createMetricCard(String label, String value, Color[] gradient) {
-            RoundedPanel card = new RoundedPanel(new BorderLayout(6,2), 16) { protected void paintComponent(Graphics g) { Graphics2D g2 = (Graphics2D)g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); int w = Math.max(getWidth()-6,28), h = Math.max(getHeight()-6,28); for(int i=0;i<4;i++){int a=20-i*4; g2.setColor(new Color(gradient[0].getRed(),gradient[0].getGreen(),gradient[0].getBlue(),a)); g2.fillRoundRect(3+i,4+i,w,h,16,16);} GradientPaint gp = new GradientPaint(0,0,gradient[0],w,h,gradient[1]); g2.setPaint(gp); g2.fillRoundRect(0,0,w,h,16,16); g2.setColor(new Color(255,255,255,30)); g2.fillRoundRect(0,0,w,h/3,16,16); g2.dispose(); super.paintComponent(g); } };
-            card.setOpaque(false); card.setBorder(BorderFactory.createEmptyBorder(18,18,18,18));
-            JLabel lblLabel = new JLabel(label); lblLabel.setFont(FONT_SMALL); lblLabel.setForeground(new Color(255,255,255,200)); card.add(lblLabel, BorderLayout.NORTH);
-            JLabel lblValue = new JLabel(value); lblValue.setFont(FONT_BIG_NUM); lblValue.setForeground(Color.WHITE); card.add(lblValue, BorderLayout.CENTER);
+            RoundedPanel card = new RoundedPanel(new BorderLayout(8,6), 16) {
+                boolean hover=false;
+                { addMouseListener(new MouseAdapter(){public void mouseEntered(MouseEvent e){hover=true;repaint();}public void mouseExited(MouseEvent e){hover=false;repaint();}}); }
+                protected void paintComponent(Graphics g) { Graphics2D g2=(Graphics2D)g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON); int w=getWidth(),h=getHeight(); g2.setColor(CARD_BG); g2.fillRoundRect(0,0,w,h,16,16); if(hover){g2.setColor(new Color(gradient[0].getRed(),gradient[0].getGreen(),gradient[0].getBlue(),38)); g2.fillRoundRect(0,0,w,h,16,16);} g2.setColor(gradient[0]); g2.fillRoundRect(0,0,5,h,16,16); g2.setColor(hover?new Color(gradient[0].getRed(),gradient[0].getGreen(),gradient[0].getBlue(),70):new Color(203,213,225,130)); g2.drawRoundRect(0,0,w-1,h-1,16,16); g2.dispose(); super.paintComponent(g); }
+            };
+            card.setOpaque(false);
+            JPanel iconBadge=new JPanel(){protected void paintComponent(Graphics g){Graphics2D g2=(Graphics2D)g.create();g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);g2.setColor(new Color(gradient[0].getRed(),gradient[0].getGreen(),gradient[0].getBlue(),22));g2.fillRoundRect(0,0,getWidth(),getHeight(),12,12);g2.dispose();}};
+            iconBadge.setPreferredSize(new Dimension(40,40)); iconBadge.setLayout(new GridBagLayout());
+            JLabel lblIcon=new JLabel(metricIcon(label)); lblIcon.setFont(new Font(FONT_NAME,Font.BOLD,18)); lblIcon.setForeground(gradient[0]); iconBadge.add(lblIcon);
+            JLabel lblLabel=new JLabel(label); lblLabel.setFont(FONT_SMALL); lblLabel.setForeground(TEXT_GRAY);
+            JLabel lblValue=new JLabel(value); lblValue.setFont(new Font(FONT_NAME,Font.BOLD,21)); lblValue.setForeground(TEXT_DARK);
+            JPanel top=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0)); top.setOpaque(false); top.add(iconBadge);
+            JPanel center=new JPanel(new BorderLayout(0,5)); center.setOpaque(false); center.add(lblLabel,BorderLayout.NORTH); center.add(lblValue,BorderLayout.CENTER);
+            card.add(top,BorderLayout.NORTH); card.add(center,BorderLayout.CENTER);
             return card;
         }
         static void addHoverEffect(JButton btn, Color normalColor, Color hoverColor) { btn.addMouseListener(new MouseAdapter(){public void mouseEntered(MouseEvent e){btn.putClientProperty("hoverColor",hoverColor);btn.repaint();}public void mouseExited(MouseEvent e){btn.putClientProperty("hoverColor",null);btn.repaint();}}); btn.setBackground(normalColor); }
@@ -171,11 +182,20 @@ public class HealthSystem {
             JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT,0,0)); titlePanel.setOpaque(false); titlePanel.add(logoIcon); titlePanel.add(lblTitle);
             panel.add(titlePanel, BorderLayout.CENTER); return panel;
         }
-        private JPanel createBottomArea() { JPanel panel = new JPanel(new BorderLayout()); panel.setOpaque(false); panel.setBorder(BorderFactory.createEmptyBorder(12,16,16,16));
+        private JPanel createBottomArea() { JPanel panel = new JPanel(new BorderLayout(8,8)); panel.setOpaque(false); panel.setBorder(BorderFactory.createEmptyBorder(12,14,16,14));
             JPanel dividerWrapper = new JPanel() { protected void paintComponent(Graphics g) { Graphics2D g2=(Graphics2D)g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(new Color(255,255,255,20)); g2.fillRoundRect(0,0,getWidth(),1,1,1); g2.dispose(); } };
             dividerWrapper.setPreferredSize(new Dimension(1,1)); dividerWrapper.setOpaque(false);
-            JLabel lblUser = new JLabel("  v3.0 Aurora"); lblUser.setFont(Theme.FONT_SMALL); lblUser.setForeground(Theme.SIDEBAR_TEXT);
-            panel.add(dividerWrapper, BorderLayout.NORTH); panel.add(Box.createVerticalStrut(8), BorderLayout.CENTER); panel.add(lblUser, BorderLayout.SOUTH); return panel;
+            JPanel profile = new JPanel(new FlowLayout(FlowLayout.LEFT,10,0)); profile.setOpaque(false);
+            String uname = currentUsername==null?"用户":currentUsername;
+            String initial = uname.isEmpty()?"U":uname.substring(0,1);
+            JPanel avatar = new JPanel(){protected void paintComponent(Graphics g){Graphics2D g2=(Graphics2D)g.create();g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);GradientPaint gp=new GradientPaint(0,0,new Color(99,102,241),40,40,new Color(139,92,246));g2.setPaint(gp);g2.fillOval(0,0,40,40);g2.setColor(Color.WHITE);g2.setFont(new Font(Theme.FONT_NAME,Font.BOLD,17));FontMetrics fm=g2.getFontMetrics();g2.drawString(initial,(40-fm.stringWidth(initial))/2,28);g2.dispose();}};
+            avatar.setPreferredSize(new Dimension(40,40)); avatar.setOpaque(false);
+            JPanel info = new JPanel(new BorderLayout(2,1)); info.setOpaque(false);
+            JLabel lblName = new JLabel(uname); lblName.setFont(Theme.FONT_BODY_B); lblName.setForeground(Theme.SIDEBAR_TEXT_ACTIVE);
+            JLabel lblMeta = new JLabel((currentActivityLevel==null?"":currentActivityLevel) + " · 在线"); lblMeta.setFont(Theme.FONT_TINY); lblMeta.setForeground(Theme.SIDEBAR_TEXT);
+            info.add(lblName,BorderLayout.NORTH); info.add(lblMeta,BorderLayout.CENTER);
+            profile.add(avatar); profile.add(info);
+            panel.add(dividerWrapper, BorderLayout.NORTH); panel.add(profile, BorderLayout.CENTER); return panel;
         }
         void selectTab(int index) { selectedIndex=index; updateSelection(); mainFrame.switchToTab(index); }
         void updateSelection() { for(int i=0;i<navItems.length;i++) navItems[i].setActive(i==selectedIndex); }
@@ -1102,17 +1122,20 @@ public class HealthSystem {
     // === DashboardPanel ===
     static class DashboardPanel extends JPanel {
         private JPanel grid;
-        DashboardPanel(){setLayout(new BorderLayout(8,8)); setBorder(BorderFactory.createEmptyBorder(10,10,10,10)); setBackground(Theme.BG);
-            RoundedPanel btnCard=Theme.createCardPanel("健康数据大屏",Theme.PRIMARY);
-            JPanel btnPanel=new JPanel(new FlowLayout(FlowLayout.LEFT,8,0)); btnPanel.setOpaque(false);
-            RoundButton btnRefresh=new RoundButton("🔄 刷新大屏",Theme.PRIMARY,Theme.PRIMARY_D).setGradient(true);
-            btnRefresh.addActionListener(e->refresh()); btnPanel.add(btnRefresh);
-            JLabel lblHint=new JLabel("实时展示核心健康指标"); lblHint.setFont(Theme.FONT_SMALL); lblHint.setForeground(Theme.TEXT_GRAY);
-            btnPanel.add(lblHint); btnCard.add(btnPanel,BorderLayout.CENTER); add(btnCard,BorderLayout.NORTH);
+        DashboardPanel(){setLayout(new BorderLayout(10,10)); setBorder(BorderFactory.createEmptyBorder(10,10,10,10)); setBackground(Theme.BG);
+            RoundedPanel hero = new RoundedPanel(new BorderLayout(16,8), 18) {
+                protected void paintComponent(Graphics g){Graphics2D g2=(Graphics2D)g.create();g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);int w=getWidth(),h=getHeight();GradientPaint gp=new GradientPaint(0,0,new Color(99,102,241),w,h,new Color(139,92,246));g2.setPaint(gp);g2.fillRoundRect(0,0,w,h,18,18);g2.setColor(new Color(255,255,255,28));g2.fillRoundRect(0,0,w,h/2,18,18);g2.dispose();super.paintComponent(g);}
+            };
+            hero.setOpaque(false); hero.setPreferredSize(new Dimension(0,92)); hero.setBorder(BorderFactory.createEmptyBorder(16,22,16,22));
+            JLabel lblHi=new JLabel("健康数据大屏"); lblHi.setFont(Theme.FONT_H2); lblHi.setForeground(Color.WHITE);
+            JLabel lblSub=new JLabel("实时追踪核心健康指标 · " + new java.text.SimpleDateFormat("yyyy年MM月dd日 EEEE", new java.util.Locale("zh","CN")).format(new java.util.Date())); lblSub.setFont(Theme.FONT_SMALL); lblSub.setForeground(new Color(255,255,255,205));
+            JPanel hiBox=new JPanel(new BorderLayout(5,4)); hiBox.setOpaque(false); hiBox.add(lblHi,BorderLayout.NORTH); hiBox.add(lblSub,BorderLayout.CENTER);
+            RoundButton btnRefresh=new RoundButton("🔄 刷新",Theme.PRIMARY,Theme.PRIMARY_D).setGradient(true); btnRefresh.addActionListener(e->refresh());
+            hero.add(hiBox,BorderLayout.WEST); hero.add(btnRefresh,BorderLayout.EAST);
             RoundedPanel gridCard=Theme.createCardPanel("核心指标",Theme.ACCENT);
-            grid=new JPanel(new GridLayout(0,4,12,12)); grid.setOpaque(false);
+            grid=new JPanel(new GridLayout(0,4,14,14)); grid.setOpaque(false);
             JScrollPane scrollGrid=new JScrollPane(grid); scrollGrid.setOpaque(false); scrollGrid.getViewport().setOpaque(false); scrollGrid.setBorder(BorderFactory.createEmptyBorder());
-            gridCard.add(scrollGrid,BorderLayout.CENTER); add(gridCard,BorderLayout.CENTER);
+            gridCard.add(scrollGrid,BorderLayout.CENTER); add(hero,BorderLayout.NORTH); add(gridCard,BorderLayout.CENTER);
             refreshGrid();
         }
         private void refreshGrid(){
