@@ -6,6 +6,7 @@
 | 版本 | 目录 | 说明 | 状态 |
 |------|------|------|------|
 | v1.0 | `version1/` | 初始版本：Java Swing 桌面应用，含 UI 升级（Nimbus + 主题系统） | ✅ 稳定 |
+| v1.1 | `version1/` | 管理员后台升级：8 大管理模块 + 数据库扩展 | ✅ 稳定 |
 | v2.0 | `version2/` | UI 全面改造升级：现代配色、圆角按钮、渐变图表、动画效果 | ✅ 稳定 |
 | v3.0 | `version3/` | Aurora 设计系统：深色侧边栏导航 + 玻璃态登录 + 贝塞尔曲线图表 + 渐变按钮 | ✅ 稳定 |
 | v4.0 | `version4/` | UI 全面重设计：Indigo/Emerald 设计令牌 + 深色侧边栏导航 + 自绘圆角按钮/表格 | ✅ 稳定 |
@@ -13,6 +14,7 @@
 
 ## Git 标签
 - `v1.0.0` - version1 初始发布
+- `v1.1.0` - version1 管理员后台升级
 - `v2.0.0` - version2 UI 全面升级
 - `v3.0.0` - version3 Aurora 设计系统
 - `v4.0.0` - version4 UI 全面重设计
@@ -169,6 +171,28 @@ cd version5 && npm install && npm run dev   # 体验账号 demo / demo123
 - JDBC 连接 PostgreSQL
 - 密码加密存储（SHA-256）
 - JFreeChart 风格的自绘图表
+
+---
+
+## v1.1.0 (2026-07-17)
+### 管理员后台大升级（基于 version1）
+
+#### 新增模块
+- **用户管理（增强版）**: 用户列表、用户详情、账号启用/禁用/冻结、软删除、批量导出 CSV
+- **数据监控与统计**: 全局健康看板（总用户、活跃用户、打卡、平均 BMI）、异常用户列表、健康风险评估
+- **内容管理**: 食物数据库 CRUD、运动库 CRUD、健康文章管理
+- **AI 系统管理**: AI 问答记录审核、Prompt 模板管理、API 配置界面
+- **系统配置**: 预警阈值、BMR 公式、目标参数、打卡规则、数据备份、系统日志
+- **报表与导出**: 用户 CSV、健康数据 JSON、饮食记录 CSV
+- **消息推送**: 系统通知、健康提醒、活动推送
+- **健康顾问功能**: 用户健康档案、干预建议、随访记录
+
+#### 技术实现
+- 新增 `AdminSystem.java` 管理后台模块，与 `HealthSystem.java` 共享 DBUtil 和 Theme
+- 登录窗口自动识别管理员账号（`admin` / `admin123`），进入管理员后台
+- 数据库扩展：新增 `admins`、`system_config`、`system_logs`、`exercise_library`、`health_articles`、`message_templates`、`notifications`、`ai_api_config`、`ai_templates`、`ai_chat_records` 等表
+- `InitDB.java` 自动完成管理员表升级（IF NOT EXISTS，不破坏已有数据）
+- 系统操作日志自动记录
 
 ---
 

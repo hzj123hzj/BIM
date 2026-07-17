@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ========================================
-echo   BMI 体质评估与预测系统 v1.0
+echo   BMI 体质评估与预测系统 v1.0 + 管理员后台
 echo ========================================
 echo.
 
@@ -10,7 +10,7 @@ set LIB_PATH=%~dp0lib\postgresql-42.7.3.jar
 set SRC_PATH=%~dp0src
 
 echo [1/3] 编译 Java 源文件...
-"%JDK_PATH%\javac" -encoding UTF-8 -cp "%LIB_PATH%" -d "%~dp0out" "%SRC_PATH%\HealthSystem.java" "%SRC_PATH%\InitDB.java" "%SRC_PATH%\CheckDB.java"
+"%JDK_PATH%\javac" -encoding UTF-8 -cp "%LIB_PATH%" -d "%~dp0out" "%SRC_PATH%\HealthSystem.java" "%SRC_PATH%\AdminSystem.java" "%SRC_PATH%\InitDB.java" "%SRC_PATH%\CheckDB.java"
 
 if %errorlevel% neq 0 (
     echo [错误] 编译失败！请检查 JDK 路径是否正确。

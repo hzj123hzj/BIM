@@ -74,6 +74,8 @@ public class HealthSystem {
         initGlobalFont();
         // 应用统一的 Nimbus 配色主题
         Theme.applyNimbusTheme();
+        // 初始化默认管理员账号
+        DBUtil.initDefaultAdmin();
 
         // 启动登录窗口
         SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true));
@@ -829,6 +831,686 @@ public class HealthSystem {
             }
             return "";
         }
+
+        // ==================== 管理员操作 ====================
+
+        /** 管理员登录验证 */
+        static boolean loginAdmin(String username, String password) {
+            String sql = "SELECT password, salt, role, status FROM admins WHERE username = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    String hash = rs.getString("password");
+                    String salt = rs.getString("salt");
+                    String status = rs.getString("status");
+                    if (!"启用".equals(status)) return false;
+                    if (PasswordUtil.verify(password, salt, hash)) {
+                        currentUsername = username;
+                        return true;
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return false;
+        }
+
+        /** 初始化默认管理员账号 */
+        static void initDefaultAdmin() {
+            String sql = "INSERT INTO admins (username, password, salt, role, status) " +
+                         "SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM admins)";
+            String salt = PasswordUtil.generateSalt();
+            String hash = PasswordUtil.hash("admin123", salt);
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, "admin");
+                ps.setString(2, hash);
+                ps.setString(3, salt);
+                ps.setString(4, "super_admin");
+                ps.setString(5, "启用");
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+
+        /** 获取所有用户（管理员） */
+        static List<Map<String, Object>> getAllUsers() {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "SELECT id, username, gender, age, height, activity_level, account_status, " +
+                         "created_at, last_login, checkin_days, deleted " +
+                         "FROM users ORDER BY id";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("id", rs.getInt("id"));
+                    map.put("username", rs.getString("username"));
+                    map.put("gender", rs.getString("gender"));
+                    map.put("age", rs.getInt("age"));
+                    map.put("height", rs.getDouble("height"));
+                    map.put("activity_level", rs.getString("activity_level"));
+                    map.put("account_status", rs.getString("account_status"));
+                    map.put("created_at", rs.getTimestamp("created_at"));
+                    map.put("last_login", rs.getTimestamp("last_login"));
+                    map.put("checkin_days", rs.getInt("checkin_days"));
+                    map.put("deleted", rs.getBoolean("deleted"));
+                    list.add(map);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 更新用户账号状态 */
+        static boolean updateUserStatus(int userId, String status) {
+            String sql = "UPDATE users SET account_status = ? WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, status);
+                ps.setInt(2, userId);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 软删除用户 */
+        static boolean softDeleteUser(int userId) {
+            String sql = "UPDATE users SET deleted = TRUE, account_status = '冻结' WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, userId);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 硬删除用户 */
+        static boolean hardDeleteUser(int userId) {
+            String sql = "DELETE FROM users WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, userId);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取用户详细健康档案 */
+        static Map<String, Object> getUserHealthProfile(String username) {
+            Map<String, Object> profile = new HashMap<>();
+            profile.put("username", username);
+
+            // 最新健康记录
+            String sql = "SELECT * FROM health_records WHERE username = ? ORDER BY record_date DESC, id DESC LIMIT 1";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    Map<String, Object> latest = new HashMap<>();
+                    latest.put("weight", rs.getDouble("weight"));
+                    latest.put("body_fat", rs.getDouble("body_fat"));
+                    latest.put("bmi", rs.getDouble("bmi"));
+                    latest.put("waist", rs.getDouble("waist"));
+                    latest.put("record_date", rs.getDate("record_date"));
+                    profile.put("latest_record", latest);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
+            // 记录总数
+            profile.put("record_count", countByUser("health_records", username));
+            profile.put("diet_count", countByUser("diet_records", username));
+            profile.put("exercise_count", countByUser("exercise_records", username));
+            profile.put("achievement_count", countByUser("achievements", username));
+
+            return profile;
+        }
+
+        private static int countByUser(String table, String username) {
+            String sql = "SELECT COUNT(*) FROM " + table + " WHERE username = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) return rs.getInt(1);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return 0;
+        }
+
+        /** 获取全局统计数据 */
+        static Map<String, Object> getGlobalStats() {
+            Map<String, Object> stats = new HashMap<>();
+            try (Connection conn = getConnection()) {
+                stats.put("total_users", countQuery(conn, "SELECT COUNT(*) FROM users WHERE deleted = FALSE"));
+                stats.put("active_users_7d", countQuery(conn, "SELECT COUNT(DISTINCT username) FROM health_records WHERE record_date >= CURRENT_DATE - INTERVAL '7 days'"));
+                stats.put("today_checkin", countQuery(conn, "SELECT COUNT(DISTINCT username) FROM health_records WHERE record_date = CURRENT_DATE"));
+                stats.put("avg_bmi", avgQuery(conn, "SELECT AVG(bmi) FROM health_records"));
+                stats.put("avg_body_fat", avgQuery(conn, "SELECT AVG(body_fat) FROM health_records"));
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return stats;
+        }
+
+        private static int countQuery(Connection conn, String sql) throws SQLException {
+            try (PreparedStatement ps = conn.prepareStatement(sql);
+                 ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+
+        private static double avgQuery(Connection conn, String sql) throws SQLException {
+            try (PreparedStatement ps = conn.prepareStatement(sql);
+                 ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getDouble(1) : 0.0;
+            }
+        }
+
+        /** 获取异常用户列表 */
+        static List<Map<String, Object>> getAbnormalUsers() {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "WITH latest AS (" +
+                    "SELECT username, weight, bmi, body_fat, record_date, " +
+                    "ROW_NUMBER() OVER (PARTITION BY username ORDER BY record_date DESC) rn " +
+                    "FROM health_records), " +
+                    "earliest AS (" +
+                    "SELECT username, weight, record_date, " +
+                    "ROW_NUMBER() OVER (PARTITION BY username ORDER BY record_date ASC) rn " +
+                    "FROM health_records) " +
+                    "SELECT u.username, u.age, u.gender, l.weight AS latest_weight, l.bmi, l.body_fat, " +
+                    "l.record_date AS latest_date, e.weight AS earliest_weight, e.record_date AS earliest_date " +
+                    "FROM users u JOIN latest l ON u.username = l.username AND l.rn = 1 " +
+                    "LEFT JOIN earliest e ON u.username = e.username AND e.rn = 1 " +
+                    "WHERE (l.weight - e.weight) > 5 " +
+                    "OR l.bmi > 28 OR l.bmi < 18.5";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("username", rs.getString("username"));
+                    map.put("age", rs.getInt("age"));
+                    map.put("gender", rs.getString("gender"));
+                    map.put("latest_weight", rs.getDouble("latest_weight"));
+                    map.put("bmi", rs.getDouble("bmi"));
+                    map.put("body_fat", rs.getDouble("body_fat"));
+                    map.put("weight_diff", rs.getDouble("latest_weight") - rs.getDouble("earliest_weight"));
+                    map.put("reason", rs.getDouble("bmi") > 28 ? "BMI超标" : rs.getDouble("bmi") < 18.5 ? "BMI偏低" : "体重骤变");
+                    list.add(map);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 获取系统配置 */
+        static Map<String, String> getSystemConfig() {
+            Map<String, String> map = new HashMap<>();
+            String sql = "SELECT config_key, config_value FROM system_config";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    map.put(rs.getString("config_key"), rs.getString("config_value"));
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return map;
+        }
+
+        /** 更新系统配置 */
+        static boolean updateSystemConfig(String key, String value) {
+            String sql = "INSERT INTO system_config (config_key, config_value, description) VALUES (?, ?, '') " +
+                         "ON CONFLICT (config_key) DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = NOW()";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, key);
+                ps.setString(2, value);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 记录系统日志 */
+        static void logAction(String type, String operator, String action, String detail) {
+            String sql = "INSERT INTO system_logs (log_type, operator, action, detail) VALUES (?, ?, ?, ?)";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, type);
+                ps.setString(2, operator);
+                ps.setString(3, action);
+                ps.setString(4, detail);
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+
+        /** 获取系统日志 */
+        static List<String[]> getSystemLogs(String type) {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT log_type, operator, action, detail, created_at FROM system_logs " +
+                         "WHERE ? = '' OR log_type = ? ORDER BY created_at DESC LIMIT 200";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, type);
+                ps.setString(2, type);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            rs.getString("log_type"),
+                            rs.getString("operator"),
+                            rs.getString("action"),
+                            rs.getString("detail"),
+                            sdf.format(rs.getTimestamp("created_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 导出所有用户数据为 CSV 内容字符串 */
+        static String exportUsersCSV() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("ID,用户名,性别,年龄,身高,活动等级,账号状态,注册时间,打卡天数\n");
+            List<Map<String, Object>> users = getAllUsers();
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+            for (Map<String, Object> u : users) {
+                sb.append(u.get("id")).append(",");
+                sb.append(u.get("username")).append(",");
+                sb.append(u.get("gender")).append(",");
+                sb.append(u.get("age")).append(",");
+                sb.append(u.get("height")).append(",");
+                sb.append(u.get("activity_level")).append(",");
+                sb.append(u.get("account_status")).append(",");
+                sb.append(u.get("created_at") == null ? "" : sdf.format(u.get("created_at"))).append(",");
+                sb.append(u.get("checkin_days")).append("\n");
+            }
+            return sb.toString();
+        }
+
+        /** 保存通知消息 */
+        static boolean saveNotification(String sender, String receiver, String title, String content, String type) {
+            String sql = "INSERT INTO notifications (sender, receiver, title, content, type) VALUES (?, ?, ?, ?, ?)";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, sender);
+                ps.setString(2, receiver);
+                ps.setString(3, title);
+                ps.setString(4, content);
+                ps.setString(5, type);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取所有通知 */
+        static List<String[]> getAllNotifications() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, sender, receiver, title, type, status, created_at FROM notifications ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("sender"),
+                            rs.getString("receiver"),
+                            rs.getString("title"),
+                            rs.getString("type"),
+                            rs.getString("status"),
+                            sdf.format(rs.getTimestamp("created_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 获取所有食物 */
+        static List<String[]> getFoods() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, food_name, calories, protein, carbs, fat FROM foods ORDER BY id";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("food_name"),
+                            String.valueOf(rs.getInt("calories")),
+                            df2.format(rs.getDouble("protein")),
+                            df2.format(rs.getDouble("carbs")),
+                            df2.format(rs.getDouble("fat"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 添加/更新食物 */
+        static boolean saveFood(int id, String name, int calories, double protein, double carbs, double fat) {
+            try (Connection conn = getConnection()) {
+                if (id <= 0) {
+                    String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, name);
+                    ps.setInt(2, calories);
+                    ps.setDouble(3, protein);
+                    ps.setDouble(4, carbs);
+                    ps.setDouble(5, fat);
+                    return ps.executeUpdate() > 0;
+                } else {
+                    String sql = "UPDATE foods SET food_name = ?, calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, name);
+                    ps.setInt(2, calories);
+                    ps.setDouble(3, protein);
+                    ps.setDouble(4, carbs);
+                    ps.setDouble(5, fat);
+                    ps.setInt(6, id);
+                    return ps.executeUpdate() > 0;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 删除食物 */
+        static boolean deleteFood(int id) {
+            String sql = "DELETE FROM foods WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取所有运动库项目 */
+        static List<String[]> getExerciseLibrary() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, exercise_name, exercise_type, calories_per_hour, intensity_level, description FROM exercise_library ORDER BY id";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("exercise_name"),
+                            rs.getString("exercise_type"),
+                            String.valueOf(rs.getInt("calories_per_hour")),
+                            rs.getString("intensity_level"),
+                            rs.getString("description")
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 保存运动库项目 */
+        static boolean saveExerciseLibrary(int id, String name, String type, int calories, String intensity, String desc) {
+            try (Connection conn = getConnection()) {
+                if (id <= 0) {
+                    String sql = "INSERT INTO exercise_library (exercise_name, exercise_type, calories_per_hour, intensity_level, description) VALUES (?, ?, ?, ?, ?)";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, name);
+                    ps.setString(2, type);
+                    ps.setInt(3, calories);
+                    ps.setString(4, intensity);
+                    ps.setString(5, desc);
+                    return ps.executeUpdate() > 0;
+                } else {
+                    String sql = "UPDATE exercise_library SET exercise_name = ?, exercise_type = ?, calories_per_hour = ?, intensity_level = ?, description = ? WHERE id = ?";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, name);
+                    ps.setString(2, type);
+                    ps.setInt(3, calories);
+                    ps.setString(4, intensity);
+                    ps.setString(5, desc);
+                    ps.setInt(6, id);
+                    return ps.executeUpdate() > 0;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 删除运动库项目 */
+        static boolean deleteExerciseLibrary(int id) {
+            String sql = "DELETE FROM exercise_library WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取所有健康文章 */
+        static List<String[]> getHealthArticles() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, title, category, status, published_at FROM health_articles ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("title"),
+                            rs.getString("category"),
+                            rs.getString("status"),
+                            sdf.format(rs.getTimestamp("published_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 保存健康文章 */
+        static boolean saveHealthArticle(int id, String title, String content, String category) {
+            try (Connection conn = getConnection()) {
+                if (id <= 0) {
+                    String sql = "INSERT INTO health_articles (title, content, category) VALUES (?, ?, ?)";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, title);
+                    ps.setString(2, content);
+                    ps.setString(3, category);
+                    return ps.executeUpdate() > 0;
+                } else {
+                    String sql = "UPDATE health_articles SET title = ?, content = ?, category = ? WHERE id = ?";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, title);
+                    ps.setString(2, content);
+                    ps.setString(3, category);
+                    ps.setInt(4, id);
+                    return ps.executeUpdate() > 0;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取 AI 模板 */
+        static List<String[]> getAITemplates() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, template_name, template_type, status, updated_at FROM ai_templates ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("template_name"),
+                            rs.getString("template_type"),
+                            rs.getString("status"),
+                            sdf.format(rs.getTimestamp("updated_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 保存 AI 模板 */
+        static boolean saveAITemplate(int id, String name, String type, String content) {
+            try (Connection conn = getConnection()) {
+                if (id <= 0) {
+                    String sql = "INSERT INTO ai_templates (template_name, template_type, prompt_text) VALUES (?, ?, ?)";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, name);
+                    ps.setString(2, type);
+                    ps.setString(3, content);
+                    return ps.executeUpdate() > 0;
+                } else {
+                    String sql = "UPDATE ai_templates SET template_name = ?, template_type = ?, prompt_text = ? WHERE id = ?";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, name);
+                    ps.setString(2, type);
+                    ps.setString(3, content);
+                    ps.setInt(4, id);
+                    return ps.executeUpdate() > 0;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取所有 AI 问答记录 */
+        static List<String[]> getAIChatRecords() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, username, question, status, created_at FROM ai_chat_records ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("username"),
+                            rs.getString("question"),
+                            rs.getString("status"),
+                            sdf.format(rs.getTimestamp("created_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 更新 AI 问答状态 */
+        static boolean updateAIChatStatus(int id, String status) {
+            String sql = "UPDATE ai_chat_records SET status = ? WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, status);
+                ps.setInt(2, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 执行数据库备份（导出 SQL 到文件） */
+        static boolean backupDatabase(String outputPath) {
+            try (Connection conn = getConnection()) {
+                DatabaseMetaData meta = conn.getMetaData();
+                StringBuilder sb = new StringBuilder();
+                sb.append("-- Backup generated at ").append(new Date()).append("\n\n");
+                // 简单导出用户表、健康记录、饮食、运动、成就数据
+                exportTable(conn, sb, "users");
+                exportTable(conn, sb, "health_records");
+                exportTable(conn, sb, "diet_records");
+                exportTable(conn, sb, "exercise_records");
+                exportTable(conn, sb, "goals");
+                exportTable(conn, sb, "achievements");
+                exportTable(conn, sb, "ai_reports");
+                exportTable(conn, sb, "system_config");
+                exportTable(conn, sb, "foods");
+                exportTable(conn, sb, "exercise_library");
+                exportTable(conn, sb, "health_articles");
+                exportTable(conn, sb, "message_templates");
+                exportTable(conn, sb, "notifications");
+                exportTable(conn, sb, "ai_templates");
+                exportTable(conn, sb, "ai_chat_records");
+
+                try (FileWriter fw = new FileWriter(outputPath)) {
+                    fw.write(sb.toString());
+                }
+                return true;
+            } catch (Exception e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        private static void exportTable(Connection conn, StringBuilder sb, String table) throws SQLException {
+            sb.append("-- Table: ").append(table).append("\n");
+            Statement st = conn.createStatement();
+            try {
+                ResultSet rs = st.executeQuery("SELECT * FROM " + table);
+                ResultSetMetaData md = rs.getMetaData();
+                int colCount = md.getColumnCount();
+                while (rs.next()) {
+                    sb.append("INSERT INTO ").append(table).append(" VALUES (");
+                    for (int i = 1; i <= colCount; i++) {
+                        String val = rs.getString(i);
+                        sb.append(val == null ? "NULL" : "'" + val.replace("'", "''") + "'");
+                        if (i < colCount) sb.append(",");
+                    }
+                    sb.append(");\n");
+                }
+            } catch (SQLException e) {
+                // 表可能不存在，跳过
+                sb.append("-- skipped or empty\n");
+            }
+            sb.append("\n");
+        }
     }
 
     // ================================================================
@@ -1301,6 +1983,23 @@ public class HealthSystem {
 
             if (username.isEmpty() || password.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "请输入用户名和密码", "提示", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // 优先判断管理员账号
+            if (DBUtil.loginAdmin(username, password)) {
+                JOptionPane.showMessageDialog(this, "管理员登录成功! 欢迎, " + username);
+                DBUtil.logAction("ADMIN", username, "管理员登录", "登录成功");
+                dispose();
+                try {
+                    AdminSystem.AdminMainFrame frame = new AdminSystem.AdminMainFrame();
+                    frame.setVisible(true);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    JOptionPane.showMessageDialog(null, "管理后台启动失败: " + ex.getMessage(),
+                            "错误", JOptionPane.ERROR_MESSAGE);
+                    new LoginFrame().setVisible(true);
+                }
                 return;
             }
 
