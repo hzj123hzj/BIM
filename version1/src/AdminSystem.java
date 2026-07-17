@@ -28,6 +28,24 @@ public class AdminSystem {
             initUI();
         }
 
+        private void logout() {
+            int confirm = JOptionPane.showConfirmDialog(this,
+                    "确定要退出登录并返回登录界面吗？",
+                    "退出登录", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "退出登录", "返回登录界面");
+                dispose();
+                SwingUtilities.invokeLater(() -> {
+                    try {
+                        new HealthSystem.LoginFrame().setVisible(true);
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        JOptionPane.showMessageDialog(null, "登录窗口启动失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    }
+                });
+            }
+        }
+
         private void initUI() {
             setLayout(new BorderLayout());
 
@@ -41,8 +59,17 @@ public class AdminSystem {
             JLabel lblAdmin = new JLabel("当前管理员: " + HealthSystem.currentUsername, SwingConstants.RIGHT);
             lblAdmin.setFont(HealthSystem.Theme.FONT_HEADER);
             lblAdmin.setForeground(Color.WHITE);
+
+            JButton btnLogout = createPrimaryBtn("退出登录");
+            btnLogout.setText("退出登录");
+            btnLogout.addActionListener(e -> logout());
+            JPanel eastPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+            eastPanel.setOpaque(false);
+            eastPanel.add(lblAdmin);
+            eastPanel.add(btnLogout);
+
             topPanel.add(lblTitle, BorderLayout.WEST);
-            topPanel.add(lblAdmin, BorderLayout.EAST);
+            topPanel.add(eastPanel, BorderLayout.EAST);
             add(topPanel, BorderLayout.NORTH);
 
             // 中间标签页
@@ -700,19 +727,40 @@ public class AdminSystem {
             form.add(new JLabel("API Key:")); form.add(tfApiKey);
             form.add(new JLabel("模型名称:")); form.add(tfModel);
             form.add(new JLabel("接口地址:")); form.add(tfEndpoint);
-            form.add(new JLabel("说明:")); form.add(new JLabel("配置硅基流动 API 信息（仅保存，不验证）"));
+            form.add(new JLabel("说明:")); form.add(new JLabel("配置硅基流动 API 信息（保存到数据库）"));
             panel.add(form, BorderLayout.NORTH);
 
+            // 加载已有配置
+            Map<String, String> cfg = HealthSystem.DBUtil.getAIApiConfig();
+            if (cfg != null) {
+                tfApiKey.setText(cfg.getOrDefault("api_key", ""));
+                tfModel.setText(cfg.getOrDefault("model_name", "deepseek-chat"));
+                tfEndpoint.setText(cfg.getOrDefault("endpoint_url", "https://api.siliconflow.cn/v1"));
+            }
+
             JButton btnSave = createPrimaryBtn("保存配置");
-            btnSave.addActionListener(e -> {
-                HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "更新API配置", tfModel.getText());
-                JOptionPane.showMessageDialog(this, "API 配置已保存");
-            });
+            btnSave.addActionListener(e -> saveApiConfig());
             JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
             btnPanel.setOpaque(false);
             btnPanel.add(btnSave);
             panel.add(btnPanel, BorderLayout.CENTER);
             return panel;
+        }
+
+        private void saveApiConfig() {
+            String apiKey = tfApiKey.getText().trim();
+            String modelName = tfModel.getText().trim();
+            String endpoint = tfEndpoint.getText().trim();
+            if (modelName.isEmpty() || endpoint.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "模型名称和接口地址不能为空", "提示", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (HealthSystem.DBUtil.saveAIApiConfig(apiKey, modelName, endpoint)) {
+                HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "更新API配置", modelName);
+                JOptionPane.showMessageDialog(this, "API 配置已保存到数据库\n\n后续可在 Prompt 模板或健康顾问模块中调用此配置生成 AI 建议。", "保存成功", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "保存失败，请检查数据库连接", "错误", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
@@ -838,7 +886,7 @@ public class AdminSystem {
             JButton btnDietJson = createPrimaryBtn("导出饮食记录 (CSV)");
             btnDietJson.addActionListener(e -> exportDietCSV());
             JButton btnChart = createPrimaryBtn("生成统计图表");
-            btnChart.addActionListener(e -> JOptionPane.showMessageDialog(this, "统计图表功能请见数据监控面板"));
+            btnChart.addActionListener(e -> showStatsDialog());
 
             card.add(btnUserReport);
             card.add(btnHealthJson);
@@ -854,15 +902,41 @@ public class AdminSystem {
 
         private void exportHealthJSON() {
             StringBuilder sb = new StringBuilder("[\n");
-            List<Map<String, Object>> users = HealthSystem.DBUtil.getAllUsers();
-            for (int i = 0; i < users.size(); i++) {
-                Map<String, Object> u = users.get(i);
-                sb.append("  {\"username\":\"").append(u.get("username")).append("\"}");
-                if (i < users.size() - 1) sb.append(",");
-                sb.append("\n");
+            String sql = "SELECT username, weight, bmi, body_fat, muscle_rate, water_rate, visceral_fat, bone_muscle, waist, bmr, tdee, record_date FROM health_records ORDER BY record_date DESC LIMIT 5000";
+            try (java.sql.Connection conn = HealthSystem.DBUtil.getConnection();
+                 java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+                java.sql.ResultSet rs = ps.executeQuery();
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) sb.append(",\n");
+                    first = false;
+                    sb.append("  {\n");
+                    sb.append("    \"username\": \"").append(escapeJson(rs.getString("username"))).append("\",\n");
+                    sb.append("    \"weight\": ").append(rs.getDouble("weight")).append(",\n");
+                    sb.append("    \"bmi\": ").append(rs.getDouble("bmi")).append(",\n");
+                    sb.append("    \"body_fat\": ").append(rs.getDouble("body_fat")).append(",\n");
+                    sb.append("    \"muscle_rate\": ").append(rs.getDouble("muscle_rate")).append(",\n");
+                    sb.append("    \"water_rate\": ").append(rs.getDouble("water_rate")).append(",\n");
+                    sb.append("    \"visceral_fat\": ").append(rs.getInt("visceral_fat")).append(",\n");
+                    sb.append("    \"bone_muscle\": ").append(rs.getDouble("bone_muscle")).append(",\n");
+                    sb.append("    \"waist\": ").append(rs.getDouble("waist")).append(",\n");
+                    sb.append("    \"bmr\": ").append(rs.getDouble("bmr")).append(",\n");
+                    sb.append("    \"tdee\": ").append(rs.getDouble("tdee")).append(",\n");
+                    sb.append("    \"record_date\": \"").append(rs.getTimestamp("record_date")).append("\"\n");
+                    sb.append("  }");
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "读取健康数据失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                return;
             }
-            sb.append("]");
+            sb.append("\n]");
             saveToFile(sb.toString(), "health_data.json");
+        }
+
+        private String escapeJson(String s) {
+            if (s == null) return "";
+            return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
         }
 
         private void exportDietCSV() {
@@ -890,15 +964,38 @@ public class AdminSystem {
 
         private void saveToFile(String content, String defaultName) {
             JFileChooser fc = new JFileChooser();
+            fc.setDialogTitle("导出文件 - " + defaultName);
             fc.setSelectedFile(new File(defaultName));
-            if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                try (FileWriter fw = new FileWriter(fc.getSelectedFile())) {
+            if (fc.showSaveDialog(SwingUtilities.getWindowAncestor(this)) == JFileChooser.APPROVE_OPTION) {
+                File f = fc.getSelectedFile();
+                try (FileWriter fw = new FileWriter(f)) {
                     fw.write(content);
-                    JOptionPane.showMessageDialog(this, "导出成功");
+                    JOptionPane.showMessageDialog(this,
+                            "导出成功！\n保存路径：\n" + f.getAbsolutePath() + "\n\n共 " + content.length() + " 字符",
+                            "导出完成", JOptionPane.INFORMATION_MESSAGE);
                 } catch (IOException ex) {
                     JOptionPane.showMessageDialog(this, "导出失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                 }
             }
+        }
+
+        private void showStatsDialog() {
+            Map<String, Object> stats = HealthSystem.DBUtil.getGlobalStats();
+            StringBuilder sb = new StringBuilder();
+            sb.append("全局健康统计\n");
+            sb.append("=========================\n");
+            sb.append("总用户数：").append(stats.get("total_users")).append("\n");
+            sb.append("7日活跃用户：").append(stats.get("active_users_7d")).append("\n");
+            sb.append("今日打卡：").append(stats.get("today_checkin")).append("\n");
+            sb.append("平均BMI：").append(HealthSystem.df1.format(stats.get("avg_bmi"))).append("\n");
+            sb.append("异常用户数：").append(stats.get("abnormal_users")).append("\n\n");
+            sb.append("提示：详细图表请切换到「数据监控」面板查看。");
+            JTextArea ta = new JTextArea(sb.toString());
+            ta.setFont(HealthSystem.Theme.FONT_BODY);
+            ta.setEditable(false);
+            ta.setRows(10);
+            ta.setColumns(35);
+            JOptionPane.showMessageDialog(this, new JScrollPane(ta), "统计摘要", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 

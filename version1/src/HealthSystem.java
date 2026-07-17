@@ -1001,6 +1001,7 @@ public class HealthSystem {
                 stats.put("today_checkin", countQuery(conn, "SELECT COUNT(DISTINCT username) FROM health_records WHERE record_date = CURRENT_DATE"));
                 stats.put("avg_bmi", avgQuery(conn, "SELECT AVG(bmi) FROM health_records"));
                 stats.put("avg_body_fat", avgQuery(conn, "SELECT AVG(body_fat) FROM health_records"));
+                stats.put("abnormal_users", getAbnormalUsers().size());
             } catch (SQLException e) {
                 e.printStackTrace();
             }
@@ -1450,6 +1451,61 @@ public class HealthSystem {
                 ps.setString(1, status);
                 ps.setInt(2, id);
                 return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取 AI API 配置（默认使用 siliconflow） */
+        static Map<String, String> getAIApiConfig() {
+            Map<String, String> cfg = new HashMap<>();
+            cfg.put("provider_name", "siliconflow");
+            cfg.put("api_key", "");
+            cfg.put("model_name", "deepseek-chat");
+            cfg.put("endpoint_url", "https://api.siliconflow.cn/v1");
+            String sql = "SELECT provider_name, api_key, model_name, endpoint_url FROM ai_api_config WHERE provider_name = ? ORDER BY id DESC LIMIT 1";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, "siliconflow");
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    cfg.put("provider_name", rs.getString("provider_name"));
+                    cfg.put("api_key", rs.getString("api_key") == null ? "" : rs.getString("api_key"));
+                    cfg.put("model_name", rs.getString("model_name") == null ? "deepseek-chat" : rs.getString("model_name"));
+                    cfg.put("endpoint_url", rs.getString("endpoint_url") == null ? "https://api.siliconflow.cn/v1" : rs.getString("endpoint_url"));
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return cfg;
+        }
+
+        /** 保存 AI API 配置 */
+        static boolean saveAIApiConfig(String apiKey, String modelName, String endpointUrl) {
+            Map<String, String> existing = getAIApiConfig();
+            String sql;
+            boolean hasRecord = existing != null && !existing.getOrDefault("api_key", "").isEmpty();
+            try (Connection conn = getConnection()) {
+                if (hasRecord) {
+                    sql = "UPDATE ai_api_config SET api_key = ?, model_name = ?, endpoint_url = ?, updated_at = CURRENT_TIMESTAMP WHERE provider_name = ?";
+                    try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                        ps.setString(1, apiKey);
+                        ps.setString(2, modelName);
+                        ps.setString(3, endpointUrl);
+                        ps.setString(4, "siliconflow");
+                        return ps.executeUpdate() > 0;
+                    }
+                } else {
+                    sql = "INSERT INTO ai_api_config (provider_name, api_key, model_name, endpoint_url) VALUES (?, ?, ?, ?)";
+                    try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                        ps.setString(1, "siliconflow");
+                        ps.setString(2, apiKey);
+                        ps.setString(3, modelName);
+                        ps.setString(4, endpointUrl);
+                        return ps.executeUpdate() > 0;
+                    }
+                }
             } catch (SQLException e) {
                 e.printStackTrace();
                 return false;
