@@ -409,8 +409,12 @@ public class HealthSystem {
             String sql = "INSERT INTO health_records (username, weight, body_fat, water_rate, muscle_rate, " +
                          "visceral_fat, bone_muscle, bmr, tdee, bmi, waist, body_age, body_type) " +
                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String updateCheckinSql = "UPDATE users SET checkin_days = (" +
+                    "SELECT COUNT(DISTINCT record_date) FROM health_records WHERE username = ?" +
+                    ") WHERE username = ?";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
+                conn.setAutoCommit(false);
                 ps.setString(1, currentUsername);
                 ps.setDouble(2, weight);
                 ps.setDouble(3, bodyFat);
@@ -424,7 +428,16 @@ public class HealthSystem {
                 ps.setDouble(11, waist);
                 ps.setInt(12, bodyAge);
                 ps.setString(13, bodyType);
-                return ps.executeUpdate() > 0;
+                ps.executeUpdate();
+
+                try (PreparedStatement ps2 = conn.prepareStatement(updateCheckinSql)) {
+                    ps2.setString(1, currentUsername);
+                    ps2.setString(2, currentUsername);
+                    ps2.executeUpdate();
+                }
+
+                conn.commit();
+                return true;
             } catch (SQLException e) {
                 JOptionPane.showMessageDialog(null, "保存健康记录失败: " + e.getMessage(),
                         "错误", JOptionPane.ERROR_MESSAGE);
@@ -880,8 +893,9 @@ public class HealthSystem {
         static List<Map<String, Object>> getAllUsers() {
             List<Map<String, Object>> list = new ArrayList<>();
             String sql = "SELECT id, username, gender, age, height, activity_level, account_status, " +
-                         "created_at, last_login, checkin_days, deleted " +
-                         "FROM users ORDER BY id";
+                         "created_at, last_login, deleted, " +
+                         "(SELECT COUNT(DISTINCT record_date) FROM health_records WHERE username = u.username) AS checkin_days " +
+                         "FROM users u ORDER BY id";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -1148,6 +1162,40 @@ public class HealthSystem {
                 sb.append(u.get("account_status")).append(",");
                 sb.append(u.get("created_at") == null ? "" : sdf.format(u.get("created_at"))).append(",");
                 sb.append(u.get("checkin_days")).append("\n");
+            }
+            return sb.toString();
+        }
+
+        /** 导出所有健康打卡记录为 CSV 内容字符串 */
+        static String exportHealthRecordsCSV() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("ID,用户名,记录日期,体重,体脂率,水分率,肌肉率,内脏脂肪,骨量,BMI,腰围,基础代谢,每日消耗,身体年龄,身体类型\n");
+            String sql = "SELECT id, username, record_date, weight, body_fat, water_rate, muscle_rate, " +
+                         "visceral_fat, bone_muscle, bmi, waist, bmr, tdee, body_age, body_type " +
+                         "FROM health_records ORDER BY record_date DESC, id DESC";
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql);
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    sb.append(rs.getInt("id")).append(",");
+                    sb.append(rs.getString("username")).append(",");
+                    sb.append(rs.getTimestamp("record_date") == null ? "" : sdf.format(rs.getTimestamp("record_date"))).append(",");
+                    sb.append(rs.getDouble("weight")).append(",");
+                    sb.append(rs.getDouble("body_fat")).append(",");
+                    sb.append(rs.getDouble("water_rate")).append(",");
+                    sb.append(rs.getDouble("muscle_rate")).append(",");
+                    sb.append(rs.getInt("visceral_fat")).append(",");
+                    sb.append(rs.getDouble("bone_muscle")).append(",");
+                    sb.append(rs.getDouble("bmi")).append(",");
+                    sb.append(rs.getDouble("waist")).append(",");
+                    sb.append(rs.getDouble("bmr")).append(",");
+                    sb.append(rs.getDouble("tdee")).append(",");
+                    sb.append(rs.getInt("body_age")).append(",");
+                    sb.append(rs.getString("body_type")).append("\n");
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
             return sb.toString();
         }

@@ -168,9 +168,12 @@ public class AdminSystem {
             JButton btnDelete = createAccentBtn("软删除");
             btnDelete.addActionListener(e -> softDeleteUser());
             ctrl.add(btnDelete);
-            JButton btnExport = createPrimaryBtn("导出CSV");
+            JButton btnExport = createPrimaryBtn("导出用户CSV");
             btnExport.addActionListener(e -> exportUsers());
             ctrl.add(btnExport);
+            JButton btnExportHealth = createPrimaryBtn("导出打卡记录CSV");
+            btnExportHealth.addActionListener(e -> exportHealthRecords());
+            ctrl.add(btnExportHealth);
             topPanel.add(ctrl, BorderLayout.CENTER);
             add(topPanel, BorderLayout.NORTH);
 
@@ -272,9 +275,29 @@ public class AdminSystem {
             JFileChooser fc = new JFileChooser();
             fc.setSelectedFile(new File("users_export.csv"));
             if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                try (FileWriter fw = new FileWriter(fc.getSelectedFile())) {
+                File f = fc.getSelectedFile();
+                try (FileWriter fw = new FileWriter(f)) {
                     fw.write(csv);
-                    JOptionPane.showMessageDialog(this, "导出成功");
+                    JOptionPane.showMessageDialog(this,
+                            "导出成功！\n保存路径：\n" + f.getAbsolutePath().replace("\\", "/") + "\n\n共 " + csv.length() + " 字符",
+                            "导出完成", JOptionPane.INFORMATION_MESSAGE);
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(this, "导出失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }
+
+        private void exportHealthRecords() {
+            String csv = HealthSystem.DBUtil.exportHealthRecordsCSV();
+            JFileChooser fc = new JFileChooser();
+            fc.setSelectedFile(new File("health_records_export.csv"));
+            if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File f = fc.getSelectedFile();
+                try (FileWriter fw = new FileWriter(f)) {
+                    fw.write(csv);
+                    JOptionPane.showMessageDialog(this,
+                            "导出成功！\n保存路径：\n" + f.getAbsolutePath().replace("\\", "/") + "\n\n共 " + csv.length() + " 字符",
+                            "导出完成", JOptionPane.INFORMATION_MESSAGE);
                 } catch (IOException ex) {
                     JOptionPane.showMessageDialog(this, "导出失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                 }
@@ -971,7 +994,7 @@ public class AdminSystem {
                 try (FileWriter fw = new FileWriter(f)) {
                     fw.write(content);
                     JOptionPane.showMessageDialog(this,
-                            "导出成功！\n保存路径：\n" + f.getAbsolutePath() + "\n\n共 " + content.length() + " 字符",
+                            "导出成功！\n保存路径：\n" + f.getAbsolutePath().replace("\\", "/") + "\n\n共 " + content.length() + " 字符",
                             "导出完成", JOptionPane.INFORMATION_MESSAGE);
                 } catch (IOException ex) {
                     JOptionPane.showMessageDialog(this, "导出失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
