@@ -1,4 +1,5 @@
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
@@ -198,8 +199,20 @@ public class HealthSystem {
             table.setFont(FONT_BODY);
             table.setRowHeight(28);
             table.getTableHeader().setFont(FONT_HEADER);
-            table.getTableHeader().setBackground(PRIMARY);
-            table.getTableHeader().setForeground(Color.WHITE);
+            table.getTableHeader().setDefaultRenderer(new DefaultTableCellRenderer() {
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value,
+                                                               boolean isSelected, boolean hasFocus,
+                                                               int row, int column) {
+                    JLabel lbl = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                    lbl.setBackground(PRIMARY);
+                    lbl.setForeground(Color.WHITE);
+                    lbl.setFont(FONT_HEADER);
+                    lbl.setOpaque(true);
+                    lbl.setHorizontalAlignment(SwingConstants.CENTER);
+                    return lbl;
+                }
+            });
             table.setSelectionBackground(PRIMARY_L);
             table.setSelectionForeground(Color.WHITE);
             table.setGridColor(BORDER);
@@ -1535,17 +1548,19 @@ public class HealthSystem {
         /** 获取单个 AI 模板详情 */
         static Map<String, String> getAITemplateById(int id) {
             Map<String, String> map = new HashMap<>();
-            String sql = "SELECT id, template_name, template_type, prompt_text, status FROM ai_templates WHERE id = ?";
+            String sql = "SELECT id, template_name, template_type, prompt_text, status, updated_at FROM ai_templates WHERE id = ?";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setInt(1, id);
                 ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
                 if (rs.next()) {
                     map.put("id", String.valueOf(rs.getInt("id")));
                     map.put("template_name", rs.getString("template_name"));
                     map.put("template_type", rs.getString("template_type"));
                     map.put("prompt_text", rs.getString("prompt_text"));
                     map.put("status", rs.getString("status"));
+                    map.put("updated_at", rs.getTimestamp("updated_at") != null ? sdf.format(rs.getTimestamp("updated_at")) : "-");
                 }
             } catch (SQLException e) {
                 e.printStackTrace();

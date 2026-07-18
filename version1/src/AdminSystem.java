@@ -838,12 +838,25 @@ public class AdminSystem {
             if (t.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "未找到模板内容"); return;
             }
-            JTextArea ta = new JTextArea(t.get("prompt_text"), 10, 50);
+            JPanel panel = new JPanel(new BorderLayout(8, 8));
+            panel.setOpaque(false);
+
+            JPanel info = new JPanel(new GridLayout(4, 2, 8, 6));
+            info.setOpaque(false);
+            info.add(new JLabel("模板名称：")); info.add(new JLabel(t.get("template_name")));
+            info.add(new JLabel("模板类型：")); info.add(new JLabel(t.get("template_type")));
+            info.add(new JLabel("当前状态：")); info.add(new JLabel(t.get("status")));
+            info.add(new JLabel("更新时间：")); info.add(new JLabel(t.get("updated_at")));
+            panel.add(info, BorderLayout.NORTH);
+
+            JTextArea ta = new JTextArea(t.get("prompt_text"), 12, 50);
             ta.setLineWrap(true);
             ta.setFont(HealthSystem.Theme.FONT_BODY);
             ta.setEditable(false);
-            JOptionPane.showMessageDialog(this, new JScrollPane(ta),
-                    "模板: " + t.get("template_name") + " [" + t.get("template_type") + "]",
+            panel.add(new JScrollPane(ta), BorderLayout.CENTER);
+
+            JOptionPane.showMessageDialog(this, panel,
+                    "Prompt 模板详情",
                     JOptionPane.INFORMATION_MESSAGE);
         }
 
