@@ -357,8 +357,11 @@ public class InitDB {
             "  question TEXT," +
             "  answer TEXT," +
             "  status VARCHAR(20) DEFAULT '有效'," +
+            "  notified BOOLEAN DEFAULT FALSE," +
             "  created_at TIMESTAMP DEFAULT NOW()" +
             ")");
+        execUpdate(conn, "ALTER TABLE ai_chat_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'");
+        execUpdate(conn, "ALTER TABLE ai_chat_records ADD COLUMN IF NOT EXISTS notified BOOLEAN DEFAULT FALSE");
         execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_ai_chat_user ON ai_chat_records(username)");
         System.out.println("  [OK] ai_chat_records 表");
 
@@ -370,9 +373,11 @@ public class InitDB {
             "  query TEXT," +
             "  result TEXT," +
             "  status VARCHAR(20) DEFAULT '有效'," +
+            "  notified BOOLEAN DEFAULT FALSE," +
             "  created_at TIMESTAMP DEFAULT NOW()" +
             ")");
         execUpdate(conn, "ALTER TABLE ai_diet_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'");
+        execUpdate(conn, "ALTER TABLE ai_diet_records ADD COLUMN IF NOT EXISTS notified BOOLEAN DEFAULT FALSE");
         System.out.println("  [OK] ai_diet_records 表");
 
         // AI 菜谱生成记录表
@@ -386,9 +391,11 @@ public class InitDB {
             "  people INT," +
             "  result TEXT," +
             "  status VARCHAR(20) DEFAULT '有效'," +
+            "  notified BOOLEAN DEFAULT FALSE," +
             "  created_at TIMESTAMP DEFAULT NOW()" +
             ")");
         execUpdate(conn, "ALTER TABLE ai_cookbook_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'");
+        execUpdate(conn, "ALTER TABLE ai_cookbook_records ADD COLUMN IF NOT EXISTS notified BOOLEAN DEFAULT FALSE");
         System.out.println("  [OK] ai_cookbook_records 表");
 
         // 插入默认系统配置

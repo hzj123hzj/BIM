@@ -729,11 +729,13 @@ public class AdminSystem {
             panel.setOpaque(false);
             JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
             ctrl.setOpaque(false);
+            JButton btnRefresh = createPrimaryBtn("刷新");
+            btnRefresh.addActionListener(e -> loadChatRecords());
             JButton btnReview = createPrimaryBtn("标记有效");
             btnReview.addActionListener(e -> updateChatStatus("有效"));
             JButton btnInvalid = createAccentBtn("标记无效");
             btnInvalid.addActionListener(e -> updateChatStatus("无效"));
-            ctrl.add(btnReview); ctrl.add(btnInvalid);
+            ctrl.add(btnRefresh); ctrl.add(btnReview); ctrl.add(btnInvalid);
             panel.add(ctrl, BorderLayout.NORTH);
 
             chatModel = new DefaultTableModel(new String[]{"ID", "用户", "问题", "状态", "时间"}, 0) {
@@ -954,11 +956,13 @@ public class AdminSystem {
             panel.setOpaque(false);
             JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
             ctrl.setOpaque(false);
+            JButton btnRefresh = createPrimaryBtn("刷新");
+            btnRefresh.addActionListener(e -> loadDietRecords());
             JButton btnReview = createPrimaryBtn("标记有效");
             btnReview.addActionListener(e -> updateDietStatus("有效"));
             JButton btnInvalid = createAccentBtn("标记无效");
             btnInvalid.addActionListener(e -> updateDietStatus("无效"));
-            ctrl.add(btnReview); ctrl.add(btnInvalid);
+            ctrl.add(btnRefresh); ctrl.add(btnReview); ctrl.add(btnInvalid);
             panel.add(ctrl, BorderLayout.NORTH);
 
             dietModel = new DefaultTableModel(new String[]{"ID", "用户", "饮食需求", "状态", "时间"}, 0) {
@@ -1019,11 +1023,13 @@ public class AdminSystem {
             panel.setOpaque(false);
             JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
             ctrl.setOpaque(false);
+            JButton btnRefresh = createPrimaryBtn("刷新");
+            btnRefresh.addActionListener(e -> loadCookbookRecords());
             JButton btnReview = createPrimaryBtn("标记有效");
             btnReview.addActionListener(e -> updateCookbookStatus("有效"));
             JButton btnInvalid = createAccentBtn("标记无效");
             btnInvalid.addActionListener(e -> updateCookbookStatus("无效"));
-            ctrl.add(btnReview); ctrl.add(btnInvalid);
+            ctrl.add(btnRefresh); ctrl.add(btnReview); ctrl.add(btnInvalid);
             panel.add(ctrl, BorderLayout.NORTH);
 
             cookbookModel = new DefaultTableModel(new String[]{"ID", "用户", "食材需求", "口味", "餐次", "人数", "状态", "时间"}, 0) {

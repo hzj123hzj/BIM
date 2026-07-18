@@ -1636,10 +1636,10 @@ public class HealthSystem {
             return map;
         }
 
-        /** 获取所有 AI 问答记录 */
+        /** 获取所有 AI 问答记录（管理员，过滤已标记无效的记录） */
         static List<String[]> getAIChatRecords() {
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, username, question, status, created_at FROM ai_chat_records ORDER BY id DESC";
+            String sql = "SELECT id, username, question, status, created_at FROM ai_chat_records WHERE COALESCE(status,'有效') <> '无效' ORDER BY id DESC";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -1659,10 +1659,10 @@ public class HealthSystem {
             return list;
         }
 
-        /** 获取所有 AI 饮食推荐记录（管理员） */
+        /** 获取所有 AI 饮食推荐记录（管理员，过滤已标记无效的记录） */
         static List<String[]> getAIDietRecords() {
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, username, query, status, created_at FROM ai_diet_records ORDER BY id DESC";
+            String sql = "SELECT id, username, query, status, created_at FROM ai_diet_records WHERE COALESCE(status,'有效') <> '无效' ORDER BY id DESC";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -1682,10 +1682,10 @@ public class HealthSystem {
             return list;
         }
 
-        /** 获取所有 AI 菜谱生成记录（管理员） */
+        /** 获取所有 AI 菜谱生成记录（管理员，过滤已标记无效的记录） */
         static List<String[]> getAICookbookRecords() {
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, username, ingredients, flavor, meal, people, status, created_at FROM ai_cookbook_records ORDER BY id DESC";
+            String sql = "SELECT id, username, ingredients, flavor, meal, people, status, created_at FROM ai_cookbook_records WHERE COALESCE(status,'有效') <> '无效' ORDER BY id DESC";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -1928,14 +1928,25 @@ public class HealthSystem {
             return map;
         }
 
-        /** 更新 AI 问答状态 */
+        /** 更新 AI 问答状态（带状态一致校验与重复通知防护） */
         static boolean updateAIChatStatus(int id, String status) {
-            String sql = "UPDATE ai_chat_records SET status = ? WHERE id = ?";
+            String select = "SELECT status, notified FROM ai_chat_records WHERE id = ?";
+            String update = "UPDATE ai_chat_records SET status = ?, notified = ? WHERE id = ?";
             try (Connection conn = getConnection();
-                 PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, status);
-                ps.setInt(2, id);
-                return ps.executeUpdate() > 0;
+                 PreparedStatement psSel = conn.prepareStatement(select)) {
+                psSel.setInt(1, id);
+                ResultSet rs = psSel.executeQuery();
+                if (!rs.next()) return false;
+                String curStatus = rs.getString("status");
+                boolean notified = rs.getBoolean("notified");
+                if (status.equals(curStatus)) return false; // 已是目标状态，不重复操作
+                boolean newNotified = "无效".equals(status) || notified; // 标记无效时锁定已通知
+                try (PreparedStatement ps = conn.prepareStatement(update)) {
+                    ps.setString(1, status);
+                    ps.setBoolean(2, newNotified);
+                    ps.setInt(3, id);
+                    return ps.executeUpdate() > 0;
+                }
             } catch (SQLException e) {
                 e.printStackTrace();
                 return false;
@@ -1991,28 +2002,50 @@ public class HealthSystem {
             return map;
         }
 
-        /** 更新 AI 饮食推荐状态 */
+        /** 更新 AI 饮食推荐状态（带状态一致校验与重复通知防护） */
         static boolean updateAIDietStatus(int id, String status) {
-            String sql = "UPDATE ai_diet_records SET status = ? WHERE id = ?";
+            String select = "SELECT status, notified FROM ai_diet_records WHERE id = ?";
+            String update = "UPDATE ai_diet_records SET status = ?, notified = ? WHERE id = ?";
             try (Connection conn = getConnection();
-                 PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, status);
-                ps.setInt(2, id);
-                return ps.executeUpdate() > 0;
+                 PreparedStatement psSel = conn.prepareStatement(select)) {
+                psSel.setInt(1, id);
+                ResultSet rs = psSel.executeQuery();
+                if (!rs.next()) return false;
+                String curStatus = rs.getString("status");
+                boolean notified = rs.getBoolean("notified");
+                if (status.equals(curStatus)) return false;
+                boolean newNotified = "无效".equals(status) || notified;
+                try (PreparedStatement ps = conn.prepareStatement(update)) {
+                    ps.setString(1, status);
+                    ps.setBoolean(2, newNotified);
+                    ps.setInt(3, id);
+                    return ps.executeUpdate() > 0;
+                }
             } catch (SQLException e) {
                 e.printStackTrace();
                 return false;
             }
         }
 
-        /** 更新 AI 菜谱生成状态 */
+        /** 更新 AI 菜谱生成状态（带状态一致校验与重复通知防护） */
         static boolean updateAICookbookStatus(int id, String status) {
-            String sql = "UPDATE ai_cookbook_records SET status = ? WHERE id = ?";
+            String select = "SELECT status, notified FROM ai_cookbook_records WHERE id = ?";
+            String update = "UPDATE ai_cookbook_records SET status = ?, notified = ? WHERE id = ?";
             try (Connection conn = getConnection();
-                 PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, status);
-                ps.setInt(2, id);
-                return ps.executeUpdate() > 0;
+                 PreparedStatement psSel = conn.prepareStatement(select)) {
+                psSel.setInt(1, id);
+                ResultSet rs = psSel.executeQuery();
+                if (!rs.next()) return false;
+                String curStatus = rs.getString("status");
+                boolean notified = rs.getBoolean("notified");
+                if (status.equals(curStatus)) return false;
+                boolean newNotified = "无效".equals(status) || notified;
+                try (PreparedStatement ps = conn.prepareStatement(update)) {
+                    ps.setString(1, status);
+                    ps.setBoolean(2, newNotified);
+                    ps.setInt(3, id);
+                    return ps.executeUpdate() > 0;
+                }
             } catch (SQLException e) {
                 e.printStackTrace();
                 return false;
