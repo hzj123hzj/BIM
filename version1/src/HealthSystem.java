@@ -1576,6 +1576,53 @@ public class HealthSystem {
             return list;
         }
 
+        /** 获取所有 AI 饮食推荐记录（管理员） */
+        static List<String[]> getAIDietRecords() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, username, query, created_at FROM ai_diet_records ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("username"),
+                            rs.getString("query"),
+                            sdf.format(rs.getTimestamp("created_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 获取所有 AI 菜谱生成记录（管理员） */
+        static List<String[]> getAICookbookRecords() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, username, ingredients, flavor, meal, people, created_at FROM ai_cookbook_records ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("username"),
+                            rs.getString("ingredients"),
+                            rs.getString("flavor"),
+                            rs.getString("meal"),
+                            String.valueOf(rs.getInt("people")),
+                            sdf.format(rs.getTimestamp("created_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
         /** 保存 AI 问答记录 */
         static boolean saveAIChatRecord(String username, String question, String answer) {
             String sql = "INSERT INTO ai_chat_records (username, question, answer) VALUES (?, ?, ?)";
@@ -4005,7 +4052,7 @@ public class HealthSystem {
             for (String[] row : rows) {
                 int id = Integer.parseInt(row[0]);
                 historyMap.put(id, row);
-                historyModel.addElement(row[4] + " | " + row[1]);
+                historyModel.addElement(row[0] + " | " + row[4] + " | " + row[1]);
             }
         }
 
@@ -4286,7 +4333,7 @@ public class HealthSystem {
 
     /** AI 菜谱生成面板 — 自由输入需求，AI 给出菜谱 + 采购清单 */
     static class AICookbookPanel extends JPanel {
-        private JTextArea taRequest = new JTextArea(4, 50);
+        private JTextArea taRequest = new JTextArea(8, 50);
         private JTextField tfApiKey = new JTextField(20);
         private JTextArea taResult = new JTextArea(16, 50);
 
@@ -4310,7 +4357,10 @@ public class HealthSystem {
             taRequest.setWrapStyleWord(true);
             taRequest.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
             taRequest.setText("例如：我有鸡蛋、番茄、鸡胸肉，想做清淡口味的晚餐，2个人吃。");
-            inputPanel.add(new JScrollPane(taRequest), BorderLayout.CENTER);
+            JScrollPane requestScroll = new JScrollPane(taRequest);
+            requestScroll.setPreferredSize(new Dimension(0, 140));
+            requestScroll.setBorder(BorderFactory.createLineBorder(Theme.BORDER));
+            inputPanel.add(requestScroll, BorderLayout.CENTER);
             topCard.add(inputPanel, BorderLayout.CENTER);
 
             JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 5));

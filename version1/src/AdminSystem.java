@@ -704,7 +704,7 @@ public class AdminSystem {
 
     // ==================== 4. AI 系统管理面板 ====================
     static class AISystemPanel extends JPanel {
-        private DefaultTableModel chatModel, templateModel, usageModel;
+        private DefaultTableModel chatModel, templateModel, usageModel, dietModel, cookbookModel;
         private JTextField tfApiKey, tfModel, tfEndpoint;
 
         AISystemPanel() {
@@ -715,6 +715,8 @@ public class AdminSystem {
             JTabbedPane tabPane = new JTabbedPane();
             tabPane.setFont(HealthSystem.Theme.FONT_HEADER);
             tabPane.addTab("AI 问答记录", createChatPanel());
+            tabPane.addTab("AI 饮食记录", createDietRecordPanel());
+            tabPane.addTab("AI 菜谱记录", createCookbookRecordPanel());
             tabPane.addTab("Prompt 模板", createTemplatePanel());
             tabPane.addTab("API 配置", createApiConfigPanel());
             tabPane.addTab("AI 使用统计", createUsageStatsPanel());
@@ -909,6 +911,86 @@ public class AdminSystem {
                 JOptionPane.showMessageDialog(this, "API 配置已保存到数据库\n\n后续可在 Prompt 模板或健康顾问模块中调用此配置生成 AI 建议。", "保存成功", JOptionPane.INFORMATION_MESSAGE);
             } else {
                 JOptionPane.showMessageDialog(this, "保存失败，请检查数据库连接", "错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+
+        private JPanel createDietRecordPanel() {
+            JPanel panel = new JPanel(new BorderLayout(8, 8));
+            panel.setOpaque(false);
+            JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            ctrl.setOpaque(false);
+            JButton btnRefresh = createPrimaryBtn("刷新记录");
+            btnRefresh.addActionListener(e -> loadDietRecords());
+            ctrl.add(btnRefresh);
+            panel.add(ctrl, BorderLayout.NORTH);
+
+            dietModel = new DefaultTableModel(new String[]{"ID", "用户", "饮食需求", "时间"}, 0) {
+                @Override public boolean isCellEditable(int row, int column) { return false; }
+            };
+            JTable table = new JTable(dietModel);
+            styleTable(table);
+            table.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        int row = table.getSelectedRow();
+                        if (row >= 0) {
+                            String username = (String) dietModel.getValueAt(row, 1);
+                            String query = (String) dietModel.getValueAt(row, 2);
+                            HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "查看AI饮食详情", username + ": " + query);
+                        }
+                    }
+                }
+            });
+            panel.add(new JScrollPane(table), BorderLayout.CENTER);
+            loadDietRecords();
+            return panel;
+        }
+
+        private void loadDietRecords() {
+            dietModel.setRowCount(0);
+            for (String[] row : HealthSystem.DBUtil.getAIDietRecords()) {
+                dietModel.addRow(row);
+            }
+        }
+
+        private JPanel createCookbookRecordPanel() {
+            JPanel panel = new JPanel(new BorderLayout(8, 8));
+            panel.setOpaque(false);
+            JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            ctrl.setOpaque(false);
+            JButton btnRefresh = createPrimaryBtn("刷新记录");
+            btnRefresh.addActionListener(e -> loadCookbookRecords());
+            ctrl.add(btnRefresh);
+            panel.add(ctrl, BorderLayout.NORTH);
+
+            cookbookModel = new DefaultTableModel(new String[]{"ID", "用户", "食材需求", "口味", "餐次", "人数", "时间"}, 0) {
+                @Override public boolean isCellEditable(int row, int column) { return false; }
+            };
+            JTable table = new JTable(cookbookModel);
+            styleTable(table);
+            table.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        int row = table.getSelectedRow();
+                        if (row >= 0) {
+                            String username = (String) cookbookModel.getValueAt(row, 1);
+                            String ingredients = (String) cookbookModel.getValueAt(row, 2);
+                            HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "查看AI菜谱详情", username + ": " + ingredients);
+                        }
+                    }
+                }
+            });
+            panel.add(new JScrollPane(table), BorderLayout.CENTER);
+            loadCookbookRecords();
+            return panel;
+        }
+
+        private void loadCookbookRecords() {
+            cookbookModel.setRowCount(0);
+            for (String[] row : HealthSystem.DBUtil.getAICookbookRecords()) {
+                cookbookModel.addRow(row);
             }
         }
 
