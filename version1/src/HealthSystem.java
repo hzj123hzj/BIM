@@ -1579,7 +1579,7 @@ public class HealthSystem {
         /** 获取所有 AI 饮食推荐记录（管理员） */
         static List<String[]> getAIDietRecords() {
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, username, query, created_at FROM ai_diet_records ORDER BY id DESC";
+            String sql = "SELECT id, username, query, status, created_at FROM ai_diet_records ORDER BY id DESC";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -1589,6 +1589,7 @@ public class HealthSystem {
                             String.valueOf(rs.getInt("id")),
                             rs.getString("username"),
                             rs.getString("query"),
+                            rs.getString("status"),
                             sdf.format(rs.getTimestamp("created_at"))
                     });
                 }
@@ -1601,7 +1602,7 @@ public class HealthSystem {
         /** 获取所有 AI 菜谱生成记录（管理员） */
         static List<String[]> getAICookbookRecords() {
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, username, ingredients, flavor, meal, people, created_at FROM ai_cookbook_records ORDER BY id DESC";
+            String sql = "SELECT id, username, ingredients, flavor, meal, people, status, created_at FROM ai_cookbook_records ORDER BY id DESC";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -1614,6 +1615,7 @@ public class HealthSystem {
                             rs.getString("flavor"),
                             rs.getString("meal"),
                             String.valueOf(rs.getInt("people")),
+                            rs.getString("status"),
                             sdf.format(rs.getTimestamp("created_at"))
                     });
                 }
@@ -1645,12 +1647,15 @@ public class HealthSystem {
                     "username VARCHAR(50) REFERENCES users(username), " +
                     "query TEXT, " +
                     "result TEXT, " +
+                    "status VARCHAR(20) DEFAULT '有效', " +
                     "created_at TIMESTAMP DEFAULT NOW())";
+            String alterSql = "ALTER TABLE ai_diet_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'";
             String insertSql = "INSERT INTO ai_diet_records (username, query, result) VALUES (?, ?, ?)";
             try (Connection conn = getConnection();
                  Statement stmt = conn.createStatement();
                  PreparedStatement ps = conn.prepareStatement(insertSql)) {
                 stmt.executeUpdate(createSql);
+                stmt.executeUpdate(alterSql);
                 ps.setString(1, username);
                 ps.setString(2, query);
                 ps.setString(3, result);
@@ -1671,12 +1676,15 @@ public class HealthSystem {
                     "meal VARCHAR(20), " +
                     "people INT, " +
                     "result TEXT, " +
+                    "status VARCHAR(20) DEFAULT '有效', " +
                     "created_at TIMESTAMP DEFAULT NOW())";
+            String alterSql = "ALTER TABLE ai_cookbook_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'";
             String insertSql = "INSERT INTO ai_cookbook_records (username, ingredients, flavor, meal, people, result) VALUES (?, ?, ?, ?, ?, ?)";
             try (Connection conn = getConnection();
                  Statement stmt = conn.createStatement();
                  PreparedStatement ps = conn.prepareStatement(insertSql)) {
                 stmt.executeUpdate(createSql);
+                stmt.executeUpdate(alterSql);
                 ps.setString(1, username);
                 ps.setString(2, ingredients);
                 ps.setString(3, flavor);
@@ -1694,8 +1702,8 @@ public class HealthSystem {
         static List<String[]> getAIUsageStats() {
             List<String[]> list = new ArrayList<>();
             String createChat = "CREATE TABLE IF NOT EXISTS ai_chat_records (id SERIAL PRIMARY KEY, username VARCHAR(50) REFERENCES users(username), question TEXT, answer TEXT, status VARCHAR(20) DEFAULT '有效', created_at TIMESTAMP DEFAULT NOW())";
-            String createDiet = "CREATE TABLE IF NOT EXISTS ai_diet_records (id SERIAL PRIMARY KEY, username VARCHAR(50) REFERENCES users(username), query TEXT, result TEXT, created_at TIMESTAMP DEFAULT NOW())";
-            String createCookbook = "CREATE TABLE IF NOT EXISTS ai_cookbook_records (id SERIAL PRIMARY KEY, username VARCHAR(50) REFERENCES users(username), ingredients TEXT, flavor VARCHAR(50), meal VARCHAR(20), people INT, result TEXT, created_at TIMESTAMP DEFAULT NOW())";
+            String createDiet = "CREATE TABLE IF NOT EXISTS ai_diet_records (id SERIAL PRIMARY KEY, username VARCHAR(50) REFERENCES users(username), query TEXT, result TEXT, status VARCHAR(20) DEFAULT '有效', created_at TIMESTAMP DEFAULT NOW())";
+            String createCookbook = "CREATE TABLE IF NOT EXISTS ai_cookbook_records (id SERIAL PRIMARY KEY, username VARCHAR(50) REFERENCES users(username), ingredients TEXT, flavor VARCHAR(50), meal VARCHAR(20), people INT, result TEXT, status VARCHAR(20) DEFAULT '有效', created_at TIMESTAMP DEFAULT NOW())";
             String sql = "SELECT u.username, " +
                     "COALESCE(c.chat_count, 0) AS chat_count, " +
                     "COALESCE(d.diet_count, 0) AS diet_count, " +
@@ -1755,9 +1763,109 @@ public class HealthSystem {
             return list;
         }
 
+        /** 根据 ID 查询 AI 问答记录详情 */
+        static Map<String, String> getAIChatRecordById(int id) {
+            Map<String, String> map = new HashMap<>();
+            String sql = "SELECT id, username, question, answer, status, created_at FROM ai_chat_records WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                if (rs.next()) {
+                    map.put("id", String.valueOf(rs.getInt("id")));
+                    map.put("username", rs.getString("username"));
+                    map.put("question", rs.getString("question"));
+                    map.put("answer", rs.getString("answer"));
+                    map.put("status", rs.getString("status"));
+                    map.put("created_at", sdf.format(rs.getTimestamp("created_at")));
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return map;
+        }
+
         /** 更新 AI 问答状态 */
         static boolean updateAIChatStatus(int id, String status) {
             String sql = "UPDATE ai_chat_records SET status = ? WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, status);
+                ps.setInt(2, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 根据 ID 查询 AI 饮食推荐记录详情 */
+        static Map<String, String> getAIDietRecordById(int id) {
+            Map<String, String> map = new HashMap<>();
+            String sql = "SELECT id, username, query, result, status, created_at FROM ai_diet_records WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                if (rs.next()) {
+                    map.put("id", String.valueOf(rs.getInt("id")));
+                    map.put("username", rs.getString("username"));
+                    map.put("query", rs.getString("query"));
+                    map.put("result", rs.getString("result"));
+                    map.put("status", rs.getString("status"));
+                    map.put("created_at", sdf.format(rs.getTimestamp("created_at")));
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return map;
+        }
+
+        /** 根据 ID 查询 AI 菜谱生成记录详情 */
+        static Map<String, String> getAICookbookRecordById(int id) {
+            Map<String, String> map = new HashMap<>();
+            String sql = "SELECT id, username, ingredients, flavor, meal, people, result, status, created_at FROM ai_cookbook_records WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                if (rs.next()) {
+                    map.put("id", String.valueOf(rs.getInt("id")));
+                    map.put("username", rs.getString("username"));
+                    map.put("ingredients", rs.getString("ingredients"));
+                    map.put("flavor", rs.getString("flavor"));
+                    map.put("meal", rs.getString("meal"));
+                    map.put("people", String.valueOf(rs.getInt("people")));
+                    map.put("result", rs.getString("result"));
+                    map.put("status", rs.getString("status"));
+                    map.put("created_at", sdf.format(rs.getTimestamp("created_at")));
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return map;
+        }
+
+        /** 更新 AI 饮食推荐状态 */
+        static boolean updateAIDietStatus(int id, String status) {
+            String sql = "UPDATE ai_diet_records SET status = ? WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, status);
+                ps.setInt(2, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 更新 AI 菜谱生成状态 */
+        static boolean updateAICookbookStatus(int id, String status) {
+            String sql = "UPDATE ai_cookbook_records SET status = ? WHERE id = ?";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, status);

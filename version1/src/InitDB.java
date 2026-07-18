@@ -369,8 +369,10 @@ public class InitDB {
             "  username VARCHAR(50) REFERENCES users(username)," +
             "  query TEXT," +
             "  result TEXT," +
+            "  status VARCHAR(20) DEFAULT '有效'," +
             "  created_at TIMESTAMP DEFAULT NOW()" +
             ")");
+        execUpdate(conn, "ALTER TABLE ai_diet_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'");
         System.out.println("  [OK] ai_diet_records 表");
 
         // AI 菜谱生成记录表
@@ -383,8 +385,10 @@ public class InitDB {
             "  meal VARCHAR(20)," +
             "  people INT," +
             "  result TEXT," +
+            "  status VARCHAR(20) DEFAULT '有效'," +
             "  created_at TIMESTAMP DEFAULT NOW()" +
             ")");
+        execUpdate(conn, "ALTER TABLE ai_cookbook_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'");
         System.out.println("  [OK] ai_cookbook_records 表");
 
         // 插入默认系统配置

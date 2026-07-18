@@ -705,6 +705,7 @@ public class AdminSystem {
     // ==================== 4. AI 系统管理面板 ====================
     static class AISystemPanel extends JPanel {
         private DefaultTableModel chatModel, templateModel, usageModel, dietModel, cookbookModel;
+        private JTable chatTable, dietTable, cookbookTable;
         private JTextField tfApiKey, tfModel, tfEndpoint;
 
         AISystemPanel() {
@@ -738,11 +739,35 @@ public class AdminSystem {
             chatModel = new DefaultTableModel(new String[]{"ID", "用户", "问题", "状态", "时间"}, 0) {
                 @Override public boolean isCellEditable(int row, int column) { return false; }
             };
-            JTable table = new JTable(chatModel);
-            styleTable(table);
-            panel.add(new JScrollPane(table), BorderLayout.CENTER);
+            chatTable = new JTable(chatModel);
+            styleTable(chatTable);
+            chatTable.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        int row = chatTable.getSelectedRow();
+                        if (row >= 0) viewChatRecord(row);
+                    }
+                }
+            });
+            panel.add(new JScrollPane(chatTable), BorderLayout.CENTER);
             loadChatRecords();
             return panel;
+        }
+
+        private void viewChatRecord(int row) {
+            int id = Integer.parseInt((String) chatModel.getValueAt(row, 0));
+            Map<String, String> rec = HealthSystem.DBUtil.getAIChatRecordById(id);
+            if (rec.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "未找到该记录"); return;
+            }
+            JTextArea ta = new JTextArea(rec.get("answer"), 12, 50);
+            ta.setLineWrap(true);
+            ta.setFont(HealthSystem.Theme.FONT_BODY);
+            ta.setEditable(false);
+            JOptionPane.showMessageDialog(this, new JScrollPane(ta),
+                    "AI 回答详情 - " + rec.get("username") + " [" + rec.get("status") + "]",
+                    JOptionPane.INFORMATION_MESSAGE);
         }
 
         private void loadChatRecords() {
@@ -753,13 +778,9 @@ public class AdminSystem {
         }
 
         private void updateChatStatus(String status) {
-            int row = ((JTable) ((JScrollPane) ((JPanel) ((JTabbedPane) getComponent(0)).getComponentAt(0)).getComponent(1)).getViewport().getView()).getSelectedRow();
-            // 简化处理，通过查找表格组件获取选中行
-            JTable table = findTableInComponent(((JTabbedPane) getComponent(0)).getComponentAt(0));
-            if (table == null) return;
-            int selected = table.getSelectedRow();
-            if (selected < 0) { JOptionPane.showMessageDialog(this, "请先选择一行"); return; }
-            int id = Integer.parseInt((String) chatModel.getValueAt(selected, 0));
+            int row = chatTable.getSelectedRow();
+            if (row < 0) { JOptionPane.showMessageDialog(this, "请先选择一行"); return; }
+            int id = Integer.parseInt((String) chatModel.getValueAt(row, 0));
             if (HealthSystem.DBUtil.updateAIChatStatus(id, status)) {
                 HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "审核AI问答", "ID=" + id + ", 状态=" + status);
                 loadChatRecords();
@@ -919,32 +940,56 @@ public class AdminSystem {
             panel.setOpaque(false);
             JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
             ctrl.setOpaque(false);
-            JButton btnRefresh = createPrimaryBtn("刷新记录");
-            btnRefresh.addActionListener(e -> loadDietRecords());
-            ctrl.add(btnRefresh);
+            JButton btnReview = createPrimaryBtn("标记有效");
+            btnReview.addActionListener(e -> updateDietStatus("有效"));
+            JButton btnInvalid = createAccentBtn("标记无效");
+            btnInvalid.addActionListener(e -> updateDietStatus("无效"));
+            ctrl.add(btnReview); ctrl.add(btnInvalid);
             panel.add(ctrl, BorderLayout.NORTH);
 
-            dietModel = new DefaultTableModel(new String[]{"ID", "用户", "饮食需求", "时间"}, 0) {
+            dietModel = new DefaultTableModel(new String[]{"ID", "用户", "饮食需求", "状态", "时间"}, 0) {
                 @Override public boolean isCellEditable(int row, int column) { return false; }
             };
-            JTable table = new JTable(dietModel);
-            styleTable(table);
-            table.addMouseListener(new MouseAdapter() {
+            dietTable = new JTable(dietModel);
+            styleTable(dietTable);
+            dietTable.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     if (e.getClickCount() == 2) {
-                        int row = table.getSelectedRow();
-                        if (row >= 0) {
-                            String username = (String) dietModel.getValueAt(row, 1);
-                            String query = (String) dietModel.getValueAt(row, 2);
-                            HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "查看AI饮食详情", username + ": " + query);
-                        }
+                        int row = dietTable.getSelectedRow();
+                        if (row >= 0) viewDietRecord(row);
                     }
                 }
             });
-            panel.add(new JScrollPane(table), BorderLayout.CENTER);
+            panel.add(new JScrollPane(dietTable), BorderLayout.CENTER);
             loadDietRecords();
             return panel;
+        }
+
+        private void viewDietRecord(int row) {
+            int id = Integer.parseInt((String) dietModel.getValueAt(row, 0));
+            Map<String, String> rec = HealthSystem.DBUtil.getAIDietRecordById(id);
+            if (rec.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "未找到该记录"); return;
+            }
+            JTextArea ta = new JTextArea(rec.get("result"), 12, 50);
+            ta.setLineWrap(true);
+            ta.setFont(HealthSystem.Theme.FONT_BODY);
+            ta.setEditable(false);
+            HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "查看AI饮食详情", rec.get("username") + ": " + rec.get("query"));
+            JOptionPane.showMessageDialog(this, new JScrollPane(ta),
+                    "AI 饮食推荐详情 - " + rec.get("username") + " [" + rec.get("status") + "]",
+                    JOptionPane.INFORMATION_MESSAGE);
+        }
+
+        private void updateDietStatus(String status) {
+            int row = dietTable.getSelectedRow();
+            if (row < 0) { JOptionPane.showMessageDialog(this, "请先选择一行"); return; }
+            int id = Integer.parseInt((String) dietModel.getValueAt(row, 0));
+            if (HealthSystem.DBUtil.updateAIDietStatus(id, status)) {
+                HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "审核AI饮食", "ID=" + id + ", 状态=" + status);
+                loadDietRecords();
+            }
         }
 
         private void loadDietRecords() {
@@ -959,32 +1004,56 @@ public class AdminSystem {
             panel.setOpaque(false);
             JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
             ctrl.setOpaque(false);
-            JButton btnRefresh = createPrimaryBtn("刷新记录");
-            btnRefresh.addActionListener(e -> loadCookbookRecords());
-            ctrl.add(btnRefresh);
+            JButton btnReview = createPrimaryBtn("标记有效");
+            btnReview.addActionListener(e -> updateCookbookStatus("有效"));
+            JButton btnInvalid = createAccentBtn("标记无效");
+            btnInvalid.addActionListener(e -> updateCookbookStatus("无效"));
+            ctrl.add(btnReview); ctrl.add(btnInvalid);
             panel.add(ctrl, BorderLayout.NORTH);
 
-            cookbookModel = new DefaultTableModel(new String[]{"ID", "用户", "食材需求", "口味", "餐次", "人数", "时间"}, 0) {
+            cookbookModel = new DefaultTableModel(new String[]{"ID", "用户", "食材需求", "口味", "餐次", "人数", "状态", "时间"}, 0) {
                 @Override public boolean isCellEditable(int row, int column) { return false; }
             };
-            JTable table = new JTable(cookbookModel);
-            styleTable(table);
-            table.addMouseListener(new MouseAdapter() {
+            cookbookTable = new JTable(cookbookModel);
+            styleTable(cookbookTable);
+            cookbookTable.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     if (e.getClickCount() == 2) {
-                        int row = table.getSelectedRow();
-                        if (row >= 0) {
-                            String username = (String) cookbookModel.getValueAt(row, 1);
-                            String ingredients = (String) cookbookModel.getValueAt(row, 2);
-                            HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "查看AI菜谱详情", username + ": " + ingredients);
-                        }
+                        int row = cookbookTable.getSelectedRow();
+                        if (row >= 0) viewCookbookRecord(row);
                     }
                 }
             });
-            panel.add(new JScrollPane(table), BorderLayout.CENTER);
+            panel.add(new JScrollPane(cookbookTable), BorderLayout.CENTER);
             loadCookbookRecords();
             return panel;
+        }
+
+        private void viewCookbookRecord(int row) {
+            int id = Integer.parseInt((String) cookbookModel.getValueAt(row, 0));
+            Map<String, String> rec = HealthSystem.DBUtil.getAICookbookRecordById(id);
+            if (rec.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "未找到该记录"); return;
+            }
+            JTextArea ta = new JTextArea(rec.get("result"), 12, 50);
+            ta.setLineWrap(true);
+            ta.setFont(HealthSystem.Theme.FONT_BODY);
+            ta.setEditable(false);
+            HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "查看AI菜谱详情", rec.get("username") + ": " + rec.get("ingredients"));
+            JOptionPane.showMessageDialog(this, new JScrollPane(ta),
+                    "AI 菜谱详情 - " + rec.get("username") + " [" + rec.get("status") + "]",
+                    JOptionPane.INFORMATION_MESSAGE);
+        }
+
+        private void updateCookbookStatus(String status) {
+            int row = cookbookTable.getSelectedRow();
+            if (row < 0) { JOptionPane.showMessageDialog(this, "请先选择一行"); return; }
+            int id = Integer.parseInt((String) cookbookModel.getValueAt(row, 0));
+            if (HealthSystem.DBUtil.updateAICookbookStatus(id, status)) {
+                HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "审核AI菜谱", "ID=" + id + ", 状态=" + status);
+                loadCookbookRecords();
+            }
         }
 
         private void loadCookbookRecords() {
