@@ -2052,28 +2052,101 @@ public class HealthSystem {
             }
         }
 
-        /** 获取 AI API 配置（默认使用 siliconflow） */
+        /** 获取 AI API 配置（默认使用智谱 GLM-4.7-Flash） */
         static Map<String, String> getAIApiConfig() {
             Map<String, String> cfg = new HashMap<>();
-            cfg.put("provider_name", "siliconflow");
+            cfg.put("provider_name", "zhipu");
             cfg.put("api_key", "");
-            cfg.put("model_name", "deepseek-chat");
-            cfg.put("endpoint_url", "https://api.siliconflow.cn/v1");
+            cfg.put("model_name", "glm-4.7-flash");
+            cfg.put("endpoint_url", "https://open.bigmodel.cn/api/paas/v4");
             String sql = "SELECT provider_name, api_key, model_name, endpoint_url FROM ai_api_config WHERE provider_name = ? ORDER BY id DESC LIMIT 1";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, "siliconflow");
+                ps.setString(1, "zhipu");
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
                     cfg.put("provider_name", rs.getString("provider_name"));
                     cfg.put("api_key", rs.getString("api_key") == null ? "" : rs.getString("api_key"));
-                    cfg.put("model_name", rs.getString("model_name") == null ? "deepseek-chat" : rs.getString("model_name"));
-                    cfg.put("endpoint_url", rs.getString("endpoint_url") == null ? "https://api.siliconflow.cn/v1" : rs.getString("endpoint_url"));
+                    cfg.put("model_name", rs.getString("model_name") == null ? "glm-4.7-flash" : rs.getString("model_name"));
+                    cfg.put("endpoint_url", rs.getString("endpoint_url") == null ? "https://open.bigmodel.cn/api/paas/v4" : rs.getString("endpoint_url"));
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
             }
             return cfg;
+        }
+
+        /** 通用 OpenAI 兼容对话调用（智谱 / 硅基流动等任意兼容服务均可） */
+        static String callOpenAIChat(String apiKey, String prompt) throws Exception {
+            Map<String, String> cfg = getAIApiConfig();
+            String endpoint = cfg.getOrDefault("endpoint_url", "https://open.bigmodel.cn/api/paas/v4");
+            String model = cfg.getOrDefault("model_name", "glm-4.7-flash");
+            String fullUrl = endpoint.endsWith("/chat/completions") ? endpoint : endpoint + "/chat/completions";
+            URL url = new URL(fullUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(30000);
+            conn.setReadTimeout(60000);
+            String escaped = prompt.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+            String body = "{\"model\":\"" + model.replace("\\", "\\\\").replace("\"", "\\\"") + "\","
+                    + "\"messages\":[{\"role\":\"user\",\"content\":\"" + escaped + "\"}]}";
+            try (OutputStream os = conn.getOutputStream()) { os.write(body.getBytes("UTF-8")); }
+            int code = conn.getResponseCode();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    code >= 400 ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) response.append(line);
+            String resp = response.toString();
+            if (code >= 400) return "AI 调用失败 (HTTP " + code + "): " + resp;
+            String content = extractContent(resp);
+            return content != null ? content : ("AI 返回: " + resp);
+        }
+
+        /** 从 OpenAI 兼容响应中提取 message.content（支持转义字符） */
+        static String extractContent(String json) {
+            int idx = json.indexOf("\"content\":\"");
+            if (idx < 0) {
+                int m = json.indexOf("\"message\"");
+                if (m >= 0) {
+                    int c = json.indexOf("\"content\":\"", m);
+                    if (c < 0) return null;
+                    idx = c;
+                } else {
+                    return null;
+                }
+            }
+            int start = idx + 11;
+            StringBuilder sb = new StringBuilder();
+            int i = start;
+            while (i < json.length()) {
+                char ch = json.charAt(i);
+                if (ch == '\\') {
+                    if (i + 1 < json.length()) {
+                        char n = json.charAt(i + 1);
+                        switch (n) {
+                            case 'n': sb.append('\n'); break;
+                            case 't': sb.append('\t'); break;
+                            case 'r': sb.append('\r'); break;
+                            case '"': sb.append('"'); break;
+                            case '\\': sb.append('\\'); break;
+                            default: sb.append(n);
+                        }
+                        i += 2;
+                        continue;
+                    }
+                    sb.append(ch);
+                } else if (ch == '"') {
+                    break;
+                } else {
+                    sb.append(ch);
+                }
+                i++;
+            }
+            return sb.toString();
         }
 
         /** 保存 AI API 配置 */
@@ -2088,13 +2161,13 @@ public class HealthSystem {
                         ps.setString(1, apiKey);
                         ps.setString(2, modelName);
                         ps.setString(3, endpointUrl);
-                        ps.setString(4, "siliconflow");
+                        ps.setString(4, "zhipu");
                         return ps.executeUpdate() > 0;
                     }
                 } else {
                     sql = "INSERT INTO ai_api_config (provider_name, api_key, model_name, endpoint_url) VALUES (?, ?, ?, ?)";
                     try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                        ps.setString(1, "siliconflow");
+                        ps.setString(1, "zhipu");
                         ps.setString(2, apiKey);
                         ps.setString(3, modelName);
                         ps.setString(4, endpointUrl);
@@ -4276,7 +4349,8 @@ public class HealthSystem {
         /** 食物拍照识别 (调用硅基流动 API) */
         private void recognizeFood() {
             String imagePath = tfApiImagePath.getText().trim();
-            String apiKey = tfApiKey.getText().trim();
+            String localKey = tfApiKey.getText().trim();
+            String apiKey = localKey.isEmpty() ? DBUtil.getAIApiConfig().getOrDefault("api_key", "") : localKey;
             if (imagePath.isEmpty() || apiKey.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "请输入图片路径和 API Key", "提示", JOptionPane.WARNING_MESSAGE);
                 return;
@@ -4302,7 +4376,11 @@ public class HealthSystem {
 
         /** 调用硅基流动 API */
         private String callSiliconFlowAPI(String apiKey, String imageDataUrl) throws Exception {
-            URL url = new URL("https://api.siliconflow.cn/v1/chat/completions");
+            Map<String, String> cfg = DBUtil.getAIApiConfig();
+            String endpoint = cfg.getOrDefault("endpoint_url", "https://open.bigmodel.cn/api/paas/v4");
+            String model = cfg.getOrDefault("model_name", "glm-4.7-flash");
+            String fullUrl = endpoint.endsWith("/chat/completions") ? endpoint : endpoint + "/chat/completions";
+            URL url = new URL(fullUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
@@ -4311,7 +4389,7 @@ public class HealthSystem {
             conn.setConnectTimeout(30000);
             conn.setReadTimeout(60000);
 
-            String body = "{\"model\":\"Qwen/Qwen2-VL-72B-Instruct\",\"messages\":[{\"role\":\"user\",\"content\":["
+            String body = "{\"model\":\"" + model.replace("\\", "\\\\").replace("\"", "\\\"") + "\",\"messages\":[{\"role\":\"user\",\"content\":["
                     + "{\"type\":\"text\",\"text\":\"请识别图片中的食物, 估算热量和营养成分(蛋白质/碳水/脂肪), 以JSON格式返回\"},"
                     + "{\"type\":\"image_url\",\"image_url\":{\"url\":\"" + imageDataUrl + "\"}}"
                     + "]}]}";
@@ -4333,16 +4411,9 @@ public class HealthSystem {
                 return "API 调用失败 (HTTP " + code + "): " + response.toString();
             }
 
-            // 简单提取 content 字段
             String resp = response.toString();
-            int idx = resp.indexOf("\"content\":\"");
-            if (idx >= 0) {
-                int end = resp.indexOf("\"", idx + 11);
-                if (end > idx) {
-                    return resp.substring(idx + 11, end).replace("\\n", "\n");
-                }
-            }
-            return resp;
+            String content = DBUtil.extractContent(resp);
+            return content != null ? content : resp;
         }
 
         /** 导出 CSV */
@@ -4481,7 +4552,8 @@ public class HealthSystem {
                 JOptionPane.showMessageDialog(this, "请输入问题", "提示", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            String apiKey = tfApiKey.getText().trim();
+            String localKey = tfApiKey.getText().trim();
+            String apiKey = localKey.isEmpty() ? DBUtil.getAIApiConfig().getOrDefault("api_key", "") : localKey;
             String answer;
             if (apiKey.isEmpty()) {
                 answer = generateLocalAnswer(question);
@@ -4528,30 +4600,7 @@ public class HealthSystem {
                         latest.get("body_type")));
             }
             String prompt = dataSb + "\n请作为健康顾问回答以下问题，控制在 300 字以内：\n" + question;
-            URL url = new URL("https://api.siliconflow.cn/v1/chat/completions");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(30000);
-            conn.setReadTimeout(60000);
-            String body = "{\"model\":\"Qwen/Qwen2.5-7B-Instruct\",\"messages\":[{\"role\":\"user\",\"content\":\""
-                    + prompt.replace("\"", "\\\"").replace("\n", "\\n")
-                    + "\"}]}";
-            try (OutputStream os = conn.getOutputStream()) { os.write(body.getBytes("UTF-8")); }
-            BufferedReader reader = new BufferedReader(new InputStreamReader(
-                    conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"));
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) response.append(line);
-            String resp = response.toString();
-            int idx = resp.indexOf("\"content\":\"");
-            if (idx >= 0) {
-                int end = resp.indexOf("\"", idx + 11);
-                if (end > idx) return resp.substring(idx + 11, end).replace("\\n", "\n");
-            }
-            return "AI 返回: " + resp;
+            return DBUtil.callOpenAIChat(apiKey, prompt);
         }
     }
 
@@ -4666,7 +4715,8 @@ public class HealthSystem {
             String goal = (String) cbGoal.getSelectedItem();
             String custom = tfCustomQuestion.getText().trim();
             String query = custom.isEmpty() ? goal : custom;
-            String apiKey = tfApiKey.getText().trim();
+            String localKey = tfApiKey.getText().trim();
+            String apiKey = localKey.isEmpty() ? DBUtil.getAIApiConfig().getOrDefault("api_key", "") : localKey;
             String plan;
             if (apiKey.isEmpty()) {
                 plan = generateLocalPlan(query);
@@ -4753,30 +4803,7 @@ public class HealthSystem {
                         diet[0], diet[1] / 100.0, diet[2] / 100.0, diet[3] / 100.0));
             }
             String prompt = dataSb + "\n请为用户制定一份「" + goal + "」的一日三餐饮食方案，给出每餐热量、食材和注意事项，控制在 400 字以内。";
-            URL url = new URL("https://api.siliconflow.cn/v1/chat/completions");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(30000);
-            conn.setReadTimeout(60000);
-            String body = "{\"model\":\"Qwen/Qwen2.5-7B-Instruct\",\"messages\":[{\"role\":\"user\",\"content\":\""
-                    + prompt.replace("\"", "\\\"").replace("\n", "\\n")
-                    + "\"}]}";
-            try (OutputStream os = conn.getOutputStream()) { os.write(body.getBytes("UTF-8")); }
-            BufferedReader reader = new BufferedReader(new InputStreamReader(
-                    conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"));
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) response.append(line);
-            String resp = response.toString();
-            int idx = resp.indexOf("\"content\":\"");
-            if (idx >= 0) {
-                int end = resp.indexOf("\"", idx + 11);
-                if (end > idx) return resp.substring(idx + 11, end).replace("\\n", "\n");
-            }
-            return "AI 返回: " + resp;
+            return DBUtil.callOpenAIChat(apiKey, prompt);
         }
     }
 
@@ -4896,7 +4923,8 @@ public class HealthSystem {
                 JOptionPane.showMessageDialog(this, "请输入你的菜谱需求", "提示", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            String apiKey = tfApiKey.getText().trim();
+            String localKey = tfApiKey.getText().trim();
+            String apiKey = localKey.isEmpty() ? DBUtil.getAIApiConfig().getOrDefault("api_key", "") : localKey;
             String result;
             if (apiKey.isEmpty()) {
                 result = generateLocalCookbook(request);
@@ -4945,30 +4973,7 @@ public class HealthSystem {
         private String callAIForCookbook(String apiKey, String request) throws Exception {
             String prompt = "请根据以下需求生成一份菜谱和采购清单：" + request
                     + "\n要求：1)给出菜名；2)列出所需食材及用量；3)给出详细步骤；4)列出采购清单（用户已提供的食材不要重复列出）；5)给出每人份大致热量。控制在600字以内。";
-            URL url = new URL("https://api.siliconflow.cn/v1/chat/completions");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(30000);
-            conn.setReadTimeout(60000);
-            String body = "{\"model\":\"Qwen/Qwen2.5-7B-Instruct\",\"messages\":[{\"role\":\"user\",\"content\":\""
-                    + prompt.replace("\"", "\\\"").replace("\n", "\\n")
-                    + "\"}]}";
-            try (OutputStream os = conn.getOutputStream()) { os.write(body.getBytes("UTF-8")); }
-            BufferedReader reader = new BufferedReader(new InputStreamReader(
-                    conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"));
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) response.append(line);
-            String resp = response.toString();
-            int idx = resp.indexOf("\"content\":\"");
-            if (idx >= 0) {
-                int end = resp.indexOf("\"", idx + 11);
-                if (end > idx) return resp.substring(idx + 11, end).replace("\\n", "\n");
-            }
-            return "AI 返回: " + resp;
+            return DBUtil.callOpenAIChat(apiKey, prompt);
         }
     }
 
@@ -5187,8 +5192,9 @@ public class HealthSystem {
 
         /** 生成报告 (调用 AI 或本地生成) */
         private void generateReport(String reportType) {
-            String apiKey = JOptionPane.showInputDialog(this, "请输入硅基流动 API Key (留空则本地生成):");
-            if (apiKey == null) return;
+            String input = JOptionPane.showInputDialog(this, "请输入 API Key (可留空, 将使用系统已配置的智谱 GLM-4.7-Flash 密钥):");
+            if (input == null) return;
+            String apiKey = input.trim().isEmpty() ? DBUtil.getAIApiConfig().getOrDefault("api_key", "") : input.trim();
 
             List<Map<String, Object>> records = DBUtil.getHealthRecords(30);
             if (records.isEmpty()) {

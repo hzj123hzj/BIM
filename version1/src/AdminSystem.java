@@ -909,21 +909,21 @@ public class AdminSystem {
             form.setOpaque(false);
             form.setBorder(new EmptyBorder(20, 20, 20, 20));
             tfApiKey = new JTextField();
-            tfModel = new JTextField("deepseek-chat");
-            tfEndpoint = new JTextField("https://api.siliconflow.cn/v1");
+            tfModel = new JTextField("glm-4.7-flash");
+            tfEndpoint = new JTextField("https://open.bigmodel.cn/api/paas/v4");
             styleTextField(tfApiKey); styleTextField(tfModel); styleTextField(tfEndpoint);
             form.add(new JLabel("API Key:")); form.add(tfApiKey);
             form.add(new JLabel("模型名称:")); form.add(tfModel);
             form.add(new JLabel("接口地址:")); form.add(tfEndpoint);
-            form.add(new JLabel("说明:")); form.add(new JLabel("配置硅基流动 API 信息（保存到数据库）"));
+            form.add(new JLabel("说明:")); form.add(new JLabel("配置智谱 GLM-4.7-Flash（OpenAI 兼容）API 信息（保存到数据库）"));
             panel.add(form, BorderLayout.NORTH);
 
             // 加载已有配置
             Map<String, String> cfg = HealthSystem.DBUtil.getAIApiConfig();
             if (cfg != null) {
                 tfApiKey.setText(cfg.getOrDefault("api_key", ""));
-                tfModel.setText(cfg.getOrDefault("model_name", "deepseek-chat"));
-                tfEndpoint.setText(cfg.getOrDefault("endpoint_url", "https://api.siliconflow.cn/v1"));
+                tfModel.setText(cfg.getOrDefault("model_name", "glm-4.7-flash"));
+                tfEndpoint.setText(cfg.getOrDefault("endpoint_url", "https://open.bigmodel.cn/api/paas/v4"));
             }
 
             JButton btnSave = createPrimaryBtn("保存配置");
