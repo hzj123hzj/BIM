@@ -1372,6 +1372,21 @@ public class HealthSystem {
             return "";
         }
 
+        /** 获取当前用户未读消息数量 */
+        static int getUnreadNotificationCount(String username) {
+            int count = 0;
+            String sql = "SELECT COUNT(*) FROM notifications WHERE receiver = ? AND status = '未读'";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) count = rs.getInt(1);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return count;
+        }
+
         /** 获取所有食物 */
         static List<String[]> getFoods() {
             List<String[]> list = new ArrayList<>();
@@ -2673,6 +2688,9 @@ public class HealthSystem {
         private JLabel lblCalorieDiff;
         private JLabel lblCheckStatus;
         private JTabbedPane tabPane;
+        private JButton btnMessage;
+        private RoundedBadge messageBadge;
+        private javax.swing.Timer messageTimer;
 
         MainFrame() {
             setTitle("BMI 体质评估与预测系统");
@@ -2682,7 +2700,14 @@ public class HealthSystem {
 
             initUI();
 
-            // 登录后检查打卡
+            // 启动未读消息角标定时刷新（每 30 秒）
+            messageTimer = new javax.swing.Timer(30000, e -> refreshMessageBadge());
+            messageTimer.start();
+            addWindowListener(new WindowAdapter() {
+                @Override public void windowClosed(WindowEvent e) { if (messageTimer != null) messageTimer.stop(); }
+            });
+
+            // 登录后检查打卡 + 未读消息提醒
             SwingUtilities.invokeLater(() -> {
                 if (!DBUtil.isCheckedToday()) {
                     JOptionPane.showMessageDialog(this, "今天称重了吗? 记得打卡记录健康数据!",
@@ -2690,7 +2715,46 @@ public class HealthSystem {
                 }
                 // 检查异常数据
                 checkAbnormalData();
+                // 未读消息主动提醒
+                int unread = DBUtil.getUnreadNotificationCount(currentUsername);
+                if (unread > 0) {
+                    int opt = JOptionPane.showConfirmDialog(this,
+                            "您有 " + unread + " 条未读消息，是否立即查看？",
+                            "未读消息提醒", JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE);
+                    if (opt == JOptionPane.YES_OPTION) openMessageCenter();
+                }
             });
+        }
+
+        /** 圆角红色未读角标 */
+        static class RoundedBadge extends JLabel {
+            RoundedBadge() {
+                setOpaque(false);
+                setHorizontalAlignment(SwingConstants.CENTER);
+                setVerticalAlignment(SwingConstants.CENTER);
+                setForeground(Color.WHITE);
+                setFont(new Font("SansSerif", Font.BOLD, 11));
+            }
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(220, 47, 47));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 9, 9);
+                super.paintComponent(g2);
+                g2.dispose();
+            }
+        }
+
+        /** 刷新顶栏未读消息角标 */
+        private void refreshMessageBadge() {
+            int n = DBUtil.getUnreadNotificationCount(currentUsername);
+            if (n > 0) {
+                messageBadge.setText(n > 99 ? "99+" : String.valueOf(n));
+                messageBadge.setVisible(true);
+            } else {
+                messageBadge.setVisible(false);
+            }
         }
 
         /** 初始化界面 */
@@ -2710,10 +2774,21 @@ public class HealthSystem {
             lblScore.setFont(Theme.FONT_HEADER);
             lblScore.setForeground(Theme.PRIMARY_D);
 
-            JButton btnMessage = new JButton("消息中心");
+            btnMessage = new JButton("消息中心");
             Theme.stylePrimaryButton(btnMessage);
             btnMessage.setPreferredSize(new Dimension(100, 30));
             btnMessage.addActionListener(e -> openMessageCenter());
+
+            // 消息按钮 + 未读角标（叠加）
+            JLayeredPane msgLayer = new JLayeredPane();
+            msgLayer.setPreferredSize(new Dimension(104, 32));
+            btnMessage.setBounds(0, 1, 100, 30);
+            messageBadge = new RoundedBadge();
+            messageBadge.setBounds(82, -3, 24, 18);
+            messageBadge.setVisible(false);
+            msgLayer.add(btnMessage, JLayeredPane.DEFAULT_LAYER);
+            msgLayer.add(messageBadge, JLayeredPane.POPUP_LAYER);
+            refreshMessageBadge();
 
             JButton btnLogout = new JButton("退出登录");
             Theme.styleAccentButton(btnLogout);
@@ -2729,7 +2804,7 @@ public class HealthSystem {
             JPanel eastPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
             eastPanel.setOpaque(false);
             eastPanel.add(lblScore);
-            eastPanel.add(btnMessage);
+            eastPanel.add(msgLayer);
             eastPanel.add(btnLogout);
             topPanel.add(eastPanel, BorderLayout.EAST);
 
@@ -2822,6 +2897,7 @@ public class HealthSystem {
                 int id = Integer.parseInt((String) model.getValueAt(row, 0));
                 if (DBUtil.updateNotificationStatus(id, "已读")) {
                     model.setValueAt("已读", row, 4);
+                    refreshMessageBadge();
                 }
             });
             JButton btnClose = new JButton("关闭");
@@ -2833,6 +2909,8 @@ public class HealthSystem {
 
             dlg.setLocationRelativeTo(this);
             dlg.setVisible(true);
+            // 关闭后刷新角标（可能已标记已读）
+            refreshMessageBadge();
         }
 
         /** 刷新所有数据 */
