@@ -1040,7 +1040,13 @@ public class AdminSystem {
             form.setBorder(new EmptyBorder(10, 10, 10, 10));
 
             cbType = new JComboBox<>(new String[]{"系统通知", "健康提醒", "活动推送"});
-            cbReceiver = new JComboBox<>(new String[]{"所有用户", "异常用户"});
+            List<String> receiverOptions = new ArrayList<>();
+            receiverOptions.add("所有用户");
+            receiverOptions.add("异常用户");
+            for (Map<String, Object> u : HealthSystem.DBUtil.getAllUsers()) {
+                receiverOptions.add("用户:" + u.get("username"));
+            }
+            cbReceiver = new JComboBox<>(receiverOptions.toArray(new String[0]));
             tfTitle = new JTextField();
             taContent = new JTextArea(5, 30);
             taContent.setLineWrap(true);
@@ -1085,10 +1091,35 @@ public class AdminSystem {
             }
             String type = (String) cbType.getSelectedItem();
             String receiver = (String) cbReceiver.getSelectedItem();
-            if (HealthSystem.DBUtil.saveNotification(HealthSystem.currentUsername, receiver, title, content, type)) {
-                HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "发送消息", title + " -> " + receiver);
-                JOptionPane.showMessageDialog(this, "消息已发送");
+            String sender = HealthSystem.currentUsername;
+            int sentCount = 0;
+            boolean ok = true;
+
+            if ("所有用户".equals(receiver)) {
+                for (Map<String, Object> u : HealthSystem.DBUtil.getAllUsers()) {
+                    String uname = (String) u.get("username");
+                    if (HealthSystem.DBUtil.saveNotification(sender, uname, title, content, type)) sentCount++;
+                }
+            } else if ("异常用户".equals(receiver)) {
+                for (Map<String, Object> u : HealthSystem.DBUtil.getAbnormalUsers()) {
+                    String uname = (String) u.get("username");
+                    if (HealthSystem.DBUtil.saveNotification(sender, uname, title, content, type)) sentCount++;
+                }
+            } else if (receiver != null && receiver.startsWith("用户:")) {
+                String uname = receiver.substring(3);
+                if (HealthSystem.DBUtil.saveNotification(sender, uname, title, content, type)) {
+                    sentCount = 1;
+                } else {
+                    ok = false;
+                }
+            }
+
+            if (ok && sentCount > 0) {
+                HealthSystem.DBUtil.logAction("ADMIN", sender, "发送消息", title + " -> " + receiver + ", 人数=" + sentCount);
+                JOptionPane.showMessageDialog(this, "消息已发送，共 " + sentCount + " 人");
                 tfTitle.setText(""); taContent.setText("");
+            } else {
+                JOptionPane.showMessageDialog(this, "消息发送失败", "错误", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -1131,6 +1162,9 @@ public class AdminSystem {
             userModel.setRowCount(0);
             for (Map<String, Object> u : HealthSystem.DBUtil.getAllUsers()) {
                 userModel.addRow(new Object[]{u.get("id"), u.get("username"), u.get("gender"), u.get("age"), u.get("account_status")});
+            }
+            if (userModel.getRowCount() > 0) {
+                userTable.setRowSelectionInterval(0, 0);
             }
         }
 
