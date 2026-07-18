@@ -1468,6 +1468,27 @@ public class HealthSystem {
             }
         }
 
+        /** 获取单个 AI 模板详情 */
+        static Map<String, String> getAITemplateById(int id) {
+            Map<String, String> map = new HashMap<>();
+            String sql = "SELECT id, template_name, template_type, prompt_text, status FROM ai_templates WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    map.put("id", String.valueOf(rs.getInt("id")));
+                    map.put("template_name", rs.getString("template_name"));
+                    map.put("template_type", rs.getString("template_type"));
+                    map.put("prompt_text", rs.getString("prompt_text"));
+                    map.put("status", rs.getString("status"));
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return map;
+        }
+
         /** 获取所有 AI 问答记录 */
         static List<String[]> getAIChatRecords() {
             List<String[]> list = new ArrayList<>();
@@ -1481,6 +1502,47 @@ public class HealthSystem {
                             String.valueOf(rs.getInt("id")),
                             rs.getString("username"),
                             rs.getString("question"),
+                            rs.getString("status"),
+                            sdf.format(rs.getTimestamp("created_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 保存 AI 问答记录 */
+        static boolean saveAIChatRecord(String username, String question, String answer) {
+            String sql = "INSERT INTO ai_chat_records (username, question, answer) VALUES (?, ?, ?)";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ps.setString(2, question);
+                ps.setString(3, answer);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取当前用户的 AI 问答记录 */
+        static List<String[]> getAIChatRecordsByUser(String username, int limit) {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, question, answer, status, created_at FROM ai_chat_records " +
+                         "WHERE username = ? ORDER BY id DESC LIMIT ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ps.setInt(2, limit);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("question"),
+                            rs.getString("answer"),
                             rs.getString("status"),
                             sdf.format(rs.getTimestamp("created_at"))
                     });
@@ -2225,6 +2287,8 @@ public class HealthSystem {
             tabPane.addTab("预测分析", new PredictionPanel());
             tabPane.addTab("目标计划", new GoalPlanPanel());
             tabPane.addTab("饮食管理", new DietPanel(this));
+            tabPane.addTab("AI 问答", new AIChatPanel());
+            tabPane.addTab("AI 饮食推荐", new AIDietPanel());
             tabPane.addTab("成就徽章", new AchievementPanel());
             tabPane.addTab("数据大屏", new DashboardPanel());
             centerWrapper.add(tabPane, BorderLayout.CENTER);
@@ -3617,6 +3681,347 @@ public class HealthSystem {
             } catch (Exception e) {
                 JOptionPane.showMessageDialog(this, "导出失败: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
             }
+        }
+    }
+
+    // ================================================================
+    //             第十一部分(续): AI 问答面板
+    // ================================================================
+
+    /** AI 问答面板 — 用户可与 AI 对话, 记录保存到 ai_chat_records */
+    static class AIChatPanel extends JPanel {
+        private DefaultListModel<String> historyModel = new DefaultListModel<>();
+        private JList<String> historyList = new JList<>(historyModel);
+        private JTextArea taAnswer = new JTextArea(12, 50);
+        private JTextField tfQuestion = new JTextField(40);
+        private JTextField tfApiKey = new JTextField(20);
+        private Map<Integer, String[]> historyMap = new HashMap<>();
+
+        AIChatPanel() {
+            setLayout(new BorderLayout(8, 8));
+            setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+            setBackground(Theme.BG);
+
+            // 左侧历史记录
+            JPanel leftCard = Theme.createCardPanel("历史问答", Theme.PRIMARY);
+            historyList.setFont(Theme.FONT_BODY);
+            historyList.setSelectionBackground(Theme.PRIMARY_L);
+            historyList.setSelectionForeground(Color.WHITE);
+            historyList.addListSelectionListener(e -> {
+                if (!e.getValueIsAdjusting() && historyList.getSelectedIndex() >= 0) {
+                    showHistoryDetail();
+                }
+            });
+            JScrollPane leftScroll = new JScrollPane(historyList);
+            leftScroll.setPreferredSize(new Dimension(260, 200));
+            leftScroll.setOpaque(false);
+            leftScroll.getViewport().setOpaque(false);
+            leftScroll.setBorder(BorderFactory.createEmptyBorder());
+            leftCard.add(leftScroll, BorderLayout.CENTER);
+            add(leftCard, BorderLayout.WEST);
+
+            // 右侧问答区
+            JPanel rightCard = Theme.createCardPanel("AI 健康问答", Theme.ACCENT);
+            rightCard.setLayout(new BorderLayout(8, 8));
+
+            JPanel inputPanel = new JPanel(new BorderLayout(8, 8));
+            inputPanel.setOpaque(false);
+            tfQuestion.setFont(Theme.FONT_BODY);
+            Theme.styleTextField(tfQuestion);
+            inputPanel.add(tfQuestion, BorderLayout.CENTER);
+            JButton btnSend = new JButton("发送提问");
+            Theme.stylePrimaryButton(btnSend);
+            btnSend.addActionListener(e -> askQuestion());
+            inputPanel.add(btnSend, BorderLayout.EAST);
+            rightCard.add(inputPanel, BorderLayout.NORTH);
+
+            taAnswer.setFont(Theme.FONT_BODY);
+            taAnswer.setEditable(false);
+            taAnswer.setLineWrap(true);
+            taAnswer.setWrapStyleWord(true);
+            taAnswer.setBackground(Theme.CARD_BG);
+            taAnswer.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            taAnswer.setText("在上方输入你的健康问题，例如：\n" +
+                    "• 我的 BMI 正常吗？\n" +
+                    "• 最近体重上升怎么办？\n" +
+                    "• 每天应该摄入多少热量？\n\n" +
+                    "输入 API Key 可调用硅基流动大模型；留空则使用本地健康规则回答。");
+            rightCard.add(new JScrollPane(taAnswer), BorderLayout.CENTER);
+
+            JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            bottomPanel.setOpaque(false);
+            bottomPanel.add(new JLabel("API Key (可选):"));
+            tfApiKey.setFont(Theme.FONT_BODY);
+            Theme.styleTextField(tfApiKey);
+            bottomPanel.add(tfApiKey);
+            JButton btnClear = new JButton("清空");
+            Theme.styleAccentButton(btnClear);
+            btnClear.addActionListener(e -> { tfQuestion.setText(""); taAnswer.setText(""); });
+            bottomPanel.add(btnClear);
+            rightCard.add(bottomPanel, BorderLayout.SOUTH);
+
+            add(rightCard, BorderLayout.CENTER);
+            refreshHistory();
+        }
+
+        private void refreshHistory() {
+            historyModel.clear();
+            historyMap.clear();
+            List<String[]> rows = DBUtil.getAIChatRecordsByUser(currentUsername, 50);
+            for (String[] row : rows) {
+                int id = Integer.parseInt(row[0]);
+                historyMap.put(id, row);
+                historyModel.addElement(row[4] + " | " + row[1]);
+            }
+        }
+
+        private void showHistoryDetail() {
+            String selected = historyList.getSelectedValue();
+            if (selected == null) return;
+            int id = Integer.parseInt(selected.split(" \\| ")[0]);
+            String[] row = historyMap.get(id);
+            if (row != null) {
+                taAnswer.setText("【问题】\n" + row[1] + "\n\n【AI 回答】\n" + row[2]);
+            }
+        }
+
+        private void askQuestion() {
+            String question = tfQuestion.getText().trim();
+            if (question.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "请输入问题", "提示", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            String apiKey = tfApiKey.getText().trim();
+            String answer;
+            if (apiKey.isEmpty()) {
+                answer = generateLocalAnswer(question);
+            } else {
+                try {
+                    answer = callAIForAnswer(apiKey, question);
+                } catch (Exception ex) {
+                    answer = "AI 调用失败，已切换本地回答：\n\n" + generateLocalAnswer(question);
+                }
+            }
+            DBUtil.saveAIChatRecord(currentUsername, question, answer);
+            taAnswer.setText("【问题】\n" + question + "\n\n【AI 回答】\n" + answer);
+            tfQuestion.setText("");
+            refreshHistory();
+        }
+
+        private String generateLocalAnswer(String question) {
+            Map<String, Object> latest = DBUtil.getLatestHealthRecord();
+            StringBuilder sb = new StringBuilder();
+            sb.append("根据你的健康数据，回答如下：\n\n");
+            if (latest != null) {
+                double weight = (double) latest.get("weight");
+                double bmi = (double) latest.get("bmi");
+                double bodyFat = (double) latest.get("body_fat");
+                sb.append(String.format("你最新一次记录：体重 %.1f kg，BMI %.1f，体脂率 %.1f%%。\n", weight, bmi, bodyFat));
+                if (bmi < 18.5) sb.append("BMI 偏低，建议适当增加热量和蛋白质摄入，配合力量训练。\n");
+                else if (bmi > 28) sb.append("BMI 已达到肥胖范围，建议控制总热量、减少精制碳水并增加有氧运动。\n");
+                else if (bmi > 24) sb.append("BMI 超重，建议保持热量赤字并规律运动。\n");
+                else sb.append("BMI 在正常范围，请继续保持。\n");
+            } else {
+                sb.append("暂无健康记录，建议先在「数据录入」页面打卡。\n");
+            }
+            sb.append("\n若问题更复杂，可在 API Key 处输入硅基流动密钥调用大模型。");
+            return sb.toString();
+        }
+
+        private String callAIForAnswer(String apiKey, String question) throws Exception {
+            Map<String, Object> latest = DBUtil.getLatestHealthRecord();
+            StringBuilder dataSb = new StringBuilder();
+            if (latest != null) {
+                dataSb.append(String.format("用户最新健康数据：体重 %.1f kg, BMI %.1f, 体脂 %.1f%%, 身体年龄 %d 岁, 类型 %s。",
+                        (double) latest.get("weight"), (double) latest.get("bmi"),
+                        (double) latest.get("body_fat"), (int) latest.get("body_age"),
+                        latest.get("body_type")));
+            }
+            String prompt = dataSb + "\n请作为健康顾问回答以下问题，控制在 300 字以内：\n" + question;
+            URL url = new URL("https://api.siliconflow.cn/v1/chat/completions");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(30000);
+            conn.setReadTimeout(60000);
+            String body = "{\"model\":\"Qwen/Qwen2.5-7B-Instruct\",\"messages\":[{\"role\":\"user\",\"content\":\""
+                    + prompt.replace("\"", "\\\"").replace("\n", "\\n")
+                    + "\"}]}";
+            try (OutputStream os = conn.getOutputStream()) { os.write(body.getBytes("UTF-8")); }
+            BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) response.append(line);
+            String resp = response.toString();
+            int idx = resp.indexOf("\"content\":\"");
+            if (idx >= 0) {
+                int end = resp.indexOf("\"", idx + 11);
+                if (end > idx) return resp.substring(idx + 11, end).replace("\\n", "\n");
+            }
+            return "AI 返回: " + resp;
+        }
+    }
+
+    // ================================================================
+    //             第十一部分(续): AI 饮食推荐面板
+    // ================================================================
+
+    /** AI 饮食推荐面板 — 根据用户目标生成饮食方案 */
+    static class AIDietPanel extends JPanel {
+        private JComboBox<String> cbGoal = new JComboBox<>(new String[]{"维持体重", "减脂", "增肌", "控糖"});
+        private JTextArea taPlan = new JTextArea(14, 50);
+        private JTextField tfApiKey = new JTextField(20);
+
+        AIDietPanel() {
+            setLayout(new BorderLayout(8, 8));
+            setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+            setBackground(Theme.BG);
+
+            JPanel topCard = Theme.createCardPanel("AI 饮食推荐", Theme.PRIMARY);
+            JPanel inputPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+            inputPanel.setOpaque(false);
+            inputPanel.add(new JLabel("饮食目标:"));
+            Theme.styleComboBox(cbGoal);
+            inputPanel.add(cbGoal);
+            inputPanel.add(new JLabel("API Key (可选):"));
+            Theme.styleTextField(tfApiKey);
+            tfApiKey.setPreferredSize(new Dimension(180, 26));
+            inputPanel.add(tfApiKey);
+            JButton btnGen = new JButton("生成推荐方案");
+            Theme.stylePrimaryButton(btnGen);
+            btnGen.addActionListener(e -> generatePlan());
+            inputPanel.add(btnGen);
+            topCard.add(inputPanel, BorderLayout.CENTER);
+            add(topCard, BorderLayout.NORTH);
+
+            JPanel centerCard = Theme.createCardPanel("推荐方案", Theme.ACCENT);
+            taPlan.setFont(Theme.FONT_BODY);
+            taPlan.setEditable(false);
+            taPlan.setLineWrap(true);
+            taPlan.setWrapStyleWord(true);
+            taPlan.setBackground(Theme.CARD_BG);
+            taPlan.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            taPlan.setText("选择饮食目标后点击「生成推荐方案」。\n\n"
+                    + "系统会根据你的最新健康数据、今日饮食记录和目标，给出一日三餐建议。\n"
+                    + "输入硅基流动 API Key 可调用大模型生成更个性化方案；留空则使用本地推荐模板。");
+            centerCard.add(new JScrollPane(taPlan), BorderLayout.CENTER);
+            add(centerCard, BorderLayout.CENTER);
+        }
+
+        private void generatePlan() {
+            String goal = (String) cbGoal.getSelectedItem();
+            String apiKey = tfApiKey.getText().trim();
+            String plan;
+            if (apiKey.isEmpty()) {
+                plan = generateLocalPlan(goal);
+            } else {
+                try {
+                    plan = callAIForDietPlan(apiKey, goal);
+                } catch (Exception ex) {
+                    plan = "AI 调用失败，已切换本地推荐：\n\n" + generateLocalPlan(goal);
+                }
+            }
+            taPlan.setText(plan);
+        }
+
+        private String generateLocalPlan(String goal) {
+            Map<String, Object> latest = DBUtil.getLatestHealthRecord();
+            int[] diet = DBUtil.getTodayDietSummary();
+            int intakeCal = diet[0];
+            StringBuilder sb = new StringBuilder();
+            sb.append("═══════════════════════════════════\n");
+            sb.append("       AI 饮食推荐方案 — ").append(goal).append("\n");
+            sb.append("═══════════════════════════════════\n\n");
+            double tdee = 1800, weight = 65, bmi = 22;
+            if (latest != null) {
+                tdee = (double) latest.get("tdee");
+                weight = (double) latest.get("weight");
+                bmi = (double) latest.get("bmi");
+                sb.append(String.format("基础信息：体重 %.1f kg，BMI %.1f，每日消耗约 %.0f kcal\n\n", weight, bmi, tdee));
+            } else {
+                sb.append("暂未检测到健康记录，使用默认参考值。\n\n");
+            }
+
+            int targetCal = (int) tdee;
+            if ("减脂".equals(goal)) targetCal = (int) (tdee * 0.85);
+            else if ("增肌".equals(goal)) targetCal = (int) (tdee * 1.1);
+            else if ("控糖".equals(goal)) targetCal = (int) tdee;
+
+            sb.append(String.format("目标热量：%d kcal/日", targetCal));
+            if (intakeCal > 0) sb.append(String.format("（今日已摄入 %d kcal）", intakeCal));
+            sb.append("\n\n");
+
+            sb.append("【一日三餐建议】\n");
+            int breakfast = (int) (targetCal * 0.3);
+            int lunch = (int) (targetCal * 0.4);
+            int dinner = (int) (targetCal * 0.3);
+            sb.append(String.format("早餐：约 %d kcal — 全麦面包/燕麦 + 鸡蛋 + 牛奶/豆浆\n", breakfast));
+            sb.append(String.format("午餐：约 %d kcal — 米饭(小份) + 瘦肉/鱼 + 大量蔬菜\n", lunch));
+            sb.append(String.format("晚餐：约 %d kcal — 杂粮 + 豆腐/鸡胸肉 + 凉拌蔬菜\n\n", dinner));
+
+            sb.append("【注意事项】\n");
+            if ("减脂".equals(goal)) {
+                sb.append("• 减少精制碳水和含糖饮料\n");
+                sb.append("• 增加蔬菜和优质蛋白\n");
+                sb.append("• 保持每周 3-5 次有氧运动\n");
+            } else if ("增肌".equals(goal)) {
+                sb.append("• 每公斤体重摄入 1.6-2g 蛋白质\n");
+                sb.append("• 训练后 30 分钟内补充碳水+蛋白\n");
+                sb.append("• 保证充足睡眠\n");
+            } else if ("控糖".equals(goal)) {
+                sb.append("• 选择低升糖指数(GI)食物\n");
+                sb.append("• 减少白米饭、白面包、甜食\n");
+                sb.append("• 餐餐搭配蔬菜和蛋白质\n");
+            } else {
+                sb.append("• 保持当前热量平衡\n");
+                sb.append("• 多样化饮食，避免偏食\n");
+                sb.append("• 规律三餐，少油少盐\n");
+            }
+            sb.append("\n本方案由本地健康规则生成，仅供参考。");
+            return sb.toString();
+        }
+
+        private String callAIForDietPlan(String apiKey, String goal) throws Exception {
+            Map<String, Object> latest = DBUtil.getLatestHealthRecord();
+            StringBuilder dataSb = new StringBuilder();
+            if (latest != null) {
+                dataSb.append(String.format("用户最新数据：体重 %.1f kg, BMI %.1f, 体脂 %.1f%%, TDEE %.0f kcal。",
+                        (double) latest.get("weight"), (double) latest.get("bmi"),
+                        (double) latest.get("body_fat"), (double) latest.get("tdee")));
+            }
+            int[] diet = DBUtil.getTodayDietSummary();
+            if (diet[0] > 0) {
+                dataSb.append(String.format("今日已摄入 %d kcal, 蛋白质 %.1fg, 碳水 %.1fg, 脂肪 %.1fg。",
+                        diet[0], diet[1] / 100.0, diet[2] / 100.0, diet[3] / 100.0));
+            }
+            String prompt = dataSb + "\n请为用户制定一份「" + goal + "」的一日三餐饮食方案，给出每餐热量、食材和注意事项，控制在 400 字以内。";
+            URL url = new URL("https://api.siliconflow.cn/v1/chat/completions");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(30000);
+            conn.setReadTimeout(60000);
+            String body = "{\"model\":\"Qwen/Qwen2.5-7B-Instruct\",\"messages\":[{\"role\":\"user\",\"content\":\""
+                    + prompt.replace("\"", "\\\"").replace("\n", "\\n")
+                    + "\"}]}";
+            try (OutputStream os = conn.getOutputStream()) { os.write(body.getBytes("UTF-8")); }
+            BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) response.append(line);
+            String resp = response.toString();
+            int idx = resp.indexOf("\"content\":\"");
+            if (idx >= 0) {
+                int end = resp.indexOf("\"", idx + 11);
+                if (end > idx) return resp.substring(idx + 11, end).replace("\\n", "\n");
+            }
+            return "AI 返回: " + resp;
         }
     }
 

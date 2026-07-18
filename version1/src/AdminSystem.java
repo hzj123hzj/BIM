@@ -307,43 +307,59 @@ public class AdminSystem {
 
     // ==================== 2. 数据监控与统计面板 ====================
     static class DataDashboardPanel extends JPanel {
+        private DefaultTableModel abnormalModel;
+        private JTable abnormalTable;
+
         DataDashboardPanel() {
             setLayout(new BorderLayout(8, 8));
             setBackground(HealthSystem.Theme.BG);
             setBorder(new EmptyBorder(12, 12, 12, 12));
 
-            // 顶部指标卡片
+            // 顶部控制栏 + 指标卡片
+            JPanel topPanel = new JPanel(new BorderLayout(8, 8));
+            topPanel.setOpaque(false);
+
+            JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            ctrl.setOpaque(false);
+            JButton btnRefresh = createPrimaryBtn("刷新数据");
+            btnRefresh.addActionListener(e -> refreshData());
+            JButton btnExport = createPrimaryBtn("导出异常用户");
+            btnExport.addActionListener(e -> exportAbnormalUsers());
+            ctrl.add(btnRefresh);
+            ctrl.add(btnExport);
+            topPanel.add(ctrl, BorderLayout.NORTH);
+
             JPanel topCards = new JPanel(new GridLayout(1, 4, 10, 10));
             topCards.setOpaque(false);
-            Map<String, Object> stats = HealthSystem.DBUtil.getGlobalStats();
-            topCards.add(metricCard("总用户数", String.valueOf(stats.get("total_users")), HealthSystem.Theme.PRIMARY));
-            topCards.add(metricCard("7日活跃用户", String.valueOf(stats.get("active_users_7d")), HealthSystem.Theme.SUCCESS));
-            topCards.add(metricCard("今日打卡", String.valueOf(stats.get("today_checkin")), HealthSystem.Theme.ACCENT));
-            topCards.add(metricCard("平均BMI", HealthSystem.df1.format(stats.get("avg_bmi")), HealthSystem.Theme.WARNING));
-            add(topCards, BorderLayout.NORTH);
+            topCards.add(metricCard("总用户数", "0", HealthSystem.Theme.PRIMARY, "注册并激活的用户总数"));
+            topCards.add(metricCard("7日活跃用户", "0", HealthSystem.Theme.SUCCESS, "最近 7 天有过登录或打卡的用户数"));
+            topCards.add(metricCard("今日打卡", "0", HealthSystem.Theme.ACCENT, "今日已提交健康打卡记录的用户数"));
+            topCards.add(metricCard("平均BMI", "0", HealthSystem.Theme.WARNING, "所有健康记录用户的平均 BMI 指数"));
+            topPanel.add(topCards, BorderLayout.CENTER);
+            add(topPanel, BorderLayout.NORTH);
 
             // 中间：异常用户列表 + 趋势说明
             JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
             split.setDividerLocation(500);
             split.setResizeWeight(0.4);
 
-            JPanel leftCard = createCard("异常用户列表");
-            DefaultTableModel model = new DefaultTableModel(
+            JPanel leftCard = createCard("异常用户列表（双击查看详情）");
+            abnormalModel = new DefaultTableModel(
                     new String[]{"用户名", "BMI", "体重变化", "异常原因"}, 0) {
                 @Override public boolean isCellEditable(int row, int column) { return false; }
             };
-            JTable table = new JTable(model);
-            styleTable(table);
-            List<Map<String, Object>> abnormals = HealthSystem.DBUtil.getAbnormalUsers();
-            for (Map<String, Object> u : abnormals) {
-                model.addRow(new Object[]{
-                        u.get("username"),
-                        HealthSystem.df1.format(u.get("bmi")),
-                        HealthSystem.df1.format(u.get("weight_diff")),
-                        u.get("reason")
-                });
-            }
-            leftCard.add(new JScrollPane(table), BorderLayout.CENTER);
+            abnormalTable = new JTable(abnormalModel);
+            styleTable(abnormalTable);
+            abnormalTable.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        int row = abnormalTable.getSelectedRow();
+                        if (row >= 0) showUserDetail((String) abnormalModel.getValueAt(row, 0));
+                    }
+                }
+            });
+            leftCard.add(new JScrollPane(abnormalTable), BorderLayout.CENTER);
             split.setLeftComponent(leftCard);
 
             JPanel rightCard = createCard("健康风险评估说明");
@@ -356,7 +372,11 @@ public class AdminSystem {
                     "风险等级:\n" +
                     "低风险: 指标在正常范围内\n" +
                     "中风险: 1-2项指标异常\n" +
-                    "高风险: 多项指标异常或骤变\n");
+                    "高风险: 多项指标异常或骤变\n\n" +
+                    "使用说明:\n" +
+                    "• 点击上方指标卡片查看统计口径\n" +
+                    "• 双击异常用户列表查看健康档案\n" +
+                    "• 点击「导出异常用户」可导出 CSV");
             ta.setFont(HealthSystem.Theme.FONT_BODY);
             ta.setEditable(false);
             ta.setBackground(HealthSystem.Theme.CARD_BG);
@@ -364,11 +384,85 @@ public class AdminSystem {
             split.setRightComponent(rightCard);
 
             add(split, BorderLayout.CENTER);
+            refreshData();
         }
 
-        private JPanel metricCard(String title, String value, Color color) {
+        private void refreshData() {
+            Map<String, Object> stats = HealthSystem.DBUtil.getGlobalStats();
+            JPanel topCards = (JPanel) ((BorderLayout) getLayout()).getLayoutComponent(BorderLayout.NORTH);
+            if (topCards != null) {
+                JPanel cards = (JPanel) topCards.getComponent(1);
+                updateMetricCard(cards, 0, String.valueOf(stats.get("total_users")));
+                updateMetricCard(cards, 1, String.valueOf(stats.get("active_users_7d")));
+                updateMetricCard(cards, 2, String.valueOf(stats.get("today_checkin")));
+                updateMetricCard(cards, 3, HealthSystem.df1.format(stats.get("avg_bmi")));
+            }
+
+            abnormalModel.setRowCount(0);
+            List<Map<String, Object>> abnormals = HealthSystem.DBUtil.getAbnormalUsers();
+            for (Map<String, Object> u : abnormals) {
+                abnormalModel.addRow(new Object[]{
+                        u.get("username"),
+                        HealthSystem.df1.format(u.get("bmi")),
+                        HealthSystem.df1.format(u.get("weight_diff")),
+                        u.get("reason")
+                });
+            }
+        }
+
+        private void updateMetricCard(JPanel cards, int index, String value) {
+            HealthSystem.RoundedPanel card = (HealthSystem.RoundedPanel) cards.getComponent(index);
+            JLabel lbl = (JLabel) card.getComponent(0);
+            lbl.setText(value);
+        }
+
+        private void showUserDetail(String username) {
+            Map<String, Object> profile = HealthSystem.DBUtil.getUserHealthProfile(username);
+            StringBuilder sb = new StringBuilder();
+            sb.append("用户: ").append(username).append("\n");
+            sb.append("健康记录数: ").append(profile.get("record_count")).append("\n");
+            sb.append("饮食记录数: ").append(profile.get("diet_count")).append("\n");
+            sb.append("运动记录数: ").append(profile.get("exercise_count")).append("\n");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> latest = (Map<String, Object>) profile.get("latest_record");
+            if (latest != null) {
+                sb.append("\n最新记录:\n");
+                sb.append("  体重: ").append(latest.get("weight")).append(" kg\n");
+                sb.append("  BMI: ").append(latest.get("bmi")).append("\n");
+                sb.append("  体脂率: ").append(latest.get("body_fat")).append("%\n");
+                sb.append("  身体年龄: ").append(latest.get("body_age")).append(" 岁\n");
+                sb.append("  类型: ").append(latest.get("body_type")).append("\n");
+            }
+            JTextArea ta = new JTextArea(sb.toString(), 12, 40);
+            ta.setFont(HealthSystem.Theme.FONT_BODY);
+            ta.setEditable(false);
+            JOptionPane.showMessageDialog(this, new JScrollPane(ta), "用户健康档案", JOptionPane.INFORMATION_MESSAGE);
+        }
+
+        private void exportAbnormalUsers() {
+            StringBuilder csv = new StringBuilder("用户名,BMI,体重变化,异常原因\n");
+            for (int i = 0; i < abnormalModel.getRowCount(); i++) {
+                csv.append(abnormalModel.getValueAt(i, 0)).append(",");
+                csv.append(abnormalModel.getValueAt(i, 1)).append(",");
+                csv.append(abnormalModel.getValueAt(i, 2)).append(",");
+                csv.append(abnormalModel.getValueAt(i, 3)).append("\n");
+            }
+            JFileChooser fc = new JFileChooser();
+            fc.setSelectedFile(new File("abnormal_users_export.csv"));
+            if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                try (FileWriter fw = new FileWriter(fc.getSelectedFile())) {
+                    fw.write(csv.toString());
+                    JOptionPane.showMessageDialog(this, "导出成功：" + fc.getSelectedFile().getAbsolutePath().replace("\\", "/"));
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(this, "导出失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }
+
+        private JPanel metricCard(String title, String value, Color color, String tooltip) {
             HealthSystem.RoundedPanel card = new HealthSystem.RoundedPanel(new BorderLayout(), 12);
             card.setBackground(Color.WHITE);
+            card.setCursor(new Cursor(Cursor.HAND_CURSOR));
             JLabel lblValue = new JLabel(value, SwingConstants.CENTER);
             lblValue.setFont(new Font("Microsoft YaHei", Font.BOLD, 28));
             lblValue.setForeground(color);
@@ -378,6 +472,12 @@ public class AdminSystem {
             card.add(lblValue, BorderLayout.CENTER);
             card.add(lblTitle, BorderLayout.SOUTH);
             card.setBorder(new EmptyBorder(16, 12, 16, 12));
+            card.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    JOptionPane.showMessageDialog(DataDashboardPanel.this, tooltip, "指标说明: " + title, JOptionPane.INFORMATION_MESSAGE);
+                }
+            });
             return card;
         }
     }
@@ -695,9 +795,32 @@ public class AdminSystem {
             };
             JTable table = new JTable(templateModel);
             styleTable(table);
+            table.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        int id = getSelectedIdFromTable(panel, templateModel);
+                        if (id > 0) viewTemplate(id);
+                    }
+                }
+            });
             panel.add(new JScrollPane(table), BorderLayout.CENTER);
             loadTemplates();
             return panel;
+        }
+
+        private void viewTemplate(int id) {
+            Map<String, String> t = HealthSystem.DBUtil.getAITemplateById(id);
+            if (t.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "未找到模板内容"); return;
+            }
+            JTextArea ta = new JTextArea(t.get("prompt_text"), 10, 50);
+            ta.setLineWrap(true);
+            ta.setFont(HealthSystem.Theme.FONT_BODY);
+            ta.setEditable(false);
+            JOptionPane.showMessageDialog(this, new JScrollPane(ta),
+                    "模板: " + t.get("template_name") + " [" + t.get("template_type") + "]",
+                    JOptionPane.INFORMATION_MESSAGE);
         }
 
         private void loadTemplates() {
@@ -713,11 +836,13 @@ public class AdminSystem {
                 int row = findTableInComponent(this).getSelectedRow();
                 name = (String) templateModel.getValueAt(row, 1);
                 type = (String) templateModel.getValueAt(row, 2);
+                Map<String, String> t = HealthSystem.DBUtil.getAITemplateById(id);
+                if (!t.isEmpty()) content = t.get("prompt_text");
             }
             JTextField tfName = new JTextField(name);
             JComboBox<String> cbType = new JComboBox<>(new String[]{"建议", "周报", "饮食推荐"});
             cbType.setSelectedItem(type);
-            JTextArea taContent = new JTextArea(8, 40);
+            JTextArea taContent = new JTextArea(content, 8, 40);
             taContent.setLineWrap(true);
             styleTextField(tfName);
             Object[] msg = {"名称", tfName, "类型", cbType, "Prompt内容", new JScrollPane(taContent)};
