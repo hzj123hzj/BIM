@@ -1319,6 +1319,59 @@ public class HealthSystem {
             return list;
         }
 
+        /** 获取当前用户收到的通知 */
+        static List<String[]> getMyNotifications(String username) {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, sender, title, type, status, created_at FROM notifications WHERE receiver = ? ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("sender"),
+                            rs.getString("title"),
+                            rs.getString("type"),
+                            rs.getString("status"),
+                            rs.getTimestamp("created_at") != null ? sdf.format(rs.getTimestamp("created_at")) : "-"
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 更新通知状态（标记已读） */
+        static boolean updateNotificationStatus(int id, String status) {
+            String sql = "UPDATE notifications SET status = ? WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, status);
+                ps.setInt(2, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取单条通知内容 */
+        static String getNotificationContent(int id) {
+            String sql = "SELECT content FROM notifications WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) return rs.getString("content");
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return "";
+        }
+
         /** 获取所有食物 */
         static List<String[]> getFoods() {
             List<String[]> list = new ArrayList<>();
@@ -1772,6 +1825,61 @@ public class HealthSystem {
                             String.valueOf(rs.getInt("id")),
                             rs.getString("question"),
                             rs.getString("answer"),
+                            rs.getString("status"),
+                            sdf.format(rs.getTimestamp("created_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 获取当前用户的 AI 饮食记录（隐藏被标记为无效的记录） */
+        static List<String[]> getAIDietRecordsByUser(String username, int limit) {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, query, result, status, created_at FROM ai_diet_records " +
+                         "WHERE username = ? AND COALESCE(status,'有效') <> '无效' ORDER BY id DESC LIMIT ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ps.setInt(2, limit);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("query"),
+                            rs.getString("result"),
+                            rs.getString("status"),
+                            sdf.format(rs.getTimestamp("created_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 获取当前用户的 AI 菜谱记录（隐藏被标记为无效的记录） */
+        static List<String[]> getAICookbookRecordsByUser(String username, int limit) {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, ingredients, flavor, meal, people, result, status, created_at FROM ai_cookbook_records " +
+                         "WHERE username = ? AND COALESCE(status,'有效') <> '无效' ORDER BY id DESC LIMIT ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ps.setInt(2, limit);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("ingredients"),
+                            rs.getString("flavor"),
+                            rs.getString("meal"),
+                            String.valueOf(rs.getInt("people")),
+                            rs.getString("result"),
                             rs.getString("status"),
                             sdf.format(rs.getTimestamp("created_at"))
                     });
@@ -2602,6 +2710,11 @@ public class HealthSystem {
             lblScore.setFont(Theme.FONT_HEADER);
             lblScore.setForeground(Theme.PRIMARY_D);
 
+            JButton btnMessage = new JButton("消息中心");
+            Theme.stylePrimaryButton(btnMessage);
+            btnMessage.setPreferredSize(new Dimension(100, 30));
+            btnMessage.addActionListener(e -> openMessageCenter());
+
             JButton btnLogout = new JButton("退出登录");
             Theme.styleAccentButton(btnLogout);
             btnLogout.setPreferredSize(new Dimension(100, 30));
@@ -2616,6 +2729,7 @@ public class HealthSystem {
             JPanel eastPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
             eastPanel.setOpaque(false);
             eastPanel.add(lblScore);
+            eastPanel.add(btnMessage);
             eastPanel.add(btnLogout);
             topPanel.add(eastPanel, BorderLayout.EAST);
 
@@ -2662,6 +2776,63 @@ public class HealthSystem {
 
             // 刷新数据
             refreshData();
+        }
+
+        /** 打开消息中心 */
+        private void openMessageCenter() {
+            JDialog dlg = new JDialog(this, "消息中心", true);
+            dlg.setLayout(new BorderLayout(8, 8));
+            dlg.setSize(560, 420);
+
+            DefaultTableModel model = new DefaultTableModel(
+                    new String[]{"ID", "发送者", "标题", "类型", "状态", "时间"}, 0) {
+                @Override public boolean isCellEditable(int r, int c) { return false; }
+            };
+            JTable table = new JTable(model);
+            Theme.styleTable(table);
+            table.addMouseListener(new MouseAdapter() {
+                @Override public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        int row = table.getSelectedRow();
+                        if (row >= 0) {
+                            int id = Integer.parseInt((String) model.getValueAt(row, 0));
+                            String title = (String) model.getValueAt(row, 2);
+                            String content = DBUtil.getNotificationContent(id);
+                            JTextArea ta = new JTextArea(content, 12, 50);
+                            ta.setLineWrap(true);
+                            ta.setFont(Theme.FONT_BODY);
+                            ta.setEditable(false);
+                            JOptionPane.showMessageDialog(dlg, new JScrollPane(ta), title, JOptionPane.INFORMATION_MESSAGE);
+                        }
+                    }
+                }
+            });
+            for (String[] row : DBUtil.getMyNotifications(currentUsername)) {
+                model.addRow(row);
+            }
+            dlg.add(new JScrollPane(table), BorderLayout.CENTER);
+
+            JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+            ctrl.setOpaque(false);
+            JButton btnRead = new JButton("标记已读");
+            Theme.stylePrimaryButton(btnRead);
+            btnRead.addActionListener(e -> {
+                int row = table.getSelectedRow();
+                if (row < 0) { JOptionPane.showMessageDialog(dlg, "请先选择一条消息"); return; }
+                int id = Integer.parseInt((String) model.getValueAt(row, 0));
+                if (DBUtil.updateNotificationStatus(id, "已读")) {
+                    model.setValueAt("已读", row, 4);
+                }
+            });
+            JButton btnClose = new JButton("关闭");
+            Theme.styleAccentButton(btnClose);
+            btnClose.addActionListener(e -> dlg.dispose());
+            ctrl.add(btnRead);
+            ctrl.add(btnClose);
+            dlg.add(ctrl, BorderLayout.SOUTH);
+
+            dlg.setLocationRelativeTo(this);
+            dlg.setVisible(true);
         }
 
         /** 刷新所有数据 */
@@ -4283,6 +4454,9 @@ public class HealthSystem {
         private JTextField tfCustomQuestion = new JTextField(22); // 自定义需求
         private JTextArea taPlan = new JTextArea(14, 50);
         private JTextField tfApiKey = new JTextField(20);
+        private DefaultListModel<String> historyModel = new DefaultListModel<>();
+        private JList<String> historyList = new JList<>(historyModel);
+        private Map<Integer, String[]> historyMap = new HashMap<>();
 
         AIDietPanel() {
             setLayout(new BorderLayout(8, 8));
@@ -4333,7 +4507,48 @@ public class HealthSystem {
                     + "\"给我一份一周低碳食谱\"\n\n"
                     + "输入硅基流动 API Key 可调用大模型生成更个性化方案；留空则使用本地推荐模板。");
             centerCard.add(new JScrollPane(taPlan), BorderLayout.CENTER);
-            add(centerCard, BorderLayout.CENTER);
+
+            // 左侧历史记录
+            JPanel leftCard = Theme.createCardPanel("历史方案", Theme.PRIMARY);
+            historyList.setFont(Theme.FONT_BODY);
+            historyList.setSelectionBackground(Theme.PRIMARY_L);
+            historyList.setSelectionForeground(Color.WHITE);
+            historyList.addListSelectionListener(e -> {
+                if (!e.getValueIsAdjusting() && historyList.getSelectedIndex() >= 0) showDietDetail();
+            });
+            JScrollPane leftScroll = new JScrollPane(historyList);
+            leftScroll.setPreferredSize(new Dimension(240, 200));
+            leftScroll.setOpaque(false);
+            leftScroll.getViewport().setOpaque(false);
+            leftScroll.setBorder(BorderFactory.createEmptyBorder());
+            leftCard.add(leftScroll, BorderLayout.CENTER);
+
+            JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftCard, centerCard);
+            split.setDividerLocation(260);
+            split.setBorder(BorderFactory.createEmptyBorder());
+            add(split, BorderLayout.CENTER);
+            refreshDietHistory();
+        }
+
+        private void refreshDietHistory() {
+            historyModel.clear();
+            historyMap.clear();
+            List<String[]> rows = DBUtil.getAIDietRecordsByUser(currentUsername, 50);
+            for (String[] row : rows) {
+                int id = Integer.parseInt(row[0]);
+                historyMap.put(id, row);
+                historyModel.addElement(id + " | " + row[4] + " | " + row[1]);
+            }
+        }
+
+        private void showDietDetail() {
+            String selected = historyList.getSelectedValue();
+            if (selected == null) return;
+            int id = Integer.parseInt(selected.split(" \\| ")[0]);
+            String[] row = historyMap.get(id);
+            if (row != null) {
+                taPlan.setText("【你的需求】\n" + row[1] + "\n\n【AI 饮食方案】\n" + row[2]);
+            }
         }
 
         private void generatePlan() {
@@ -4352,8 +4567,8 @@ public class HealthSystem {
                 }
             }
             taPlan.setText(plan);
-            // 保存使用记录
             DBUtil.saveAIDietRecord(currentUsername, query, plan);
+            refreshDietHistory();
         }
 
         private String generateLocalPlan(String goal) {
@@ -4463,6 +4678,9 @@ public class HealthSystem {
         private JTextArea taRequest = new JTextArea(8, 50);
         private JTextField tfApiKey = new JTextField(20);
         private JTextArea taResult = new JTextArea(16, 50);
+        private DefaultListModel<String> historyModel = new DefaultListModel<>();
+        private JList<String> historyList = new JList<>(historyModel);
+        private Map<Integer, String[]> historyMap = new HashMap<>();
 
         AICookbookPanel() {
             setLayout(new BorderLayout(8, 8));
@@ -4517,7 +4735,48 @@ public class HealthSystem {
                     + "• 用土豆和牛肉做一道家常口味的菜，3个人。\n\n"
                     + "输入硅基流动 API Key 可调用大模型生成更丰富的菜谱；留空则使用本地模板。");
             centerCard.add(new JScrollPane(taResult), BorderLayout.CENTER);
-            add(centerCard, BorderLayout.CENTER);
+
+            // 左侧历史记录
+            JPanel leftCard = Theme.createCardPanel("历史菜谱", Theme.PRIMARY);
+            historyList.setFont(Theme.FONT_BODY);
+            historyList.setSelectionBackground(Theme.PRIMARY_L);
+            historyList.setSelectionForeground(Color.WHITE);
+            historyList.addListSelectionListener(e -> {
+                if (!e.getValueIsAdjusting() && historyList.getSelectedIndex() >= 0) showCookbookDetail();
+            });
+            JScrollPane leftScroll = new JScrollPane(historyList);
+            leftScroll.setPreferredSize(new Dimension(240, 200));
+            leftScroll.setOpaque(false);
+            leftScroll.getViewport().setOpaque(false);
+            leftScroll.setBorder(BorderFactory.createEmptyBorder());
+            leftCard.add(leftScroll, BorderLayout.CENTER);
+
+            JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftCard, centerCard);
+            split.setDividerLocation(260);
+            split.setBorder(BorderFactory.createEmptyBorder());
+            add(split, BorderLayout.CENTER);
+            refreshCookbookHistory();
+        }
+
+        private void refreshCookbookHistory() {
+            historyModel.clear();
+            historyMap.clear();
+            List<String[]> rows = DBUtil.getAICookbookRecordsByUser(currentUsername, 50);
+            for (String[] row : rows) {
+                int id = Integer.parseInt(row[0]);
+                historyMap.put(id, row);
+                historyModel.addElement(id + " | " + row[7] + " | " + row[1]);
+            }
+        }
+
+        private void showCookbookDetail() {
+            String selected = historyList.getSelectedValue();
+            if (selected == null) return;
+            int id = Integer.parseInt(selected.split(" \\| ")[0]);
+            String[] row = historyMap.get(id);
+            if (row != null) {
+                taResult.setText("【你的需求】\n" + row[1] + "\n\n【AI 菜谱与采购清单】\n" + row[5]);
+            }
         }
 
         private void generateCookbook() {
@@ -4539,6 +4798,7 @@ public class HealthSystem {
             }
             taResult.setText(result);
             DBUtil.saveAICookbookRecord(currentUsername, request, "自由输入", "-", 0, result);
+            refreshCookbookHistory();
         }
 
         private String generateLocalCookbook(String request) {
