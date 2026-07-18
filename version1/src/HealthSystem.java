@@ -3422,9 +3422,8 @@ public class HealthSystem {
 
             String goalType = (String) goal.get("goal_type");
             double targetWeight = (double) goal.get("target_value");
-            Date startDateRaw = (Date) goal.get("start_date");
-            if (startDateRaw == null) startDateRaw = new Date();
-            LocalDate startDate = startDateRaw.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            java.sql.Date startDateRaw = (java.sql.Date) goal.get("start_date");
+            LocalDate startDate = startDateRaw != null ? startDateRaw.toLocalDate() : LocalDate.now();
             LocalDate today = LocalDate.now();
             long daysSinceStart = ChronoUnit.DAYS.between(startDate, today);
             int actualStage = (int) Math.min(4, Math.max(1, daysSinceStart / 7 + 1));
