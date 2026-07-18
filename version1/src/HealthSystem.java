@@ -1099,6 +1099,107 @@ public class HealthSystem {
             return stats;
         }
 
+        /** 所有注册并激活的用户列表 */
+        static List<Map<String, Object>> getTotalUsersList() {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "SELECT username, gender, age, height, activity_level, created_at FROM users WHERE deleted = FALSE ORDER BY username";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql);
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("username", rs.getString("username"));
+                    map.put("gender", rs.getString("gender"));
+                    map.put("age", rs.getInt("age"));
+                    map.put("height", rs.getDouble("height"));
+                    map.put("activity_level", rs.getString("activity_level"));
+                    map.put("created_at", rs.getTimestamp("created_at"));
+                    list.add(map);
+                }
+            } catch (SQLException e) { e.printStackTrace(); }
+            return list;
+        }
+
+        /** 最近 7 天活跃（登录或打卡）用户列表 */
+        static List<Map<String, Object>> getActiveUsers7dList() {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "WITH latest AS (" +
+                    "SELECT username, MAX(record_date) AS last_date, COUNT(*) AS record_count " +
+                    "FROM health_records WHERE record_date >= CURRENT_DATE - INTERVAL '7 days' " +
+                    "GROUP BY username) " +
+                    "SELECT u.username, u.age, u.gender, l.last_date, l.record_count " +
+                    "FROM users u JOIN latest l ON u.username = l.username " +
+                    "ORDER BY l.last_date DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql);
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("username", rs.getString("username"));
+                    map.put("age", rs.getInt("age"));
+                    map.put("gender", rs.getString("gender"));
+                    map.put("last_date", rs.getDate("last_date"));
+                    map.put("record_count", rs.getInt("record_count"));
+                    list.add(map);
+                }
+            } catch (SQLException e) { e.printStackTrace(); }
+            return list;
+        }
+
+        /** 今日打卡用户列表 */
+        static List<Map<String, Object>> getTodayCheckinUsersList() {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "WITH today AS (" +
+                    "SELECT username, MAX(record_date) AS record_date, AVG(bmi) AS bmi, " +
+                    "COUNT(*) AS record_count FROM health_records WHERE record_date = CURRENT_DATE GROUP BY username) " +
+                    "SELECT u.username, u.age, u.gender, t.record_date, t.record_count, t.bmi " +
+                    "FROM users u JOIN today t ON u.username = t.username " +
+                    "ORDER BY t.record_date DESC, u.username";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql);
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("username", rs.getString("username"));
+                    map.put("age", rs.getInt("age"));
+                    map.put("gender", rs.getString("gender"));
+                    map.put("record_date", rs.getDate("record_date"));
+                    map.put("record_count", rs.getInt("record_count"));
+                    map.put("bmi", rs.getDouble("bmi"));
+                    list.add(map);
+                }
+            } catch (SQLException e) { e.printStackTrace(); }
+            return list;
+        }
+
+        /** 有 BMI 记录的用户列表（用于平均 BMI 卡片） */
+        static List<Map<String, Object>> getAvgBMIUsersList() {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "WITH latest AS (" +
+                    "SELECT username, bmi, weight, body_fat, record_date, " +
+                    "ROW_NUMBER() OVER (PARTITION BY username ORDER BY record_date DESC) rn " +
+                    "FROM health_records) " +
+                    "SELECT u.username, u.age, u.gender, l.bmi, l.weight, l.body_fat, l.record_date " +
+                    "FROM users u JOIN latest l ON u.username = l.username AND l.rn = 1 " +
+                    "ORDER BY l.bmi DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql);
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("username", rs.getString("username"));
+                    map.put("age", rs.getInt("age"));
+                    map.put("gender", rs.getString("gender"));
+                    map.put("bmi", rs.getDouble("bmi"));
+                    map.put("weight", rs.getDouble("weight"));
+                    map.put("body_fat", rs.getDouble("body_fat"));
+                    map.put("record_date", rs.getDate("record_date"));
+                    list.add(map);
+                }
+            } catch (SQLException e) { e.printStackTrace(); }
+            return list;
+        }
+
         private static int countQuery(Connection conn, String sql) throws SQLException {
             try (PreparedStatement ps = conn.prepareStatement(sql);
                  ResultSet rs = ps.executeQuery()) {

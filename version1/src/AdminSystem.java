@@ -331,10 +331,10 @@ public class AdminSystem {
 
             JPanel topCards = new JPanel(new GridLayout(1, 4, 10, 10));
             topCards.setOpaque(false);
-            topCards.add(metricCard("总用户数", "0", HealthSystem.Theme.PRIMARY, "注册并激活的用户总数"));
-            topCards.add(metricCard("7日活跃用户", "0", HealthSystem.Theme.SUCCESS, "最近 7 天有过登录或打卡的用户数"));
-            topCards.add(metricCard("今日打卡", "0", HealthSystem.Theme.ACCENT, "今日已提交健康打卡记录的用户数"));
-            topCards.add(metricCard("平均BMI", "0", HealthSystem.Theme.WARNING, "所有健康记录用户的平均 BMI 指数"));
+            topCards.add(metricCard("total_users", "总用户数", "0", HealthSystem.Theme.PRIMARY, "注册并激活的用户总数"));
+            topCards.add(metricCard("active_7d", "7日活跃用户", "0", HealthSystem.Theme.SUCCESS, "最近 7 天有过登录或打卡的用户数"));
+            topCards.add(metricCard("today_checkin", "今日打卡", "0", HealthSystem.Theme.ACCENT, "今日已提交健康打卡记录的用户数"));
+            topCards.add(metricCard("avg_bmi", "平均BMI", "0", HealthSystem.Theme.WARNING, "所有健康记录用户的平均 BMI 指数"));
             topPanel.add(topCards, BorderLayout.CENTER);
             add(topPanel, BorderLayout.NORTH);
 
@@ -374,8 +374,8 @@ public class AdminSystem {
                     "中风险: 1-2项指标异常\n" +
                     "高风险: 多项指标异常或骤变\n\n" +
                     "使用说明:\n" +
-                    "• 点击上方指标卡片查看统计口径\n" +
-                    "• 双击异常用户列表查看健康档案\n" +
+                    "• 点击上方指标卡片查看对应用户列表\n" +
+                    "• 双击列表用户查看健康档案\n" +
                     "• 点击「导出异常用户」可导出 CSV");
             ta.setFont(HealthSystem.Theme.FONT_BODY);
             ta.setEditable(false);
@@ -439,6 +439,67 @@ public class AdminSystem {
             JOptionPane.showMessageDialog(this, new JScrollPane(ta), "用户健康档案", JOptionPane.INFORMATION_MESSAGE);
         }
 
+        private void showMetricUserList(String type) {
+            JDialog dlg = new JDialog((JFrame) SwingUtilities.getWindowAncestor(this), true);
+            dlg.setSize(720, 420);
+            dlg.setLocationRelativeTo(this);
+            DefaultTableModel model = new DefaultTableModel() {
+                @Override public boolean isCellEditable(int row, int column) { return false; }
+            };
+            JTable table = new JTable(model);
+            styleTable(table);
+            List<Map<String, Object>> data = new ArrayList<>();
+            String title;
+            switch (type) {
+                case "total_users":
+                    title = "总用户列表";
+                    model.setColumnIdentifiers(new String[]{"用户名", "性别", "年龄", "身高(cm)", "活跃度", "注册时间"});
+                    data = HealthSystem.DBUtil.getTotalUsersList();
+                    for (Map<String, Object> u : data) {
+                        model.addRow(new Object[]{u.get("username"), u.get("gender"), u.get("age"), u.get("height"), u.get("activity_level"), u.get("created_at")});
+                    }
+                    break;
+                case "active_7d":
+                    title = "7日活跃用户列表";
+                    model.setColumnIdentifiers(new String[]{"用户名", "性别", "年龄", "最近记录日期", "7天内记录数"});
+                    data = HealthSystem.DBUtil.getActiveUsers7dList();
+                    for (Map<String, Object> u : data) {
+                        model.addRow(new Object[]{u.get("username"), u.get("gender"), u.get("age"), u.get("last_date"), u.get("record_count")});
+                    }
+                    break;
+                case "today_checkin":
+                    title = "今日打卡用户列表";
+                    model.setColumnIdentifiers(new String[]{"用户名", "性别", "年龄", "BMI", "记录数", "打卡日期"});
+                    data = HealthSystem.DBUtil.getTodayCheckinUsersList();
+                    for (Map<String, Object> u : data) {
+                        model.addRow(new Object[]{u.get("username"), u.get("gender"), u.get("age"), HealthSystem.df1.format(u.get("bmi")), u.get("record_count"), u.get("record_date")});
+                    }
+                    break;
+                case "avg_bmi":
+                    title = "平均 BMI 用户列表";
+                    model.setColumnIdentifiers(new String[]{"用户名", "性别", "年龄", "BMI", "体重", "体脂率", "记录日期"});
+                    data = HealthSystem.DBUtil.getAvgBMIUsersList();
+                    for (Map<String, Object> u : data) {
+                        model.addRow(new Object[]{u.get("username"), u.get("gender"), u.get("age"), HealthSystem.df1.format(u.get("bmi")), HealthSystem.df1.format(u.get("weight")) + " kg", HealthSystem.df1.format(u.get("body_fat")) + "%", u.get("record_date")});
+                    }
+                    break;
+                default:
+                    title = "用户列表";
+            }
+            table.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        int row = table.getSelectedRow();
+                        if (row >= 0) showUserDetail((String) model.getValueAt(row, 0));
+                    }
+                }
+            });
+            dlg.setTitle(title + " (共 " + data.size() + " 人)");
+            dlg.add(new JScrollPane(table), BorderLayout.CENTER);
+            dlg.setVisible(true);
+        }
+
         private void exportAbnormalUsers() {
             StringBuilder csv = new StringBuilder("用户名,BMI,体重变化,异常原因\n");
             for (int i = 0; i < abnormalModel.getRowCount(); i++) {
@@ -459,7 +520,7 @@ public class AdminSystem {
             }
         }
 
-        private JPanel metricCard(String title, String value, Color color, String tooltip) {
+        private JPanel metricCard(String type, String title, String value, Color color, String tooltip) {
             HealthSystem.RoundedPanel card = new HealthSystem.RoundedPanel(new BorderLayout(), 12);
             card.setBackground(Color.WHITE);
             card.setCursor(new Cursor(Cursor.HAND_CURSOR));
@@ -475,7 +536,7 @@ public class AdminSystem {
             card.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
-                    JOptionPane.showMessageDialog(DataDashboardPanel.this, tooltip, "指标说明: " + title, JOptionPane.INFORMATION_MESSAGE);
+                    showMetricUserList(type);
                 }
             });
             return card;
