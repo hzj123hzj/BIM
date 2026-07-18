@@ -588,6 +588,32 @@ public class HealthSystem {
             return list;
         }
 
+        /** 获取当前用户全部运动记录（含日期） */
+        static List<String[]> getExerciseRecordsByUser(String username, int limit) {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT record_date, exercise_type, duration, intensity, calories_burned FROM exercise_records " +
+                         "WHERE username = ? ORDER BY record_date DESC, id DESC LIMIT ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ps.setInt(2, limit);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                while (rs.next()) {
+                    list.add(new String[]{
+                        sdf.format(rs.getDate("record_date")),
+                        rs.getString("exercise_type"),
+                        rs.getInt("duration") + "分钟",
+                        rs.getString("intensity"),
+                        rs.getInt("calories_burned") + "kcal"
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
         // ==================== 饮食记录操作 ====================
 
         /** 保存饮食记录 */
@@ -2401,7 +2427,23 @@ public class HealthSystem {
             lblScore = new JLabel("健康评分: --", SwingConstants.RIGHT);
             lblScore.setFont(Theme.FONT_HEADER);
             lblScore.setForeground(Theme.PRIMARY_D);
-            topPanel.add(lblScore, BorderLayout.EAST);
+
+            JButton btnLogout = new JButton("退出登录");
+            Theme.styleAccentButton(btnLogout);
+            btnLogout.setPreferredSize(new Dimension(100, 30));
+            btnLogout.addActionListener(e -> {
+                if (JOptionPane.showConfirmDialog(this, "确定要退出登录吗？", "退出确认",
+                        JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                    dispose();
+                    SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true));
+                }
+            });
+
+            JPanel eastPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+            eastPanel.setOpaque(false);
+            eastPanel.add(lblScore);
+            eastPanel.add(btnLogout);
+            topPanel.add(eastPanel, BorderLayout.EAST);
 
             add(topPanel, BorderLayout.NORTH);
 
@@ -2410,11 +2452,18 @@ public class HealthSystem {
             centerWrapper.setBackground(Theme.BG);
             centerWrapper.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
             tabPane = new JTabbedPane();
+            GoalPlanPanel goalPlanPanel = new GoalPlanPanel();
+            tabPane.addChangeListener(e -> {
+                if (tabPane.getSelectedComponent() == goalPlanPanel) {
+                    goalPlanPanel.refresh();
+                    goalPlanPanel.refreshExerciseRecords();
+                }
+            });
             tabPane.addTab("数据录入", new DataInputPanel(this));
             tabPane.addTab("历史趋势", new HistoryTrendPanel());
             tabPane.addTab("分析评估", new AnalysisPanel());
             tabPane.addTab("预测分析", new PredictionPanel());
-            tabPane.addTab("目标计划", new GoalPlanPanel());
+            tabPane.addTab("目标计划", goalPlanPanel);
             tabPane.addTab("饮食管理", new DietPanel(this));
             tabPane.addTab("AI 问答", new AIChatPanel());
             tabPane.addTab("AI 饮食推荐", new AIDietPanel());
@@ -3297,6 +3346,8 @@ public class HealthSystem {
         private JTextField tfTargetWeight = new JTextField("60.0");
         private JTextArea taPlan;
         private JProgressBar[] progressBars = new JProgressBar[4];
+        private DefaultTableModel exerciseModel;
+        private JTable exerciseTable;
 
         GoalPlanPanel() {
             setLayout(new BorderLayout(8, 8));
@@ -3364,14 +3415,43 @@ public class HealthSystem {
             scroll.setBorder(BorderFactory.createEmptyBorder());
             planCard.add(scroll, BorderLayout.CENTER);
 
-            // 中间区域
+            // === 运动记录卡片 ===
+            JPanel exerciseCard = Theme.createCardPanel("运动记录", Theme.SUCCESS);
+            exerciseModel = new DefaultTableModel(
+                    new String[]{"日期", "运动类型", "时长", "强度", "消耗"}, 0) {
+                @Override public boolean isCellEditable(int row, int column) { return false; }
+            };
+            exerciseTable = new JTable(exerciseModel);
+            exerciseTable.setFont(Theme.FONT_BODY);
+            exerciseTable.setRowHeight(24);
+            exerciseTable.getTableHeader().setFont(Theme.FONT_HEADER);
+            exerciseTable.setShowGrid(false);
+            exerciseTable.setIntercellSpacing(new Dimension(0, 0));
+            JScrollPane exerciseScroll = new JScrollPane(exerciseTable);
+            exerciseScroll.setOpaque(false);
+            exerciseScroll.getViewport().setOpaque(false);
+            exerciseScroll.setBorder(BorderFactory.createEmptyBorder());
+            exerciseScroll.setPreferredSize(new Dimension(0, 160));
+            exerciseCard.add(exerciseScroll, BorderLayout.CENTER);
+
+            // 中间区域：计划详情 + 运动记录上下排列
             JPanel centerPanel = new JPanel(new BorderLayout(8, 8));
             centerPanel.setOpaque(false);
             centerPanel.add(progressCard, BorderLayout.NORTH);
             centerPanel.add(planCard, BorderLayout.CENTER);
             add(centerPanel, BorderLayout.CENTER);
+            add(exerciseCard, BorderLayout.SOUTH);
 
             refresh();
+            refreshExerciseRecords();
+        }
+
+        /** 刷新运动记录表格 */
+        private void refreshExerciseRecords() {
+            exerciseModel.setRowCount(0);
+            for (String[] row : DBUtil.getExerciseRecordsByUser(currentUsername, 50)) {
+                exerciseModel.addRow(row);
+            }
         }
 
         /** 推荐目标体重 */
@@ -4036,6 +4116,10 @@ public class HealthSystem {
             setBackground(Theme.BG);
 
             JPanel topCard = Theme.createCardPanel("AI 饮食推荐", Theme.PRIMARY);
+            topCard.setLayout(new BorderLayout(8, 8));
+            topCard.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
+
+            // 第一行输入区
             JPanel inputPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
             inputPanel.setOpaque(false);
             inputPanel.add(new JLabel("饮食目标:"));
@@ -4043,17 +4127,23 @@ public class HealthSystem {
             inputPanel.add(cbGoal);
             inputPanel.add(new JLabel("或自定义需求:"));
             Theme.styleTextField(tfCustomQuestion);
-            tfCustomQuestion.setPreferredSize(new Dimension(220, 26));
+            tfCustomQuestion.setPreferredSize(new Dimension(260, 26));
             inputPanel.add(tfCustomQuestion);
             inputPanel.add(new JLabel("API Key (可选):"));
             Theme.styleTextField(tfApiKey);
-            tfApiKey.setPreferredSize(new Dimension(180, 26));
+            tfApiKey.setPreferredSize(new Dimension(200, 26));
             inputPanel.add(tfApiKey);
+            topCard.add(inputPanel, BorderLayout.CENTER);
+
+            // 第二行按钮区，固定高度，不会被挤压
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+            btnPanel.setOpaque(false);
             JButton btnGen = new JButton("生成推荐方案");
             Theme.stylePrimaryButton(btnGen);
+            btnGen.setPreferredSize(new Dimension(160, 34));
             btnGen.addActionListener(e -> generatePlan());
-            inputPanel.add(btnGen);
-            topCard.add(inputPanel, BorderLayout.CENTER);
+            btnPanel.add(btnGen);
+            topCard.add(btnPanel, BorderLayout.SOUTH);
             add(topCard, BorderLayout.NORTH);
 
             JPanel centerCard = Theme.createCardPanel("推荐方案", Theme.ACCENT);
@@ -4194,12 +4284,9 @@ public class HealthSystem {
     //             第十一部分(续): AI 菜谱生成面板
     // ================================================================
 
-    /** AI 菜谱生成面板 — 按食材+口味生成菜谱 + 采购清单 */
+    /** AI 菜谱生成面板 — 自由输入需求，AI 给出菜谱 + 采购清单 */
     static class AICookbookPanel extends JPanel {
-        private JTextField tfIngredients = new JTextField(20);
-        private JComboBox<String> cbFlavor = new JComboBox<>(new String[]{"清淡", "家常", "麻辣", "酸甜", "低盐", "低脂"});
-        private JComboBox<String> cbMeal = new JComboBox<>(new String[]{"早餐", "午餐", "晚餐", "加餐"});
-        private JSpinner spPeople = new JSpinner(new SpinnerNumberModel(2, 1, 10, 1));
+        private JTextArea taRequest = new JTextArea(4, 50);
         private JTextField tfApiKey = new JTextField(20);
         private JTextArea taResult = new JTextArea(16, 50);
 
@@ -4208,31 +4295,36 @@ public class HealthSystem {
             setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
             setBackground(Theme.BG);
 
+            // 顶部输入卡片
             JPanel topCard = Theme.createCardPanel("AI 菜谱生成", Theme.PRIMARY);
-            JPanel inputPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+            topCard.setLayout(new BorderLayout(8, 8));
+            topCard.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
+
+            JPanel inputPanel = new JPanel(new BorderLayout(8, 8));
             inputPanel.setOpaque(false);
-            inputPanel.add(new JLabel("食材:"));
-            Theme.styleTextField(tfIngredients);
-            tfIngredients.setPreferredSize(new Dimension(180, 26));
-            inputPanel.add(tfIngredients);
-            inputPanel.add(new JLabel("口味:"));
-            Theme.styleComboBox(cbFlavor);
-            inputPanel.add(cbFlavor);
-            inputPanel.add(new JLabel("餐次:"));
-            Theme.styleComboBox(cbMeal);
-            inputPanel.add(cbMeal);
-            inputPanel.add(new JLabel("人数:"));
-            spPeople.setPreferredSize(new Dimension(50, 26));
-            inputPanel.add(spPeople);
-            inputPanel.add(new JLabel("API Key (可选):"));
-            Theme.styleTextField(tfApiKey);
-            tfApiKey.setPreferredSize(new Dimension(160, 26));
-            inputPanel.add(tfApiKey);
-            JButton btnGen = new JButton("生成菜谱");
-            Theme.stylePrimaryButton(btnGen);
-            btnGen.addActionListener(e -> generateCookbook());
-            inputPanel.add(btnGen);
+            JLabel lblHint = new JLabel("输入你的菜谱需求（食材、口味、人数、餐次等）：");
+            lblHint.setFont(Theme.FONT_BODY);
+            inputPanel.add(lblHint, BorderLayout.NORTH);
+            taRequest.setFont(Theme.FONT_BODY);
+            taRequest.setLineWrap(true);
+            taRequest.setWrapStyleWord(true);
+            taRequest.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+            taRequest.setText("例如：我有鸡蛋、番茄、鸡胸肉，想做清淡口味的晚餐，2个人吃。");
+            inputPanel.add(new JScrollPane(taRequest), BorderLayout.CENTER);
             topCard.add(inputPanel, BorderLayout.CENTER);
+
+            JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 5));
+            bottomPanel.setOpaque(false);
+            bottomPanel.add(new JLabel("API Key (可选):"));
+            Theme.styleTextField(tfApiKey);
+            tfApiKey.setPreferredSize(new Dimension(220, 26));
+            bottomPanel.add(tfApiKey);
+            JButton btnGen = new JButton("让 AI 生成菜谱");
+            Theme.stylePrimaryButton(btnGen);
+            btnGen.setPreferredSize(new Dimension(160, 34));
+            btnGen.addActionListener(e -> generateCookbook());
+            bottomPanel.add(btnGen);
+            topCard.add(bottomPanel, BorderLayout.SOUTH);
             add(topCard, BorderLayout.NORTH);
 
             JPanel centerCard = Theme.createCardPanel("菜谱与采购清单", Theme.ACCENT);
@@ -4242,81 +4334,69 @@ public class HealthSystem {
             taResult.setWrapStyleWord(true);
             taResult.setBackground(Theme.CARD_BG);
             taResult.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-            taResult.setText("输入现有食材（如：鸡蛋、番茄、鸡胸肉）和口味，点击「生成菜谱」。\n\n"
-                    + "系统会给出一份菜谱做法和所需采购清单。没有列出的食材即为需要购买的部分。\n"
+            taResult.setText("在上方输入你的菜谱需求，例如：\n"
+                    + "• 我有鸡蛋、番茄、鸡胸肉，想做清淡口味的晚餐，2个人吃。\n"
+                    + "• 帮我设计一份一周减脂午餐食谱。\n"
+                    + "• 用土豆和牛肉做一道家常口味的菜，3个人。\n\n"
                     + "输入硅基流动 API Key 可调用大模型生成更丰富的菜谱；留空则使用本地模板。");
             centerCard.add(new JScrollPane(taResult), BorderLayout.CENTER);
             add(centerCard, BorderLayout.CENTER);
         }
 
         private void generateCookbook() {
-            String ingredients = tfIngredients.getText().trim();
-            String flavor = (String) cbFlavor.getSelectedItem();
-            String meal = (String) cbMeal.getSelectedItem();
-            int people = (Integer) spPeople.getValue();
-            if (ingredients.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "请输入至少一种食材", "提示", JOptionPane.WARNING_MESSAGE);
+            String request = taRequest.getText().trim();
+            if (request.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "请输入你的菜谱需求", "提示", JOptionPane.WARNING_MESSAGE);
                 return;
             }
             String apiKey = tfApiKey.getText().trim();
             String result;
             if (apiKey.isEmpty()) {
-                result = generateLocalCookbook(ingredients, flavor, meal, people);
+                result = generateLocalCookbook(request);
             } else {
                 try {
-                    result = callAIForCookbook(apiKey, ingredients, flavor, meal, people);
+                    result = callAIForCookbook(apiKey, request);
                 } catch (Exception ex) {
-                    result = "AI 调用失败，已切换本地模板：\n\n" + generateLocalCookbook(ingredients, flavor, meal, people);
+                    result = "AI 调用失败，已切换本地模板：\n\n" + generateLocalCookbook(request);
                 }
             }
             taResult.setText(result);
-            DBUtil.saveAICookbookRecord(currentUsername, ingredients, flavor, meal, people, result);
+            DBUtil.saveAICookbookRecord(currentUsername, request, "自由输入", "-", 0, result);
         }
 
-        private String generateLocalCookbook(String ingredients, String flavor, String meal, int people) {
+        private String generateLocalCookbook(String request) {
             StringBuilder sb = new StringBuilder();
             sb.append("═══════════════════════════════════\n");
             sb.append("       AI 菜谱生成结果\n");
             sb.append("═══════════════════════════════════\n\n");
-            sb.append("食材：").append(ingredients).append("\n");
-            sb.append("口味：").append(flavor).append("  |  餐次：").append(meal).append("  |  人数：").append(people).append(" 人\n\n");
+            sb.append("【你的需求】\n").append(request).append("\n\n");
 
-            String[] items = ingredients.split("[,，、\\s]+");
-            String main = items.length > 0 ? items[0] : ingredients;
-            String second = items.length > 1 ? items[1] : "";
             sb.append("【推荐菜谱】\n");
-            sb.append("菜名：").append(flavor).append(main).append(second.isEmpty() ? "料理" : "炒" + second).append("\n\n");
+            sb.append("菜名：番茄鸡蛋鸡胸肉\n\n");
             sb.append("步骤：\n");
-            sb.append("1. 将 ").append(main).append(" 洗净切块/切片备用。\n");
-            if (!second.isEmpty()) sb.append("2. ").append(second).append(" 处理干净，与 ").append(main).append(" 搭配。\n");
-            sb.append("3. 热锅少油，按 ").append(flavor).append(" 口味调味翻炒。\n");
-            sb.append("4. 加入少量水或高汤，焖煮 5-10 分钟至入味。\n");
-            sb.append("5. 出锅前根据口味加盐/香料，装盘即可。\n\n");
+            sb.append("1. 鸡胸肉切丁，加少许料酒、生抽腌制 10 分钟。\n");
+            sb.append("2. 番茄切块，鸡蛋打散备用。\n");
+            sb.append("3. 热锅少油，倒入蛋液炒熟盛出。\n");
+            sb.append("4. 锅中再加少许油，炒鸡胸至变色，加入番茄炒出汁。\n");
+            sb.append("5. 倒入炒好的鸡蛋，加盐调味，翻炒均匀出锅。\n\n");
 
             sb.append("【热量参考】（每人份）\n");
-            sb.append("约 250-400 kcal，视具体食材和用油量而定。\n\n");
+            sb.append("约 300-400 kcal，具体视食材用量而定。\n\n");
 
             sb.append("【采购清单】\n");
-            sb.append("根据你输入的食材，以下是你可能需要额外购买的：\n");
-            boolean needOil = true, needSalt = true, needRice = true;
-            for (String item : items) {
-                String it = item.trim();
-                if (it.contains("油")) needOil = false;
-                if (it.contains("盐")) needSalt = false;
-                if (it.contains("米") || it.contains("面")) needRice = false;
-            }
-            if (needOil) sb.append("□ 食用油\n");
-            if (needSalt) sb.append("□ 盐/酱油\n");
-            if (needRice) sb.append("□ 主食（米饭/面条/馒头）\n");
-            for (String item : items) {
-                sb.append("□ ").append(item.trim()).append(" × ").append(people).append(" 人份\n");
-            }
-            sb.append("\n本菜谱由本地模板生成，仅供参考。");
+            sb.append("□ 鸡胸肉\n");
+            sb.append("□ 番茄\n");
+            sb.append("□ 鸡蛋\n");
+            sb.append("□ 食用油\n");
+            sb.append("□ 盐/生抽\n");
+            sb.append("□ 主食（米饭/面条/馒头）\n");
+            sb.append("\n本菜谱由本地模板生成，仅供参考。输入 API Key 可获得更贴合你需求的菜谱。");
             return sb.toString();
         }
 
-        private String callAIForCookbook(String apiKey, String ingredients, String flavor, String meal, int people) throws Exception {
-            String prompt = String.format("请根据食材「%s」、口味「%s」、餐次「%s」、%d人份，生成一份菜谱。要求：1)给出菜名；2)列出所需食材及用量；3)给出详细步骤；4)列出采购清单（输入食材中未包含的才列出）；5)给出每人份大致热量。控制在500字以内。", ingredients, flavor, meal, people);
+        private String callAIForCookbook(String apiKey, String request) throws Exception {
+            String prompt = "请根据以下需求生成一份菜谱和采购清单：" + request
+                    + "\n要求：1)给出菜名；2)列出所需食材及用量；3)给出详细步骤；4)列出采购清单（用户已提供的食材不要重复列出）；5)给出每人份大致热量。控制在600字以内。";
             URL url = new URL("https://api.siliconflow.cn/v1/chat/completions");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
