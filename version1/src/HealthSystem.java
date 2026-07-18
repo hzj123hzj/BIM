@@ -10,6 +10,9 @@ import java.security.SecureRandom;
 import java.sql.*;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.Date;
 import java.util.List;
@@ -658,7 +661,7 @@ public class HealthSystem {
             String checkSql = "SELECT id FROM goals WHERE username = ?";
             String updateSql = "UPDATE goals SET goal_type = ?, target_value = ?, start_date = CURRENT_DATE, " +
                                "end_date = NULL, current_stage = 1 WHERE username = ?";
-            String insertSql = "INSERT INTO goals (username, goal_type, target_value) VALUES (?, ?, ?)";
+            String insertSql = "INSERT INTO goals (username, goal_type, target_value, start_date) VALUES (?, ?, ?, CURRENT_DATE)";
             try (Connection conn = getConnection()) {
                 PreparedStatement checkPs = conn.prepareStatement(checkSql);
                 checkPs.setString(1, currentUsername);
@@ -679,6 +682,41 @@ public class HealthSystem {
                 e.printStackTrace();
                 return false;
             }
+        }
+
+        /** 更新目标当前阶段 */
+        static boolean updateGoalStage(int stage) {
+            String sql = "UPDATE goals SET current_stage = ? WHERE username = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, stage);
+                ps.setString(2, currentUsername);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取指定日期范围内的运动统计 [次数, 总分钟] */
+        static int[] getExerciseStatsBetween(Date start, Date end) {
+            int[] result = {0, 0};
+            String sql = "SELECT COUNT(*), COALESCE(SUM(duration), 0) FROM exercise_records " +
+                         "WHERE username = ? AND record_date >= ? AND record_date < ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, currentUsername);
+                ps.setDate(2, new java.sql.Date(start.getTime()));
+                ps.setDate(3, new java.sql.Date(end.getTime()));
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    result[0] = rs.getInt(1);
+                    result[1] = rs.getInt(2);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return result;
         }
 
         /** 获取目标 */
@@ -1527,6 +1565,97 @@ public class HealthSystem {
             }
         }
 
+        /** 保存 AI 饮食推荐记录（自动建表） */
+        static boolean saveAIDietRecord(String username, String query, String result) {
+            String createSql = "CREATE TABLE IF NOT EXISTS ai_diet_records (" +
+                    "id SERIAL PRIMARY KEY, " +
+                    "username VARCHAR(50) REFERENCES users(username), " +
+                    "query TEXT, " +
+                    "result TEXT, " +
+                    "created_at TIMESTAMP DEFAULT NOW())";
+            String insertSql = "INSERT INTO ai_diet_records (username, query, result) VALUES (?, ?, ?)";
+            try (Connection conn = getConnection();
+                 Statement stmt = conn.createStatement();
+                 PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                stmt.executeUpdate(createSql);
+                ps.setString(1, username);
+                ps.setString(2, query);
+                ps.setString(3, result);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 保存 AI 菜谱生成记录（自动建表） */
+        static boolean saveAICookbookRecord(String username, String ingredients, String flavor, String meal, int people, String result) {
+            String createSql = "CREATE TABLE IF NOT EXISTS ai_cookbook_records (" +
+                    "id SERIAL PRIMARY KEY, " +
+                    "username VARCHAR(50) REFERENCES users(username), " +
+                    "ingredients TEXT, " +
+                    "flavor VARCHAR(50), " +
+                    "meal VARCHAR(20), " +
+                    "people INT, " +
+                    "result TEXT, " +
+                    "created_at TIMESTAMP DEFAULT NOW())";
+            String insertSql = "INSERT INTO ai_cookbook_records (username, ingredients, flavor, meal, people, result) VALUES (?, ?, ?, ?, ?, ?)";
+            try (Connection conn = getConnection();
+                 Statement stmt = conn.createStatement();
+                 PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                stmt.executeUpdate(createSql);
+                ps.setString(1, username);
+                ps.setString(2, ingredients);
+                ps.setString(3, flavor);
+                ps.setString(4, meal);
+                ps.setInt(5, people);
+                ps.setString(6, result);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取 AI 使用统计（管理员） */
+        static List<String[]> getAIUsageStats() {
+            List<String[]> list = new ArrayList<>();
+            String createChat = "CREATE TABLE IF NOT EXISTS ai_chat_records (id SERIAL PRIMARY KEY, username VARCHAR(50) REFERENCES users(username), question TEXT, answer TEXT, status VARCHAR(20) DEFAULT '有效', created_at TIMESTAMP DEFAULT NOW())";
+            String createDiet = "CREATE TABLE IF NOT EXISTS ai_diet_records (id SERIAL PRIMARY KEY, username VARCHAR(50) REFERENCES users(username), query TEXT, result TEXT, created_at TIMESTAMP DEFAULT NOW())";
+            String createCookbook = "CREATE TABLE IF NOT EXISTS ai_cookbook_records (id SERIAL PRIMARY KEY, username VARCHAR(50) REFERENCES users(username), ingredients TEXT, flavor VARCHAR(50), meal VARCHAR(20), people INT, result TEXT, created_at TIMESTAMP DEFAULT NOW())";
+            String sql = "SELECT u.username, " +
+                    "COALESCE(c.chat_count, 0) AS chat_count, " +
+                    "COALESCE(d.diet_count, 0) AS diet_count, " +
+                    "COALESCE(b.cookbook_count, 0) AS cookbook_count, " +
+                    "GREATEST(c.last_time, d.last_time, b.last_time) AS last_time " +
+                    "FROM users u " +
+                    "LEFT JOIN (SELECT username, COUNT(*) AS chat_count, MAX(created_at) AS last_time FROM ai_chat_records GROUP BY username) c ON u.username = c.username " +
+                    "LEFT JOIN (SELECT username, COUNT(*) AS diet_count, MAX(created_at) AS last_time FROM ai_diet_records GROUP BY username) d ON u.username = d.username " +
+                    "LEFT JOIN (SELECT username, COUNT(*) AS cookbook_count, MAX(created_at) AS last_time FROM ai_cookbook_records GROUP BY username) b ON u.username = b.username " +
+                    "ORDER BY u.username";
+            try (Connection conn = getConnection();
+                 Statement stmt = conn.createStatement();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                stmt.executeUpdate(createChat);
+                stmt.executeUpdate(createDiet);
+                stmt.executeUpdate(createCookbook);
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            rs.getString("username"),
+                            String.valueOf(rs.getInt("chat_count")),
+                            String.valueOf(rs.getInt("diet_count")),
+                            String.valueOf(rs.getInt("cookbook_count")),
+                            rs.getTimestamp("last_time") != null ? sdf.format(rs.getTimestamp("last_time")) : "-"
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
         /** 获取当前用户的 AI 问答记录 */
         static List<String[]> getAIChatRecordsByUser(String username, int limit) {
             List<String[]> list = new ArrayList<>();
@@ -2289,6 +2418,7 @@ public class HealthSystem {
             tabPane.addTab("饮食管理", new DietPanel(this));
             tabPane.addTab("AI 问答", new AIChatPanel());
             tabPane.addTab("AI 饮食推荐", new AIDietPanel());
+            tabPane.addTab("AI 菜谱生成", new AICookbookPanel());
             tabPane.addTab("成就徽章", new AchievementPanel());
             tabPane.addTab("数据大屏", new DashboardPanel());
             centerWrapper.add(tabPane, BorderLayout.CENTER);
@@ -3292,7 +3422,14 @@ public class HealthSystem {
 
             String goalType = (String) goal.get("goal_type");
             double targetWeight = (double) goal.get("target_value");
-            int currentStage = goal.get("current_stage") != null ? (int) goal.get("current_stage") : 1;
+            Date startDateRaw = (Date) goal.get("start_date");
+            if (startDateRaw == null) startDateRaw = new Date();
+            LocalDate startDate = startDateRaw.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            LocalDate today = LocalDate.now();
+            long daysSinceStart = ChronoUnit.DAYS.between(startDate, today);
+            int actualStage = (int) Math.min(4, Math.max(1, daysSinceStart / 7 + 1));
+            // 同步数据库阶段
+            DBUtil.updateGoalStage(actualStage);
 
             sb.append("═══════════════════════════════════════════\n");
             sb.append("              目标计划\n");
@@ -3300,33 +3437,42 @@ public class HealthSystem {
             sb.append("目标类型: ").append(goalType).append("\n");
             sb.append("当前体重: ").append(df1.format(currentWeight)).append(" kg\n");
             sb.append("目标体重: ").append(df1.format(targetWeight)).append(" kg\n");
-            sb.append("需变化: ").append(df1.format(Math.abs(currentWeight - targetWeight))).append(" kg\n\n");
+            sb.append("需变化: ").append(df1.format(Math.abs(currentWeight - targetWeight))).append(" kg\n");
+            sb.append("目标开始日期: ").append(startDate).append(" (已进行 ").append(daysSinceStart).append(" 天)\n\n");
 
             // 分阶段计划
             sb.append("【分阶段计划 (4周递进)】\n");
             double totalChange = targetWeight - currentWeight;
             double[] stageTargets = new double[4];
-            // 起步阶段稍慢, 后面加速
             double[] ratios = {0.2, 0.25, 0.275, 0.275};
             double cumRatio = 0;
+            int[] weeklyTargets = getWeeklyTargets(goalType);
             for (int i = 0; i < 4; i++) {
                 cumRatio += ratios[i];
                 stageTargets[i] = currentWeight + totalChange * cumRatio;
                 sb.append("  第").append(i + 1).append("周: ").append(df1.format(i == 0 ? currentWeight : stageTargets[i - 1]));
                 sb.append(" → ").append(df1.format(stageTargets[i])).append(" kg\n");
 
-                // 计算进度
-                double stageStart = (i == 0) ? currentWeight : stageTargets[i - 1];
-                double stageEnd = stageTargets[i];
+                // 计算阶段进度（根据运动记录同步）
                 double progress;
-                if (stageEnd > stageStart) {
-                    progress = (currentWeight - stageStart) / (stageEnd - stageStart) * 100;
+                if (i + 1 < actualStage) {
+                    progress = 100;
+                } else if (i + 1 > actualStage) {
+                    progress = 0;
                 } else {
-                    progress = (stageStart - currentWeight) / (stageStart - stageEnd) * 100;
+                    LocalDate stageStart = startDate.plusWeeks(i);
+                    LocalDate stageEnd = startDate.plusWeeks(i + 1);
+                    Date s = Date.from(stageStart.atStartOfDay(ZoneId.systemDefault()).toInstant());
+                    Date e = Date.from(stageEnd.atStartOfDay(ZoneId.systemDefault()).toInstant());
+                    int[] stats = DBUtil.getExerciseStatsBetween(s, e);
+                    int targetTimes = weeklyTargets[0];
+                    int targetMinutes = weeklyTargets[1];
+                    double pTimes = targetTimes > 0 ? (double) stats[0] / targetTimes * 100 : 0;
+                    double pMinutes = targetMinutes > 0 ? (double) stats[1] / targetMinutes * 100 : 0;
+                    progress = Math.min(100, Math.max(pTimes, pMinutes));
+                    sb.append("    本周运动: ").append(stats[0]).append(" 次, ").append(stats[1]).append(" 分钟\n");
+                    sb.append("    阶段目标: ").append(targetTimes).append(" 次 / ").append(targetMinutes).append(" 分钟\n");
                 }
-                progress = Math.max(0, Math.min(100, progress));
-                if (i + 1 < currentStage) progress = 100;
-                if (i + 1 > currentStage) progress = 0;
                 progressBars[i].setValue((int) progress);
             }
             sb.append("\n");
@@ -3383,6 +3529,15 @@ public class HealthSystem {
             sb.append("\n═══════════════════════════════════════════\n");
 
             taPlan.setText(sb.toString());
+        }
+
+        private int[] getWeeklyTargets(String goalType) {
+            switch (goalType) {
+                case "减脂": return new int[]{4, 180};
+                case "减重": return new int[]{5, 225};
+                case "增肌": return new int[]{4, 240};
+                default: return new int[]{3, 120};
+            }
         }
     }
 
@@ -3872,6 +4027,7 @@ public class HealthSystem {
     /** AI 饮食推荐面板 — 根据用户目标生成饮食方案 */
     static class AIDietPanel extends JPanel {
         private JComboBox<String> cbGoal = new JComboBox<>(new String[]{"维持体重", "减脂", "增肌", "控糖"});
+        private JTextField tfCustomQuestion = new JTextField(22); // 自定义需求
         private JTextArea taPlan = new JTextArea(14, 50);
         private JTextField tfApiKey = new JTextField(20);
 
@@ -3886,6 +4042,10 @@ public class HealthSystem {
             inputPanel.add(new JLabel("饮食目标:"));
             Theme.styleComboBox(cbGoal);
             inputPanel.add(cbGoal);
+            inputPanel.add(new JLabel("或自定义需求:"));
+            Theme.styleTextField(tfCustomQuestion);
+            tfCustomQuestion.setPreferredSize(new Dimension(220, 26));
+            inputPanel.add(tfCustomQuestion);
             inputPanel.add(new JLabel("API Key (可选):"));
             Theme.styleTextField(tfApiKey);
             tfApiKey.setPreferredSize(new Dimension(180, 26));
@@ -3904,8 +4064,10 @@ public class HealthSystem {
             taPlan.setWrapStyleWord(true);
             taPlan.setBackground(Theme.CARD_BG);
             taPlan.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-            taPlan.setText("选择饮食目标后点击「生成推荐方案」。\n\n"
-                    + "系统会根据你的最新健康数据、今日饮食记录和目标，给出一日三餐建议。\n"
+            taPlan.setText("选择饮食目标或直接在「自定义需求」中输入你的饮食问题，例如:\n"
+                    + "\"我有高血压，晚餐吃什么好？\"\n"
+                    + "\"健身后需要补充什么？\"\n"
+                    + "\"给我一份一周低碳食谱\"\n\n"
                     + "输入硅基流动 API Key 可调用大模型生成更个性化方案；留空则使用本地推荐模板。");
             centerCard.add(new JScrollPane(taPlan), BorderLayout.CENTER);
             add(centerCard, BorderLayout.CENTER);
@@ -3913,18 +4075,22 @@ public class HealthSystem {
 
         private void generatePlan() {
             String goal = (String) cbGoal.getSelectedItem();
+            String custom = tfCustomQuestion.getText().trim();
+            String query = custom.isEmpty() ? goal : custom;
             String apiKey = tfApiKey.getText().trim();
             String plan;
             if (apiKey.isEmpty()) {
-                plan = generateLocalPlan(goal);
+                plan = generateLocalPlan(query);
             } else {
                 try {
-                    plan = callAIForDietPlan(apiKey, goal);
+                    plan = callAIForDietPlan(apiKey, query);
                 } catch (Exception ex) {
-                    plan = "AI 调用失败，已切换本地推荐：\n\n" + generateLocalPlan(goal);
+                    plan = "AI 调用失败，已切换本地推荐：\n\n" + generateLocalPlan(query);
                 }
             }
             taPlan.setText(plan);
+            // 保存使用记录
+            DBUtil.saveAIDietRecord(currentUsername, query, plan);
         }
 
         private String generateLocalPlan(String goal) {
@@ -3998,6 +4164,160 @@ public class HealthSystem {
                         diet[0], diet[1] / 100.0, diet[2] / 100.0, diet[3] / 100.0));
             }
             String prompt = dataSb + "\n请为用户制定一份「" + goal + "」的一日三餐饮食方案，给出每餐热量、食材和注意事项，控制在 400 字以内。";
+            URL url = new URL("https://api.siliconflow.cn/v1/chat/completions");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(30000);
+            conn.setReadTimeout(60000);
+            String body = "{\"model\":\"Qwen/Qwen2.5-7B-Instruct\",\"messages\":[{\"role\":\"user\",\"content\":\""
+                    + prompt.replace("\"", "\\\"").replace("\n", "\\n")
+                    + "\"}]}";
+            try (OutputStream os = conn.getOutputStream()) { os.write(body.getBytes("UTF-8")); }
+            BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) response.append(line);
+            String resp = response.toString();
+            int idx = resp.indexOf("\"content\":\"");
+            if (idx >= 0) {
+                int end = resp.indexOf("\"", idx + 11);
+                if (end > idx) return resp.substring(idx + 11, end).replace("\\n", "\n");
+            }
+            return "AI 返回: " + resp;
+        }
+    }
+
+    // ================================================================
+    //             第十一部分(续): AI 菜谱生成面板
+    // ================================================================
+
+    /** AI 菜谱生成面板 — 按食材+口味生成菜谱 + 采购清单 */
+    static class AICookbookPanel extends JPanel {
+        private JTextField tfIngredients = new JTextField(20);
+        private JComboBox<String> cbFlavor = new JComboBox<>(new String[]{"清淡", "家常", "麻辣", "酸甜", "低盐", "低脂"});
+        private JComboBox<String> cbMeal = new JComboBox<>(new String[]{"早餐", "午餐", "晚餐", "加餐"});
+        private JSpinner spPeople = new JSpinner(new SpinnerNumberModel(2, 1, 10, 1));
+        private JTextField tfApiKey = new JTextField(20);
+        private JTextArea taResult = new JTextArea(16, 50);
+
+        AICookbookPanel() {
+            setLayout(new BorderLayout(8, 8));
+            setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+            setBackground(Theme.BG);
+
+            JPanel topCard = Theme.createCardPanel("AI 菜谱生成", Theme.PRIMARY);
+            JPanel inputPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+            inputPanel.setOpaque(false);
+            inputPanel.add(new JLabel("食材:"));
+            Theme.styleTextField(tfIngredients);
+            tfIngredients.setPreferredSize(new Dimension(180, 26));
+            inputPanel.add(tfIngredients);
+            inputPanel.add(new JLabel("口味:"));
+            Theme.styleComboBox(cbFlavor);
+            inputPanel.add(cbFlavor);
+            inputPanel.add(new JLabel("餐次:"));
+            Theme.styleComboBox(cbMeal);
+            inputPanel.add(cbMeal);
+            inputPanel.add(new JLabel("人数:"));
+            spPeople.setPreferredSize(new Dimension(50, 26));
+            inputPanel.add(spPeople);
+            inputPanel.add(new JLabel("API Key (可选):"));
+            Theme.styleTextField(tfApiKey);
+            tfApiKey.setPreferredSize(new Dimension(160, 26));
+            inputPanel.add(tfApiKey);
+            JButton btnGen = new JButton("生成菜谱");
+            Theme.stylePrimaryButton(btnGen);
+            btnGen.addActionListener(e -> generateCookbook());
+            inputPanel.add(btnGen);
+            topCard.add(inputPanel, BorderLayout.CENTER);
+            add(topCard, BorderLayout.NORTH);
+
+            JPanel centerCard = Theme.createCardPanel("菜谱与采购清单", Theme.ACCENT);
+            taResult.setFont(Theme.FONT_BODY);
+            taResult.setEditable(false);
+            taResult.setLineWrap(true);
+            taResult.setWrapStyleWord(true);
+            taResult.setBackground(Theme.CARD_BG);
+            taResult.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            taResult.setText("输入现有食材（如：鸡蛋、番茄、鸡胸肉）和口味，点击「生成菜谱」。\n\n"
+                    + "系统会给出一份菜谱做法和所需采购清单。没有列出的食材即为需要购买的部分。\n"
+                    + "输入硅基流动 API Key 可调用大模型生成更丰富的菜谱；留空则使用本地模板。");
+            centerCard.add(new JScrollPane(taResult), BorderLayout.CENTER);
+            add(centerCard, BorderLayout.CENTER);
+        }
+
+        private void generateCookbook() {
+            String ingredients = tfIngredients.getText().trim();
+            String flavor = (String) cbFlavor.getSelectedItem();
+            String meal = (String) cbMeal.getSelectedItem();
+            int people = (Integer) spPeople.getValue();
+            if (ingredients.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "请输入至少一种食材", "提示", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            String apiKey = tfApiKey.getText().trim();
+            String result;
+            if (apiKey.isEmpty()) {
+                result = generateLocalCookbook(ingredients, flavor, meal, people);
+            } else {
+                try {
+                    result = callAIForCookbook(apiKey, ingredients, flavor, meal, people);
+                } catch (Exception ex) {
+                    result = "AI 调用失败，已切换本地模板：\n\n" + generateLocalCookbook(ingredients, flavor, meal, people);
+                }
+            }
+            taResult.setText(result);
+            DBUtil.saveAICookbookRecord(currentUsername, ingredients, flavor, meal, people, result);
+        }
+
+        private String generateLocalCookbook(String ingredients, String flavor, String meal, int people) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("═══════════════════════════════════\n");
+            sb.append("       AI 菜谱生成结果\n");
+            sb.append("═══════════════════════════════════\n\n");
+            sb.append("食材：").append(ingredients).append("\n");
+            sb.append("口味：").append(flavor).append("  |  餐次：").append(meal).append("  |  人数：").append(people).append(" 人\n\n");
+
+            String[] items = ingredients.split("[,，、\\s]+");
+            String main = items.length > 0 ? items[0] : ingredients;
+            String second = items.length > 1 ? items[1] : "";
+            sb.append("【推荐菜谱】\n");
+            sb.append("菜名：").append(flavor).append(main).append(second.isEmpty() ? "料理" : "炒" + second).append("\n\n");
+            sb.append("步骤：\n");
+            sb.append("1. 将 ").append(main).append(" 洗净切块/切片备用。\n");
+            if (!second.isEmpty()) sb.append("2. ").append(second).append(" 处理干净，与 ").append(main).append(" 搭配。\n");
+            sb.append("3. 热锅少油，按 ").append(flavor).append(" 口味调味翻炒。\n");
+            sb.append("4. 加入少量水或高汤，焖煮 5-10 分钟至入味。\n");
+            sb.append("5. 出锅前根据口味加盐/香料，装盘即可。\n\n");
+
+            sb.append("【热量参考】（每人份）\n");
+            sb.append("约 250-400 kcal，视具体食材和用油量而定。\n\n");
+
+            sb.append("【采购清单】\n");
+            sb.append("根据你输入的食材，以下是你可能需要额外购买的：\n");
+            boolean needOil = true, needSalt = true, needRice = true;
+            for (String item : items) {
+                String it = item.trim();
+                if (it.contains("油")) needOil = false;
+                if (it.contains("盐")) needSalt = false;
+                if (it.contains("米") || it.contains("面")) needRice = false;
+            }
+            if (needOil) sb.append("□ 食用油\n");
+            if (needSalt) sb.append("□ 盐/酱油\n");
+            if (needRice) sb.append("□ 主食（米饭/面条/馒头）\n");
+            for (String item : items) {
+                sb.append("□ ").append(item.trim()).append(" × ").append(people).append(" 人份\n");
+            }
+            sb.append("\n本菜谱由本地模板生成，仅供参考。");
+            return sb.toString();
+        }
+
+        private String callAIForCookbook(String apiKey, String ingredients, String flavor, String meal, int people) throws Exception {
+            String prompt = String.format("请根据食材「%s」、口味「%s」、餐次「%s」、%d人份，生成一份菜谱。要求：1)给出菜名；2)列出所需食材及用量；3)给出详细步骤；4)列出采购清单（输入食材中未包含的才列出）；5)给出每人份大致热量。控制在500字以内。", ingredients, flavor, meal, people);
             URL url = new URL("https://api.siliconflow.cn/v1/chat/completions");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");

@@ -704,7 +704,7 @@ public class AdminSystem {
 
     // ==================== 4. AI 系统管理面板 ====================
     static class AISystemPanel extends JPanel {
-        private DefaultTableModel chatModel, templateModel;
+        private DefaultTableModel chatModel, templateModel, usageModel;
         private JTextField tfApiKey, tfModel, tfEndpoint;
 
         AISystemPanel() {
@@ -717,6 +717,7 @@ public class AdminSystem {
             tabPane.addTab("AI 问答记录", createChatPanel());
             tabPane.addTab("Prompt 模板", createTemplatePanel());
             tabPane.addTab("API 配置", createApiConfigPanel());
+            tabPane.addTab("AI 使用统计", createUsageStatsPanel());
             add(tabPane, BorderLayout.CENTER);
         }
 
@@ -908,6 +909,33 @@ public class AdminSystem {
                 JOptionPane.showMessageDialog(this, "API 配置已保存到数据库\n\n后续可在 Prompt 模板或健康顾问模块中调用此配置生成 AI 建议。", "保存成功", JOptionPane.INFORMATION_MESSAGE);
             } else {
                 JOptionPane.showMessageDialog(this, "保存失败，请检查数据库连接", "错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+
+        private JPanel createUsageStatsPanel() {
+            JPanel panel = new JPanel(new BorderLayout(8, 8));
+            panel.setOpaque(false);
+            JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            ctrl.setOpaque(false);
+            JButton btnRefresh = createPrimaryBtn("刷新统计");
+            btnRefresh.addActionListener(e -> loadUsageStats());
+            ctrl.add(btnRefresh);
+            panel.add(ctrl, BorderLayout.NORTH);
+
+            usageModel = new DefaultTableModel(new String[]{"用户名", "AI 问答", "AI 饮食", "AI 菜谱", "最后使用时间"}, 0) {
+                @Override public boolean isCellEditable(int row, int column) { return false; }
+            };
+            JTable table = new JTable(usageModel);
+            styleTable(table);
+            panel.add(new JScrollPane(table), BorderLayout.CENTER);
+            loadUsageStats();
+            return panel;
+        }
+
+        private void loadUsageStats() {
+            usageModel.setRowCount(0);
+            for (String[] row : HealthSystem.DBUtil.getAIUsageStats()) {
+                usageModel.addRow(row);
             }
         }
     }

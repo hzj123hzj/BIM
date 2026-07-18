@@ -362,6 +362,31 @@ public class InitDB {
         execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_ai_chat_user ON ai_chat_records(username)");
         System.out.println("  [OK] ai_chat_records 表");
 
+        // AI 饮食推荐记录表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS ai_diet_records (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  username VARCHAR(50) REFERENCES users(username)," +
+            "  query TEXT," +
+            "  result TEXT," +
+            "  created_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        System.out.println("  [OK] ai_diet_records 表");
+
+        // AI 菜谱生成记录表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS ai_cookbook_records (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  username VARCHAR(50) REFERENCES users(username)," +
+            "  ingredients TEXT," +
+            "  flavor VARCHAR(50)," +
+            "  meal VARCHAR(20)," +
+            "  people INT," +
+            "  result TEXT," +
+            "  created_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        System.out.println("  [OK] ai_cookbook_records 表");
+
         // 插入默认系统配置
         insertConfigIfNotExists(conn, "weight_change_threshold", "5.0", "7天体重变化阈值(kg)");
         insertConfigIfNotExists(conn, "body_fat_rise_days", "30", "体脂连续上升天数阈值");
