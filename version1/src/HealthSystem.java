@@ -1723,11 +1723,13 @@ public class HealthSystem {
                     "COALESCE(c.chat_count, 0) AS chat_count, " +
                     "COALESCE(d.diet_count, 0) AS diet_count, " +
                     "COALESCE(b.cookbook_count, 0) AS cookbook_count, " +
-                    "GREATEST(c.last_time, d.last_time, b.last_time) AS last_time " +
+                    "GREATEST(COALESCE(c.last_time, TIMESTAMP '1970-01-01 00:00:00'), " +
+                            "COALESCE(d.last_time, TIMESTAMP '1970-01-01 00:00:00'), " +
+                            "COALESCE(b.last_time, TIMESTAMP '1970-01-01 00:00:00')) AS last_time " +
                     "FROM users u " +
-                    "LEFT JOIN (SELECT username, COUNT(*) AS chat_count, MAX(created_at) AS last_time FROM ai_chat_records GROUP BY username) c ON u.username = c.username " +
-                    "LEFT JOIN (SELECT username, COUNT(*) AS diet_count, MAX(created_at) AS last_time FROM ai_diet_records GROUP BY username) d ON u.username = d.username " +
-                    "LEFT JOIN (SELECT username, COUNT(*) AS cookbook_count, MAX(created_at) AS last_time FROM ai_cookbook_records GROUP BY username) b ON u.username = b.username " +
+                    "LEFT JOIN (SELECT username, COUNT(*) AS chat_count, MAX(created_at) AS last_time FROM ai_chat_records WHERE COALESCE(status,'有效')<>'无效' GROUP BY username) c ON u.username = c.username " +
+                    "LEFT JOIN (SELECT username, COUNT(*) AS diet_count, MAX(created_at) AS last_time FROM ai_diet_records WHERE COALESCE(status,'有效')<>'无效' GROUP BY username) d ON u.username = d.username " +
+                    "LEFT JOIN (SELECT username, COUNT(*) AS cookbook_count, MAX(created_at) AS last_time FROM ai_cookbook_records WHERE COALESCE(status,'有效')<>'无效' GROUP BY username) b ON u.username = b.username " +
                     "ORDER BY u.username";
             try (Connection conn = getConnection();
                  Statement stmt = conn.createStatement();
@@ -1738,12 +1740,14 @@ public class HealthSystem {
                 ResultSet rs = ps.executeQuery();
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
                 while (rs.next()) {
+                    Timestamp lastT = rs.getTimestamp("last_time");
+                    String lastStr = (lastT != null && lastT.getTime() > 0) ? sdf.format(lastT) : "-";
                     list.add(new String[]{
                             rs.getString("username"),
                             String.valueOf(rs.getInt("chat_count")),
                             String.valueOf(rs.getInt("diet_count")),
                             String.valueOf(rs.getInt("cookbook_count")),
-                            rs.getTimestamp("last_time") != null ? sdf.format(rs.getTimestamp("last_time")) : "-"
+                            lastStr
                     });
                 }
             } catch (SQLException e) {
@@ -1752,11 +1756,11 @@ public class HealthSystem {
             return list;
         }
 
-        /** 获取当前用户的 AI 问答记录 */
+        /** 获取当前用户的 AI 问答记录（隐藏被管理员标记为无效的记录） */
         static List<String[]> getAIChatRecordsByUser(String username, int limit) {
             List<String[]> list = new ArrayList<>();
             String sql = "SELECT id, question, answer, status, created_at FROM ai_chat_records " +
-                         "WHERE username = ? ORDER BY id DESC LIMIT ?";
+                         "WHERE username = ? AND COALESCE(status,'有效') <> '无效' ORDER BY id DESC LIMIT ?";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, username);

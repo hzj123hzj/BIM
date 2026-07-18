@@ -782,6 +782,7 @@ public class AdminSystem {
             if (row < 0) { JOptionPane.showMessageDialog(this, "请先选择一行"); return; }
             int id = Integer.parseInt((String) chatModel.getValueAt(row, 0));
             if (HealthSystem.DBUtil.updateAIChatStatus(id, status)) {
+                if ("无效".equals(status)) notifyAIRejected("ai_chat", id);
                 HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "审核AI问答", "ID=" + id + ", 状态=" + status);
                 loadChatRecords();
             }
@@ -1000,6 +1001,7 @@ public class AdminSystem {
             if (row < 0) { JOptionPane.showMessageDialog(this, "请先选择一行"); return; }
             int id = Integer.parseInt((String) dietModel.getValueAt(row, 0));
             if (HealthSystem.DBUtil.updateAIDietStatus(id, status)) {
+                if ("无效".equals(status)) notifyAIRejected("ai_diet", id);
                 HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "审核AI饮食", "ID=" + id + ", 状态=" + status);
                 loadDietRecords();
             }
@@ -1064,8 +1066,30 @@ public class AdminSystem {
             if (row < 0) { JOptionPane.showMessageDialog(this, "请先选择一行"); return; }
             int id = Integer.parseInt((String) cookbookModel.getValueAt(row, 0));
             if (HealthSystem.DBUtil.updateAICookbookStatus(id, status)) {
+                if ("无效".equals(status)) notifyAIRejected("ai_cookbook", id);
                 HealthSystem.DBUtil.logAction("ADMIN", HealthSystem.currentUsername, "审核AI菜谱", "ID=" + id + ", 状态=" + status);
                 loadCookbookRecords();
+            }
+        }
+
+        /** 标记无效时，给该记录对应用户发送系统通知 */
+        private void notifyAIRejected(String type, int id) {
+            String username = null;
+            String typeName = "";
+            if ("ai_chat".equals(type)) {
+                username = HealthSystem.DBUtil.getAIChatRecordById(id).get("username");
+                typeName = "AI 问答";
+            } else if ("ai_diet".equals(type)) {
+                username = HealthSystem.DBUtil.getAIDietRecordById(id).get("username");
+                typeName = "AI 饮食推荐";
+            } else if ("ai_cookbook".equals(type)) {
+                username = HealthSystem.DBUtil.getAICookbookRecordById(id).get("username");
+                typeName = "AI 菜谱生成";
+            }
+            if (username != null && !username.isEmpty()) {
+                HealthSystem.DBUtil.saveNotification("系统", username, "AI 内容审核通知",
+                        "您的一条" + typeName + "记录（ID=" + id + "）被管理员判定为无效，已对您隐藏。" +
+                        "如内容有误或需要更准确建议，请重新生成或重新提问。", "系统通知");
             }
         }
 
