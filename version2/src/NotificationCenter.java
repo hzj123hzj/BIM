@@ -137,16 +137,7 @@ public class NotificationCenter {
     }
 
     private static void showContent(String[] row, String content, boolean isAdmin) {
-        Alert a = new Alert(Alert.AlertType.INFORMATION);
-        a.setTitle("消息详情");
-        a.setHeaderText(row[isAdmin ? 3 : 2]); // 标题
-        TextArea ta = new TextArea(content);
-        ta.setEditable(false);
-        ta.setWrapText(true);
-        ta.setPrefSize(520, 320);
-        a.getDialogPane().setContent(ta);
-        a.setResizable(true);
-        a.showAndWait();
+        ReportDialog.showText(row[isAdmin ? 3 : 2], content);
     }
 
     private static void info(String m) {

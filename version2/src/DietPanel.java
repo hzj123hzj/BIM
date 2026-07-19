@@ -199,21 +199,7 @@ public class DietPanel extends VBox {
     private static String f1(double v) { return String.format("%.1f", v); }
 
     private void showReportDialog(String title, String content) {
-        Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle(title);
-        dialog.setHeaderText(null);
-        dialog.setResizable(true);
-        TextArea area = new TextArea(content);
-        area.setEditable(false);
-        area.setWrapText(true);
-        area.setStyle("-fx-font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; -fx-font-size: 14px;");
-        VBox box = new VBox(area);
-        VBox.setVgrow(area, Priority.ALWAYS);
-        box.setPrefSize(800, 600);
-        dialog.getDialogPane().setContent(box);
-        dialog.getDialogPane().setPrefSize(800, 600);
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        dialog.show();
+        ReportDialog.showText(title, content);
     }
 
     private void alert(String m) {

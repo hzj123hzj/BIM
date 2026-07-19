@@ -143,10 +143,7 @@ public class UserDashboardPanel extends VBox {
         dialog.setTitle("核心指标详情");
         dialog.setHeaderText(null);
         dialog.setResizable(true);
-        dialog.getDialogPane().setContent(box);
-        dialog.getDialogPane().setPrefSize(800, 600);
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        dialog.show();
+        ReportDialog.show("核心指标详情", pane);
     }
 
     private VBox metricCard(String title, String value, String colorHex) {

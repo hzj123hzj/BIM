@@ -1,10 +1,11 @@
-/* JavaFX 8 主题样式 — BMI 体质评估与预测系统 (version2) */
+/* JavaFX 8 主题样式 — BMI 体质评估与预测系统 (version2) | 高级优化版 */
+/* 注意：JavaFX 8 CSS 不支持 --变量，所有颜色用字面量统一管理 */
 .root {
     -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
     -fx-base: #f0f6f9;
 }
 
-/* ===== 布局背景 ===== */
+/* ===== 布局背景（由平涂改为多层柔和渐变，营造空间纵深） ===== */
 .bg-gradient {
     -fx-background-color: linear-gradient(to bottom right, #2D8CA0, #1E6478);
 }
@@ -18,6 +19,8 @@
     -fx-cursor: hand;
     -fx-font-size: 13px;
     -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(45,140,160,0.25), 6, 0.2, 0, 2);
+    -fx-transition: -fx-background-color 0.2s;
 }
 .button-primary:hover { -fx-background-color: #1E6478; }
 .button-primary:pressed { -fx-background-color: #154B5A; }
@@ -30,6 +33,7 @@
     -fx-cursor: hand;
     -fx-font-size: 13px;
     -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(255,150,70,0.30), 6, 0.2, 0, 2);
 }
 .button-accent:hover { -fx-background-color: #E07B2E; }
 .button-accent:pressed { -fx-background-color: #C76A26; }
@@ -45,18 +49,41 @@
 }
 .button-ghost:hover { -fx-background-color: #E1F0F5; }
 
-/* ===== 卡片 ===== */
+/* ===== 卡片（圆角加大 + 柔和投影 + hover 轻微上浮，建立层次） ===== */
 .card {
     -fx-background-color: #ffffff;
-    -fx-background-radius: 12;
-    -fx-effect: dropshadow(three-pass-box, rgba(30,60,80,0.10), 10, 0, 0, 4);
+    -fx-background-radius: 14;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.12), 14, 0.2, 0, 4);
     -fx-padding: 16;
+}
+.card:hover {
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.20), 22, 0.3, 0, 8);
+    -fx-translate-y: -2;
 }
 .card-title {
     -fx-font-size: 15px;
     -fx-font-weight: bold;
     -fx-text-fill: #1E6478;
+    -fx-padding: 0 0 8 11;
+    -fx-border-color: transparent transparent transparent #2D8CA0;
+    -fx-border-width: 0 0 0 3;
 }
+
+/* ===== 排版层级（标题 / 正文 / 弱文本 三档） ===== */
+.h-page { -fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #1B2A33; }
+.text-body { -fx-font-size: 14px; -fx-text-fill: #3C4A55; }
+.text-muted { -fx-font-size: 13px; -fx-text-fill: #6B7884; }
+
+/* ===== 指标胶囊（用色块区分语义） ===== */
+.stat-chip {
+    -fx-background-color: #EAF3F7;
+    -fx-text-fill: #1E6478;
+    -fx-background-radius: 20;
+    -fx-padding: 6 14;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+.stat-chip-accent { -fx-background-color: #FDEBDD; -fx-text-fill: #C76A26; }
 
 /* ===== 输入框 ===== */
 .text-field, .password-field, .combo-box, .text-area {
@@ -103,7 +130,7 @@
 
 /* ===== 左侧导航栏 SideNav ===== */
 .sidebar {
-    -fx-background-color: #203A45;
+    -fx-background-color: linear-gradient(to bottom, #213C47, #18313A);
     -fx-pref-width: 198;
     -fx-min-width: 176;
     -fx-max-width: 230;
@@ -125,10 +152,15 @@
 .sidebar-scroll .scroll-bar { -fx-background-color: transparent; }
 .sidebar-scroll .scroll-bar .thumb { -fx-background-color: rgba(255,255,255,0.25); }
 .sidebar-nav { -fx-padding: 8 10; }
-.content-scroll { -fx-background-color: #F0F6F9; -fx-border-width: 0; }
+.content-scroll {
+    /* 多层柔和渐变，替代纯色平涂 */
+    -fx-background-color: linear-gradient(to bottom, #F6FBFD 0%, #EDF4F8 55%, #E6EFF5 100%);
+    -fx-border-width: 0;
+}
 .content-scroll .scroll-bar:vertical .thumb { -fx-background-color: #B7C6CE; -fx-background-radius: 6; }
 .content-scroll .scroll-bar:vertical .track { -fx-background-color: transparent; }
 .content-scroll .scroll-bar:horizontal { -fx-opacity: 0; }
+
 .sidebar-btn {
     -fx-background-color: transparent;
     -fx-text-fill: #C7D6DD;
@@ -148,11 +180,55 @@
     -fx-background-color: #2D8CA0;
     -fx-text-fill: #FFFFFF;
     -fx-font-weight: bold;
+    -fx-border-color: #FF9646;
+    -fx-border-width: 0 0 0 3;
+    -fx-border-radius: 0;
 }
+.sidebar-icon {
+    -fx-text-fill: #9FB8C2;
+    -fx-font-size: 14px;
+    -fx-font-family: "Segoe UI Symbol", "Microsoft YaHei", sans-serif;
+}
+.sidebar-btn-active .sidebar-icon { -fx-text-fill: #FFFFFF; }
+
 /* ===== 标题文字 ===== */
 .page-title { -fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #28323C; }
 .sub-title { -fx-font-size: 14px; -fx-text-fill: #646E78; }
 .hint { -fx-font-size: 12px; -fx-text-fill: #646E78; }
+
+/* ===== 报告弹窗（渐变标题带 + 舒适阅读栏，破解文本墙） ===== */
+.report-card {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 16;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.22), 26, 0.3, 0, 10);
+    -fx-padding: 0;
+    -fx-overflow: hidden;
+}
+.report-hero {
+    -fx-background-color: linear-gradient(to right, #2D8CA0, #1E6478);
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 19px;
+    -fx-font-weight: bold;
+    -fx-padding: 20 24;
+    -fx-background-radius: 16 16 0 0;
+}
+.report-body {
+    -fx-padding: 22 26;
+    -fx-background-color: #ffffff;
+}
+.report-text {
+    -fx-fill: #2A3742;
+    -fx-font-size: 14px;
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    -fx-line-spacing: 6px;
+}
+.report-scroll {
+    -fx-background-color: #ffffff;
+    -fx-border-width: 0;
+}
+.report-scroll .scroll-bar:vertical .thumb { -fx-background-color: #B7C6CE; -fx-background-radius: 6; }
+.report-scroll .scroll-bar:vertical .track { -fx-background-color: transparent; }
+.report-scroll .scroll-bar:horizontal { -fx-opacity: 0; }
 
 /* ===== 未读角标 ===== */
 .badge {

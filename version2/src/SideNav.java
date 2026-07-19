@@ -4,7 +4,9 @@ import javafx.scene.control.*;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 左侧导航栏（自建，替代 JavaFX TabPane）。
@@ -29,6 +31,34 @@ public class SideNav {
     private Button activeBtn;
     private final List<Tab> tabs;
 
+    // 导航图标映射（用户端 / 管理端通用，几何字形兼容性最佳）
+    private static final Map<String, String> ICON = new HashMap<>();
+    static {
+        ICON.put("数据大屏", "◉");
+        ICON.put("数据录入", "✎");
+        ICON.put("历史趋势", "↗");
+        ICON.put("分析评估", "◎");
+        ICON.put("预测分析", "❖");
+        ICON.put("目标计划", "✦");
+        ICON.put("饮食管理", "▦");
+        ICON.put("AI 问答", "❝");
+        ICON.put("AI 饮食推荐", "✚");
+        ICON.put("AI 菜谱生成", "◈");
+        ICON.put("成就徽章", "★");
+        ICON.put("健康资讯", "❏");
+        ICON.put("用户管理", "◫");
+        ICON.put("食物库管理", "▤");
+        ICON.put("运动库管理", "◆");
+        ICON.put("健康资讯管理", "❏");
+        ICON.put("AI问答记录", "❝");
+        ICON.put("AI饮食记录", "✚");
+        ICON.put("AI菜谱记录", "◈");
+        ICON.put("干预模板", "✎");
+        ICON.put("接口配置", "◉");
+        ICON.put("AI使用统计", "▥");
+        ICON.put("数据监控", "◎");
+    }
+
     public SideNav(String brandTitle, List<Tab> tabs) {
         this.tabs = tabs;
 
@@ -37,7 +67,7 @@ public class SideNav {
         content.setFitToHeight(false);
         content.setPannable(false); // 关闭拖拽平移，恢复标准鼠标滚轮滚动（避免灵敏度忽快忽慢）
         content.setPadding(new Insets(10));
-        content.setStyle("-fx-background-color: #F0F6F9; -fx-border-width: 0;");
+        content.setStyle("-fx-border-width: 0;"); // 背景交由 .content-scroll 渐变控制
         content.getStyleClass().add("content-scroll");
         // 标准化鼠标滚轮滚动：每次固定步长，避免灵敏度随鼠标硬件 delta 跳变
         content.addEventFilter(ScrollEvent.SCROLL, e -> {
@@ -73,7 +103,14 @@ public class SideNav {
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
         for (Tab tab : tabs) {
-            Button btn = new Button(tab.getText());
+            String title = tab.getText();
+            Label icon = new Label(ICON.getOrDefault(title, "●"));
+            icon.getStyleClass().add("sidebar-icon");
+            Label txt = new Label(title);
+            HBox hb = new HBox(10, icon, txt);
+            hb.setAlignment(Pos.CENTER_LEFT);
+            Button btn = new Button();
+            btn.setGraphic(hb);
             btn.getStyleClass().add("sidebar-btn");
             btn.setMaxWidth(Double.MAX_VALUE);
             btn.setAlignment(Pos.CENTER_LEFT);
