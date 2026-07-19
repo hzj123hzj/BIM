@@ -25,7 +25,7 @@ public class HistoryTrendPanel extends VBox {
     public HistoryTrendPanel() {
         setSpacing(12);
         setPadding(new Insets(14));
-        setStyle("-fx-background-color: #F0F6F9;");
+        setStyle("-fx-background-color: transparent;");
 
         cbMetric.getItems().addAll("体重", "体脂率", "肌肉率", "BMI", "腰围");
         cbMetric.setValue("体重");

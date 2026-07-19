@@ -29,7 +29,7 @@ public class GoalPlanPanel extends VBox {
     public GoalPlanPanel() {
         setSpacing(12);
         setPadding(new Insets(14));
-        setStyle("-fx-background-color: #F0F6F9;");
+        setStyle("-fx-background-color: transparent;");
 
         cbGoalType.getItems().addAll("减脂", "减重", "增肌", "保持健康");
         cbGoalType.setValue("减脂");

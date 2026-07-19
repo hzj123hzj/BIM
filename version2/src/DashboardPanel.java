@@ -12,7 +12,7 @@ public class DashboardPanel extends VBox {
     public DashboardPanel() {
         setSpacing(12);
         setPadding(new Insets(14));
-        setStyle("-fx-background-color: #F0F6F9;");
+        setStyle("-fx-background-color: transparent;");
 
         HBox ctrl = new HBox(10);
         ctrl.setAlignment(Pos.CENTER_LEFT);

@@ -13,9 +13,9 @@ public class MainView {
         HBox top = new HBox(12);
         top.setPadding(new Insets(10, 14, 10, 14));
         top.setAlignment(Pos.CENTER_LEFT);
-        top.setStyle("-fx-background-color: linear-gradient(to right, #E1F0F5, #F0F6F9); -fx-border-color: #D2DCE4; -fx-border-width: 0 0 1 0;");
+        top.setStyle("-fx-background-color: linear-gradient(to right, #1E6478, #2D8CA0 60%, #1E6478); -fx-border-color: transparent transparent #154B5A transparent; -fx-border-width: 0 0 2 0; -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.25), 10, 0.2, 0, 2);");
         Label user = new Label("欢迎, " + DBUtil.currentUsername);
-        user.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #1E6478;");
+        user.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #FFFFFF;");
         Button btnMsg = new Button("消息中心");
         btnMsg.getStyleClass().add("button-primary");
         Button btnLogout = new Button("退出登录");

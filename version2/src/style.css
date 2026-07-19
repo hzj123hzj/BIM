@@ -1,80 +1,95 @@
-/* JavaFX 8 主题样式 — BMI 体质评估与预测系统 (version2) | 高级优化版 */
+/* JavaFX 8 主题 — BMI 健康系统 version2 | 视觉系统升级版 */
 /* 注意：JavaFX 8 CSS 不支持 --变量，所有颜色用字面量统一管理 */
 .root {
     -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
-    -fx-base: #f0f6f9;
+    -fx-base: #EAF3F7;
 }
 
-/* ===== 布局背景（由平涂改为多层柔和渐变，营造空间纵深） ===== */
+/* ===== 品牌渐变（登录页左侧品牌区） ===== */
 .bg-gradient {
-    -fx-background-color: linear-gradient(to bottom right, #2D8CA0, #1E6478);
+    -fx-background-color: linear-gradient(135deg, #2D8CA0 0%, #1E6478 55%, #154B5A 100%);
 }
 
-/* ===== 按钮 ===== */
+/* ===== 内容区：多层柔和渐变（面板透明后透出，建立空间纵深） ===== */
+.content-scroll {
+    -fx-background-color: linear-gradient(to bottom,
+        #F4FAFC 0%,
+        #EAF3F7 42%,
+        #E3EEF4 100%);
+    -fx-border-width: 0;
+}
+.content-scroll .scroll-bar:vertical .thumb { -fx-background-color: #9DBAC4; -fx-background-radius: 6; }
+.content-scroll .scroll-bar:vertical .track { -fx-background-color: transparent; }
+.content-scroll .scroll-bar:horizontal { -fx-opacity: 0; }
+
+/* ===== 按钮（渐变质感 + 内高光 + 柔投影） ===== */
 .button-primary {
-    -fx-background-color: #2D8CA0;
-    -fx-text-fill: white;
-    -fx-background-radius: 8;
+    -fx-background-color: linear-gradient(to bottom, #3CA0B5, #2D8CA0 50%, #1E6478);
+    -fx-text-fill: #FFFFFF;
+    -fx-background-radius: 9;
     -fx-padding: 8 18;
     -fx-cursor: hand;
     -fx-font-size: 13px;
     -fx-font-weight: bold;
-    -fx-effect: dropshadow(gaussian, rgba(45,140,160,0.25), 6, 0.2, 0, 2);
-    -fx-transition: -fx-background-color 0.2s;
+    -fx-effect: dropshadow(gaussian, rgba(30,100,120,0.35), 6, 0.2, 0, 2);
 }
-.button-primary:hover { -fx-background-color: #1E6478; }
+.button-primary:hover { -fx-background-color: linear-gradient(to bottom, #46AEC2, #2D8CA0 50%, #1E6478); }
 .button-primary:pressed { -fx-background-color: #154B5A; }
 
 .button-accent {
-    -fx-background-color: #FF9646;
-    -fx-text-fill: white;
-    -fx-background-radius: 8;
+    -fx-background-color: linear-gradient(to bottom, #FFA85F, #FF9646 50%, #E07B2E);
+    -fx-text-fill: #FFFFFF;
+    -fx-background-radius: 9;
     -fx-padding: 8 18;
     -fx-cursor: hand;
     -fx-font-size: 13px;
     -fx-font-weight: bold;
-    -fx-effect: dropshadow(gaussian, rgba(255,150,70,0.30), 6, 0.2, 0, 2);
+    -fx-effect: dropshadow(gaussian, rgba(224,123,46,0.40), 6, 0.2, 0, 2);
 }
-.button-accent:hover { -fx-background-color: #E07B2E; }
+.button-accent:hover { -fx-background-color: linear-gradient(to bottom, #FFB676, #FF9646 50%, #E07B2E); }
 .button-accent:pressed { -fx-background-color: #C76A26; }
 
 .button-ghost {
     -fx-background-color: transparent;
-    -fx-text-fill: #2D8CA0;
+    -fx-text-fill: #1E6478;
     -fx-border-color: #2D8CA0;
-    -fx-border-radius: 8;
+    -fx-border-radius: 9;
+    -fx-border-width: 1.5;
     -fx-padding: 7 16;
     -fx-cursor: hand;
     -fx-font-size: 13px;
+    -fx-font-weight: bold;
 }
 .button-ghost:hover { -fx-background-color: #E1F0F5; }
 
-/* ===== 卡片（圆角加大 + 柔和投影 + hover 轻微上浮，建立层次） ===== */
+/* ===== 卡片（圆角16 + 左侧品牌色条 + 分层投影 + hover上浮） ===== */
 .card {
-    -fx-background-color: #ffffff;
-    -fx-background-radius: 14;
-    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.12), 14, 0.2, 0, 4);
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 16;
+    -fx-border-color: transparent transparent transparent #2D8CA0;
+    -fx-border-width: 0 0 0 4;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.14), 16, 0.18, 0, 4);
     -fx-padding: 16;
 }
 .card:hover {
-    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.20), 22, 0.3, 0, 8);
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.22), 24, 0.28, 0, 8);
     -fx-translate-y: -2;
 }
 .card-title {
-    -fx-font-size: 15px;
+    -fx-font-size: 16px;
     -fx-font-weight: bold;
     -fx-text-fill: #1E6478;
-    -fx-padding: 0 0 8 11;
-    -fx-border-color: transparent transparent transparent #2D8CA0;
-    -fx-border-width: 0 0 0 3;
+    -fx-padding: 0 0 10 0;
+    -fx-border-color: transparent transparent #E1F0F5 transparent;
+    -fx-border-width: 0 0 1 0;
 }
 
-/* ===== 排版层级（标题 / 正文 / 弱文本 三档） ===== */
-.h-page { -fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #1B2A33; }
+/* ===== 排版层级 ===== */
+.h-page { -fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #154B5A; }
 .text-body { -fx-font-size: 14px; -fx-text-fill: #3C4A55; }
 .text-muted { -fx-font-size: 13px; -fx-text-fill: #6B7884; }
 
-/* ===== 指标胶囊（用色块区分语义） ===== */
+/* ===== 指标胶囊 ===== */
 .stat-chip {
     -fx-background-color: #EAF3F7;
     -fx-text-fill: #1E6478;
@@ -85,35 +100,38 @@
 }
 .stat-chip-accent { -fx-background-color: #FDEBDD; -fx-text-fill: #C76A26; }
 
-/* ===== 输入框 ===== */
+/* ===== 输入框（focus 时品牌青 ring） ===== */
 .text-field, .password-field, .combo-box, .text-area {
-    -fx-background-radius: 8;
-    -fx-border-color: #D2DCE4;
-    -fx-border-radius: 8;
-    -fx-padding: 6 8;
+    -fx-background-radius: 9;
+    -fx-border-color: #CFDCE3;
+    -fx-border-radius: 9;
+    -fx-border-width: 1.5;
+    -fx-padding: 7 10;
     -fx-font-size: 13px;
-    -fx-background-color: #ffffff;
+    -fx-background-color: #FFFFFF;
 }
 .text-field:focused, .password-field:focused, .combo-box:focused, .text-area:focused {
     -fx-border-color: #2D8CA0;
     -fx-border-width: 2;
+    -fx-effect: dropshadow(gaussian, rgba(45,140,160,0.18), 8, 0.3, 0, 0);
 }
 .text-area { -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; }
 
-/* ===== 表格 ===== */
+/* ===== 表格（深青渐变表头 + 白字 + 圆角 + 柔投影） ===== */
 .table-view {
-    -fx-background-radius: 8;
+    -fx-background-radius: 10;
     -fx-border-color: #D2DCE4;
-    -fx-border-radius: 8;
+    -fx-border-radius: 10;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.08), 8, 0.15, 0, 2);
 }
 .table-view .column-header-background {
-    -fx-background-color: #E1F0F5;
-    -fx-background-radius: 8 8 0 0;
-    -fx-border-color: transparent transparent #D2DCE4 transparent;
+    -fx-background-color: linear-gradient(to bottom, #2D8CA0, #1E6478);
+    -fx-background-radius: 10 10 0 0;
+    -fx-border-color: transparent transparent #154B5A transparent;
     -fx-border-width: 0 0 1 0;
 }
 .table-view .column-header .label {
-    -fx-text-fill: #28323C;
+    -fx-text-fill: #FFFFFF;
     -fx-font-weight: bold;
     -fx-font-size: 13px;
 }
@@ -128,24 +146,24 @@
     -fx-font-weight: bold;
 }
 
-/* ===== 左侧导航栏 SideNav ===== */
+/* ===== 左侧导航栏 SideNav（白底 + 顶部品牌 hero + 选中渐变填充） ===== */
 .sidebar {
-    -fx-background-color: #FFFFFF;
+    -fx-background-color: linear-gradient(to bottom, #FFFFFF, #F4F9FB);
     -fx-pref-width: 198;
     -fx-min-width: 176;
     -fx-max-width: 230;
     -fx-padding: 0 0 12 0;
     -fx-border-color: #E2EBF0;
     -fx-border-width: 0 1 0 0;
-    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.08), 12, 0.1, 2, 0);
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.10), 14, 0.12, 2, 0);
 }
 .sidebar-brand {
-    -fx-text-fill: #1E6478;
+    -fx-background-color: linear-gradient(to right, #2D8CA0, #1E6478);
+    -fx-text-fill: #FFFFFF;
     -fx-font-size: 16px;
     -fx-font-weight: bold;
-    -fx-padding: 18 16 16 18;
-    -fx-border-color: transparent transparent #EDF2F5 transparent;
-    -fx-border-width: 0 0 1 0;
+    -fx-padding: 20 16 18 18;
+    -fx-background-radius: 0;
 }
 .sidebar-scroll {
     -fx-background-color: transparent;
@@ -153,70 +171,75 @@
 }
 .sidebar-scroll .viewport { -fx-background-color: transparent; }
 .sidebar-scroll .scroll-bar { -fx-background-color: transparent; }
-.sidebar-scroll .scroll-bar .thumb { -fx-background-color: #B7C6CE; }
-.sidebar-nav { -fx-padding: 8 10; }
-.content-scroll {
-    /* 多层柔和渐变，替代纯色平涂 */
-    -fx-background-color: linear-gradient(to bottom, #F6FBFD 0%, #EDF4F8 55%, #E6EFF5 100%);
-    -fx-border-width: 0;
-}
-.content-scroll .scroll-bar:vertical .thumb { -fx-background-color: #B7C6CE; -fx-background-radius: 6; }
-.content-scroll .scroll-bar:vertical .track { -fx-background-color: transparent; }
-.content-scroll .scroll-bar:horizontal { -fx-opacity: 0; }
-
+.sidebar-scroll .scroll-bar .thumb { -fx-background-color: #B7C6CE; -fx-background-radius: 6; }
+.sidebar-nav { -fx-padding: 10 10; }
 .sidebar-btn {
     -fx-background-color: transparent;
-    -fx-text-fill: #41525E;
+    -fx-text-fill: #3C4A55;
     -fx-font-size: 13px;
     -fx-alignment: CENTER-LEFT;
     -fx-padding: 12 16;
-    -fx-background-radius: 8;
+    -fx-background-radius: 9;
     -fx-cursor: hand;
     -fx-border-width: 0;
     -fx-wrap-text: false;
 }
 .sidebar-btn:hover {
-    -fx-background-color: #EAF3F7;
+    -fx-background-color: #E1F0F5;
     -fx-text-fill: #1E6478;
 }
 .sidebar-btn-active {
-    -fx-background-color: #2D8CA0;
+    -fx-background-color: linear-gradient(to right, #2D8CA0, #3CA0B5);
     -fx-text-fill: #FFFFFF;
     -fx-font-weight: bold;
-    -fx-border-color: #FF9646;
+    -fx-border-color: transparent transparent transparent #FF9646;
     -fx-border-width: 0 0 0 3;
     -fx-border-radius: 0;
+    -fx-effect: dropshadow(gaussian, rgba(45,140,160,0.30), 8, 0.2, 0, 2);
 }
 .sidebar-icon {
-    -fx-text-fill: #8AA0AB;
+    -fx-text-fill: #6B8A95;
     -fx-font-size: 14px;
     -fx-font-family: "Segoe UI Symbol", "Microsoft YaHei", sans-serif;
 }
 .sidebar-btn-active .sidebar-icon { -fx-text-fill: #FFFFFF; }
 
-/* ===== 标题文字 ===== */
-.page-title { -fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #28323C; }
-.sub-title { -fx-font-size: 14px; -fx-text-fill: #646E78; }
-.hint { -fx-font-size: 12px; -fx-text-fill: #646E78; }
+/* ===== 顶栏 header（深青渐变 + 白字，统一品牌感） ===== */
+.top-bar {
+    -fx-background-color: linear-gradient(to right, #1E6478, #2D8CA0 60%, #1E6478);
+    -fx-border-color: transparent transparent #154B5A transparent;
+    -fx-border-width: 0 0 2 0;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.25), 10, 0.2, 0, 2);
+}
+.top-bar-label {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
 
-/* ===== 报告弹窗（渐变标题带 + 舒适阅读栏，破解文本墙） ===== */
+/* ===== 页面标题 ===== */
+.page-title { -fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #154B5A; }
+.sub-title { -fx-font-size: 14px; -fx-text-fill: #41525E; -fx-font-weight: bold; }
+.hint { -fx-font-size: 12px; -fx-text-fill: #6B7884; }
+
+/* ===== 报告弹窗（渐变标题带 + 舒适阅读栏） ===== */
 .report-card {
     -fx-background-color: #ffffff;
-    -fx-background-radius: 16;
-    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.22), 26, 0.3, 0, 10);
+    -fx-background-radius: 18;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.28), 30, 0.3, 0, 12);
     -fx-padding: 0;
     -fx-overflow: hidden;
 }
 .report-hero {
     -fx-background-color: linear-gradient(to right, #2D8CA0, #1E6478);
     -fx-text-fill: #FFFFFF;
-    -fx-font-size: 19px;
+    -fx-font-size: 20px;
     -fx-font-weight: bold;
-    -fx-padding: 20 24;
-    -fx-background-radius: 16 16 0 0;
+    -fx-padding: 22 26;
+    -fx-background-radius: 18 18 0 0;
 }
 .report-body {
-    -fx-padding: 22 26;
+    -fx-padding: 24 28;
     -fx-background-color: #ffffff;
 }
 .report-text {

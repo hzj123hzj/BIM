@@ -28,7 +28,7 @@ public class DataInputPanel extends VBox {
     public DataInputPanel() {
         setSpacing(14);
         setPadding(new Insets(14));
-        setStyle("-fx-background-color: #F0F6F9;");
+        setStyle("-fx-background-color: transparent;");
 
         VBox healthCard = buildHealthCard();
         VBox exerciseCard = buildExerciseCard();

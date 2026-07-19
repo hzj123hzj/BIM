@@ -18,7 +18,7 @@ public class AICookbookPanel extends VBox {
     public AICookbookPanel() {
         setSpacing(12);
         setPadding(new Insets(14));
-        setStyle("-fx-background-color: #F0F6F9;");
+        setStyle("-fx-background-color: transparent;");
 
         taRequest.setPrefHeight(120);
         taRequest.setWrapText(true);

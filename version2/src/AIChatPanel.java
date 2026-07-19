@@ -18,7 +18,7 @@ public class AIChatPanel extends VBox {
     public AIChatPanel() {
         setSpacing(12);
         setPadding(new Insets(14));
-        setStyle("-fx-background-color: #F0F6F9;");
+        setStyle("-fx-background-color: transparent;");
 
         // 左侧历史
         VBox leftCard = new VBox(10);

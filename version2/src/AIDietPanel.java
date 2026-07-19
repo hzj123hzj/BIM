@@ -19,7 +19,7 @@ public class AIDietPanel extends VBox {
     public AIDietPanel() {
         setSpacing(12);
         setPadding(new Insets(14));
-        setStyle("-fx-background-color: #F0F6F9;");
+        setStyle("-fx-background-color: transparent;");
 
         cbGoal.getItems().addAll("维持体重", "减脂", "增肌", "控糖");
         cbGoal.setValue("减脂");

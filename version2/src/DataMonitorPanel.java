@@ -26,7 +26,7 @@ public class DataMonitorPanel extends VBox {
     public DataMonitorPanel() {
         setSpacing(12);
         setPadding(new Insets(14));
-        setStyle("-fx-background-color: #F0F6F9;");
+        setStyle("-fx-background-color: transparent;");
 
         // 顶部指标卡片
         HBox cards = new HBox(12);

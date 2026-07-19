@@ -24,7 +24,7 @@ public class UserManagePanel extends VBox {
     public UserManagePanel() {
         setSpacing(12);
         setPadding(new Insets(14));
-        setStyle("-fx-background-color: #F0F6F9;");
+        setStyle("-fx-background-color: transparent;");
 
         VBox card = new VBox(10);
         card.getStyleClass().add("card");

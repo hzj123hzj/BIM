@@ -41,7 +41,7 @@ public class LoginView {
         root.setCenter(card);
         BorderPane.setAlignment(card, Pos.CENTER);
         root.setPadding(new Insets(40));
-        root.setStyle("-fx-background-color: #F0F6F9;");
+        root.setStyle("-fx-background-color: linear-gradient(to bottom right, #EAF3F7, #D6E6EC);");
     }
 
     private GridPane createLoginPanel() {
