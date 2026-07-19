@@ -16,8 +16,8 @@ public class AIChatPanel extends VBox {
     private final TextField tfApiKey = new TextField();
 
     public AIChatPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         // 左侧历史

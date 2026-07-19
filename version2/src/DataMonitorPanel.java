@@ -24,8 +24,8 @@ public class DataMonitorPanel extends VBox {
     private final TableView<Map<String, Object>> abnormalTable = new TableView<>();
 
     public DataMonitorPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         // 顶部指标卡片

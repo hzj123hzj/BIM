@@ -18,16 +18,32 @@ import javafx.scene.text.Text;
  */
 public class ReportDialog {
 
-    /** 纯文本报告：自动包裹为舒适阅读栏 */
+    /** 纯文本报告：按行解析渲染，【小节标题】加粗品牌色、ASCII 装饰线剔除，破除文本墙塑料感 */
     public static void showText(String title, String content) {
-        VBox bodyWrap = new VBox();
+        VBox bodyWrap = new VBox(3);
         bodyWrap.getStyleClass().add("report-body");
         bodyWrap.setMaxWidth(Double.MAX_VALUE);
 
-        Text text = new Text(content == null ? "" : content);
-        text.getStyleClass().add("report-text");
-        text.setWrappingWidth(720);
-        bodyWrap.getChildren().add(text);
+        String text = content == null ? "" : content;
+        for (String line : text.split("\n", -1)) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) {
+                Region gap = new Region();
+                gap.setPrefHeight(5);
+                bodyWrap.getChildren().add(gap);
+                continue;
+            }
+            // 剔除 ═══ ─── ==== 这类 ASCII 装饰线，改由 CSS 分隔
+            if (trimmed.matches("^[═─=\\-_*~#]{3,}$")) continue;
+            Text t = new Text(line);
+            t.setWrappingWidth(720);
+            if (trimmed.startsWith("【") && trimmed.endsWith("】")) {
+                t.getStyleClass().add("report-section-title");
+            } else {
+                t.getStyleClass().add("report-text");
+            }
+            bodyWrap.getChildren().add(t);
+        }
 
         ScrollPane sp = new ScrollPane(bodyWrap);
         sp.setFitToWidth(true);

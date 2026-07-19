@@ -13,8 +13,8 @@ public class HealthArticlePanel extends VBox {
     private final ObservableList<String[]> items = FXCollections.observableArrayList();
 
     public HealthArticlePanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         HBox ctrl = new HBox(10);

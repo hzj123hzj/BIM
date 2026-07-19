@@ -15,8 +15,8 @@ public class AICookbookRecordPanel extends VBox {
     private final TableView<String[]> table = new TableView<>();
 
     public AICookbookRecordPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         VBox card = new VBox(10);

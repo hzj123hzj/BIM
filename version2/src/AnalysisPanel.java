@@ -10,8 +10,8 @@ public class AnalysisPanel extends VBox {
     private String reportContent = "";
 
     public AnalysisPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         HBox ctrl = new HBox(10);

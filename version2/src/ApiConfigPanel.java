@@ -15,8 +15,8 @@ public class ApiConfigPanel extends VBox {
     private final TextField tfEndpoint = new TextField("https://open.bigmodel.cn/api/paas/v4");
 
     public ApiConfigPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         VBox card = new VBox(10);

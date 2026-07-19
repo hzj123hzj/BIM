@@ -27,8 +27,8 @@ public class GoalPlanPanel extends VBox {
     private final Label lblPredict = new Label("--");
 
     public GoalPlanPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         cbGoalType.getItems().addAll("减脂", "减重", "增肌", "保持健康");

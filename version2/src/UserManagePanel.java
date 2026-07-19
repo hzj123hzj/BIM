@@ -22,8 +22,8 @@ public class UserManagePanel extends VBox {
     private final TextField tfSearch = new TextField();
 
     public UserManagePanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         VBox card = new VBox(10);

@@ -22,8 +22,8 @@ public class PredictionPanel extends VBox {
     private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
     public PredictionPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         HBox ctrl = new HBox(10);

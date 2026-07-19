@@ -22,8 +22,8 @@ public class DietPanel extends VBox {
     private String reportContent = "";
 
     public DietPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         cbMealType.getItems().addAll("早餐", "午餐", "晚餐", "加餐");

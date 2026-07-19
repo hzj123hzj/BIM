@@ -17,8 +17,8 @@ public class AIDietPanel extends VBox {
     private final Map<Integer, String[]> historyMap = new HashMap<>();
 
     public AIDietPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         cbGoal.getItems().addAll("维持体重", "减脂", "增肌", "控糖");

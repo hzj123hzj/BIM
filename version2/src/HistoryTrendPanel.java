@@ -23,8 +23,8 @@ public class HistoryTrendPanel extends VBox {
     private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
     public HistoryTrendPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         cbMetric.getItems().addAll("体重", "体脂率", "肌肉率", "BMI", "腰围");
@@ -139,7 +139,7 @@ public class HistoryTrendPanel extends VBox {
 
     private Node tooltipNode(String text) {
         Label dot = new Label();
-        dot.setStyle("-fx-background-color: " + Theme.hex(Theme.PRIMARY) + "; -fx-background-radius: 4; -fx-min-width: 7; -fx-min-height: 7;");
+        dot.setStyle("-fx-background-color: #FFFFFF, #2D8CA0; -fx-background-insets: 0, 2px; -fx-background-radius: 7px; -fx-min-width: 12; -fx-min-height: 12; -fx-border-color: #2D8CA0; -fx-border-width: 2; -fx-border-radius: 7px;");
         Tooltip tp = new Tooltip(text);
         Tooltip.install(dot, tp);
         return dot;

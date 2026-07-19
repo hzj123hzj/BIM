@@ -21,8 +21,8 @@ public class AchievementPanel extends VBox {
     private final Label lblCount = new Label();
 
     public AchievementPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         HBox ctrl = new HBox(10);
@@ -70,7 +70,7 @@ public class AchievementPanel extends VBox {
         for (String[] badge : ALL_BADGES) {
             boolean has = earnedNames.contains(badge[0]);
             VBox chip = new VBox(6);
-            chip.setPadding(new Insets(14));
+            chip.setPadding(new Insets(18));
             chip.setPrefSize(200, 110);
             chip.getStyleClass().add("card");
             if (has) chip.setStyle("-fx-background-color: " + Theme.hex(Theme.ACCENT) + "; -fx-background-radius: 12; -fx-effect: dropshadow(three-pass-box, rgba(30,60,80,0.12), 10, 0, 0, 4);");

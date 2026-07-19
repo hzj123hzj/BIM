@@ -16,8 +16,8 @@ public class AICookbookPanel extends VBox {
     private final Map<Integer, String[]> historyMap = new HashMap<>();
 
     public AICookbookPanel() {
-        setSpacing(12);
-        setPadding(new Insets(14));
+        setSpacing(16);
+        setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
         taRequest.setPrefHeight(120);
