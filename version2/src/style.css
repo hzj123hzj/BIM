@@ -110,6 +110,25 @@
 .tab:selected { -fx-background-color: #2D8CA0; }
 .tab:selected .tab-label { -fx-text-fill: white; -fx-font-weight: bold; }
 
+/* 左侧纵向 Tab：文字横向显示 */
+.tab-pane:left {
+    -fx-tab-min-width: 42;
+    -fx-tab-max-width: 50;
+}
+.tab-pane:left .tab-header-area .tab {
+    -fx-background-radius: 8 0 0 8;
+    -fx-padding: 0 6;
+    -fx-pref-height: 100;
+    -fx-min-height: 90;
+    -fx-max-height: 110;
+}
+.tab-pane:left .tab-header-area .tab .tab-label {
+    -fx-rotate: 0;
+    -fx-text-alignment: center;
+    -fx-alignment: center;
+    -fx-wrap-text: false;
+    -fx-font-size: 13px;
+}
 /* ===== 标题文字 ===== */
 .page-title { -fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #28323C; }
 .sub-title { -fx-font-size: 14px; -fx-text-fill: #646E78; }
