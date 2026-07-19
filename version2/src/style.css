@@ -80,11 +80,13 @@
     -fx-border-radius: 8;
 }
 .table-view .column-header-background {
-    -fx-background-color: #2D8CA0;
+    -fx-background-color: #E1F0F5;
     -fx-background-radius: 8 8 0 0;
+    -fx-border-color: transparent transparent #D2DCE4 transparent;
+    -fx-border-width: 0 0 1 0;
 }
 .table-view .column-header .label {
-    -fx-text-fill: white;
+    -fx-text-fill: #28323C;
     -fx-font-weight: bold;
     -fx-font-size: 13px;
 }

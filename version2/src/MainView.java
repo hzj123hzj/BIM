@@ -32,6 +32,7 @@ public class MainView {
         TabPane tabs = new TabPane();
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getTabs().addAll(
+                tab("数据大屏", new UserDashboardPanel()),
                 tab("数据录入", new DataInputPanel()),
                 tab("历史趋势", new HistoryTrendPanel()),
                 tab("分析评估", new AnalysisPanel()),
