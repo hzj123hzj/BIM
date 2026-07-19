@@ -14,6 +14,9 @@ import java.util.List;
  *   靠 setTabMinHeight 与 CSS 均无法根治。
  * 这里用普通 Button 列表实现侧边导航，文字天然横向渲染，无旋转缺陷。
  *
+ * 内容区使用 ScrollPane：当面板内容高于可视区时自动出现滚动条，
+ * 避免 StackPane 直接裁剪导致"无法下滑查看"的问题。
+ *
  * 用法：
  *   SideNav nav = new SideNav("标题", tabs);   // tabs 为 List<Tab>
  *   borderPane.setLeft(nav.getSidebar());
@@ -21,14 +24,20 @@ import java.util.List;
  */
 public class SideNav {
     private final VBox sidebar = new VBox();
-    private final StackPane content = new StackPane();
+    private final ScrollPane content = new ScrollPane();
     private Button activeBtn;
     private final List<Tab> tabs;
 
     public SideNav(String brandTitle, List<Tab> tabs) {
         this.tabs = tabs;
+
+        // 内容区：可滚动，宽度贴合视口，高度跟随内容（超出滚动）
+        content.setFitToWidth(true);
+        content.setFitToHeight(false);
+        content.setPannable(true);
         content.setPadding(new Insets(10));
-        content.setStyle("-fx-background-color: #F0F6F9;");
+        content.setStyle("-fx-background-color: #F0F6F9; -fx-border-width: 0;");
+        content.getStyleClass().add("content-scroll");
 
         sidebar.getStyleClass().add("sidebar");
 
@@ -69,18 +78,14 @@ public class SideNav {
         activeBtn = btn;
 
         Node panel = tab.getContent();
-        if (panel instanceof Region) {
-            ((Region) panel).setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        }
-        StackPane.setAlignment(panel, Pos.TOP_LEFT);
-        content.getChildren().setAll(panel);
+        content.setContent(panel);
     }
 
     public VBox getSidebar() {
         return sidebar;
     }
 
-    public StackPane getContent() {
+    public ScrollPane getContent() {
         return content;
     }
 }

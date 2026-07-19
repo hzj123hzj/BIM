@@ -125,6 +125,10 @@
 .sidebar-scroll .scroll-bar { -fx-background-color: transparent; }
 .sidebar-scroll .scroll-bar .thumb { -fx-background-color: rgba(255,255,255,0.25); }
 .sidebar-nav { -fx-padding: 8 10; }
+.content-scroll { -fx-background-color: #F0F6F9; -fx-border-width: 0; }
+.content-scroll .scroll-bar:vertical .thumb { -fx-background-color: #B7C6CE; -fx-background-radius: 6; }
+.content-scroll .scroll-bar:vertical .track { -fx-background-color: transparent; }
+.content-scroll .scroll-bar:horizontal { -fx-opacity: 0; }
 .sidebar-btn {
     -fx-background-color: transparent;
     -fx-text-fill: #C7D6DD;
