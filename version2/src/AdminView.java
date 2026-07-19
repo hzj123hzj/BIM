@@ -1,3 +1,5 @@
+import javafx.geometry.Side;
+
 import javafx.geometry.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -33,9 +35,14 @@ public class AdminView {
             App.showLogin();
         });
 
-        // 中间 TabPane
+        // 左侧纵向 Tab（与用户端一致）
         TabPane tp = new TabPane();
+        tp.setSide(Side.LEFT);
         tp.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        tp.setTabMinHeight(110);
+        tp.setTabMaxHeight(130);
+        tp.setTabMinWidth(36);
+        tp.setTabMaxWidth(42);
         tp.getTabs().addAll(
                 new Tab("用户管理", new UserManagePanel()),
                 new Tab("食物数据库", new FoodManagePanel()),

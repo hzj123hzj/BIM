@@ -33,6 +33,10 @@ public class MainView {
         TabPane tabs = new TabPane();
         tabs.setSide(Side.LEFT);
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        tabs.setTabMinHeight(110);
+        tabs.setTabMaxHeight(130);
+        tabs.setTabMinWidth(36);
+        tabs.setTabMaxWidth(42);
         tabs.getTabs().addAll(
                 tab("数据大屏", new UserDashboardPanel()),
                 tab("数据录入", new DataInputPanel()),
