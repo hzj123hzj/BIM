@@ -205,13 +205,37 @@ public class DataMonitorPanel extends VBox {
     }
 
     private void intervene() {
-        Map<String, Object> sel = abnormalTable.getSelectionModel().getSelectedItem();
+        // 1. 选择用户：从所有用户中选，不局限于异常用户列表
+        List<Map<String, Object>> users = DBUtil.getTotalUsersList();
+        if (users.isEmpty()) {
+            warn("系统中暂无用户");
+            return;
+        }
+
+        TableView<Map<String, Object>> t = new TableView<>();
+        t.getColumns().addAll(
+                colM("用户名", "username", 120), colM("性别", "gender", 70),
+                colM("年龄", "age", 70), colM("身高", "height", 90),
+                colM("活跃度", "activity_level", 110), colM("注册时间", "created_at", 150));
+        t.getItems().addAll(users);
+        t.setPrefSize(640, 360);
+        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        Alert choose = new Alert(Alert.AlertType.CONFIRMATION, "", ButtonType.OK, ButtonType.CANCEL);
+        choose.setTitle("选择要干预的用户");
+        choose.setHeaderText("所有用户列表（共 " + users.size() + " 人）");
+        choose.getDialogPane().setContent(t);
+        choose.setResizable(true);
+        if (!choose.showAndWait().filter(b -> b == ButtonType.OK).isPresent()) return;
+
+        Map<String, Object> sel = t.getSelectionModel().getSelectedItem();
         if (sel == null) {
-            warn("请先在异常用户列表中选择一个用户");
+            warn("请选择一个用户");
             return;
         }
         String username = String.valueOf(sel.get("username"));
 
+        // 2. 编辑干预建议
         TextField tfTitle = new TextField("健康干预建议");
         TextArea taContent = new TextArea();
         taContent.setPrefRowCount(5);

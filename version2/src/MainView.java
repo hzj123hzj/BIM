@@ -1,6 +1,7 @@
 import javafx.geometry.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.geometry.Side;
 
 public class MainView {
     private BorderPane root = new BorderPane();
@@ -22,14 +23,15 @@ public class MainView {
         top.getChildren().addAll(user, spacer, btnMsg, btnLogout);
         root.setTop(top);
 
-        btnMsg.setOnAction(e -> alert("消息中心模块迁移中"));
+        btnMsg.setOnAction(e -> NotificationCenter.show(DBUtil.currentUsername, false));
         btnLogout.setOnAction(e -> {
             DBUtil.currentUsername = "";
             App.showLogin();
         });
 
-        // 中部 Tab
+        // 左侧纵向 Tab
         TabPane tabs = new TabPane();
+        tabs.setSide(Side.LEFT);
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getTabs().addAll(
                 tab("数据大屏", new UserDashboardPanel()),

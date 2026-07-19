@@ -19,11 +19,14 @@ public class AdminView {
         t.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #1E6478;");
         Label admin = new Label("当前管理员: " + DBUtil.currentUsername);
         admin.setStyle("-fx-font-size: 13px; -fx-text-fill: #646E78;");
+        Button btnMsg = new Button("消息中心");
+        btnMsg.getStyleClass().add("button-primary");
         Button btnLogout = new Button("退出登录");
         btnLogout.getStyleClass().add("button-accent");
         Region sp = new Region();
         HBox.setHgrow(sp, Priority.ALWAYS);
-        top.getChildren().addAll(t, admin, sp, btnLogout);
+        top.getChildren().addAll(t, admin, sp, btnMsg, btnLogout);
+        btnMsg.setOnAction(e -> NotificationCenter.show(DBUtil.currentUsername, true));
         root.setTop(top);
         btnLogout.setOnAction(e -> {
             DBUtil.logAction("ADMIN", DBUtil.currentUsername, "退出登录", "返回登录界面");
