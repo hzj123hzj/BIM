@@ -26,9 +26,12 @@ public class PredictionPanel extends VBox {
         ctrl.setAlignment(Pos.CENTER_LEFT);
         Button btnRefresh = new Button("刷新预测结果");
         btnRefresh.getStyleClass().add("button-primary");
+        Button btnReport = new Button("查看预测报告");
+        btnReport.getStyleClass().add("button-accent");
+        btnReport.setOnAction(e -> showReportDialog("预测分析报告", ta.getText()));
         Label hint = new Label("基于历史数据进行线性回归趋势预测");
         hint.getStyleClass().add("hint");
-        ctrl.getChildren().addAll(btnRefresh, hint);
+        ctrl.getChildren().addAll(btnRefresh, btnReport, hint);
 
         VBox ctrlCard = new VBox(10);
         ctrlCard.getStyleClass().add("card");
@@ -209,6 +212,24 @@ public class PredictionPanel extends VBox {
         sb.append("\n═══════════════════════════════════════════\n");
 
         ta.setText(sb.toString());
+    }
+
+    private void showReportDialog(String title, String content) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.setHeaderText(null);
+        dialog.setResizable(true);
+        TextArea area = new TextArea(content);
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setStyle("-fx-font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; -fx-font-size: 14px;");
+        VBox box = new VBox(area);
+        VBox.setVgrow(area, Priority.ALWAYS);
+        box.setPrefSize(800, 600);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().setPrefSize(800, 600);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.show();
     }
 
     private void styleSeries(final XYChart.Series<Number, Number> s, final Color c) {

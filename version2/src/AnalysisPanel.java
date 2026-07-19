@@ -18,9 +18,12 @@ public class AnalysisPanel extends VBox {
         ctrl.setAlignment(Pos.CENTER_LEFT);
         Button btnRefresh = new Button("刷新分析结果");
         btnRefresh.getStyleClass().add("button-primary");
+        Button btnReport = new Button("查看报告");
+        btnReport.getStyleClass().add("button-accent");
+        btnReport.setOnAction(e -> showReportDialog("健康分析评估报告", ta.getText()));
         Label hint = new Label("综合 BMI、体脂率、BMR、TDEE 等指标生成评估报告");
         hint.getStyleClass().add("hint");
-        ctrl.getChildren().addAll(btnRefresh, hint);
+        ctrl.getChildren().addAll(btnRefresh, btnReport, hint);
 
         VBox ctrlCard = new VBox(10);
         ctrlCard.getStyleClass().add("card");
@@ -159,6 +162,24 @@ public class AnalysisPanel extends VBox {
     }
 
     private static String f0(double v) { return String.format("%.0f", v); }
+
+    private void showReportDialog(String title, String content) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.setHeaderText(null);
+        dialog.setResizable(true);
+        TextArea area = new TextArea(content);
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setStyle("-fx-font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; -fx-font-size: 14px;");
+        VBox box = new VBox(area);
+        VBox.setVgrow(area, Priority.ALWAYS);
+        box.setPrefSize(800, 600);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().setPrefSize(800, 600);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.show();
+    }
     private static String f1(double v) { return String.format("%.1f", v); }
     private static String f2(double v) { return String.format("%.2f", v); }
 }

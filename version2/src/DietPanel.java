@@ -59,34 +59,24 @@ public class DietPanel extends VBox {
         VBox right = new VBox(8); right.getChildren().addAll(new Label("每日营养报告"){{getStyleClass().add("card-title");}}, rp);
         top.getChildren().addAll(left, right);
 
-        VBox summaryCard = new VBox(10);
-        summaryCard.getStyleClass().add("card");
+        HBox summaryHeader = new HBox(10);
+        summaryHeader.setAlignment(Pos.CENTER_LEFT);
         Label t2 = new Label("今日营养汇总");
         t2.getStyleClass().add("card-title");
-        summaryCard.getChildren().addAll(t2, top);
+        Region sp = new Region();
+        HBox.setHgrow(sp, Priority.ALWAYS);
+        Button btnReport = new Button("查看每日营养报告");
+        btnReport.getStyleClass().add("button-primary");
+        btnReport.setOnAction(e -> showReportDialog("每日营养报告", taReport.getText()));
+        summaryHeader.getChildren().addAll(t2, sp, btnReport);
 
-        // 食物库
-        TableView<String[]> foodTable = new TableView<>();
-        String[] cols = {"食物", "热量(kcal)", "蛋白质(g)", "碳水(g)", "脂肪(g)"};
-        for (int i = 0; i < cols.length; i++) {
-            final int idx = i;
-            TableColumn<String[], String> c = new TableColumn<>(cols[i]);
-            c.setCellValueFactory(cb -> new ReadOnlyStringWrapper(cb.getValue()[idx]));
-            foodTable.getColumns().add(c);
-        }
-        ObservableList<String[]> foodItems = FXCollections.observableArrayList();
-        foodTable.setItems(foodItems);
-        ScrollPane fsp = new ScrollPane(foodTable);
-        fsp.setFitToWidth(true);
-        VBox foodCard = new VBox(10);
-        foodCard.getStyleClass().add("card");
-        Label t3 = new Label("食物库");
-        t3.getStyleClass().add("card-title");
-        foodCard.getChildren().addAll(t3, fsp);
+        VBox summaryCard = new VBox(10);
+        summaryCard.getStyleClass().add("card");
+        summaryCard.getChildren().addAll(summaryHeader, top);
 
-        getChildren().addAll(inputCard, summaryCard, foodCard);
+        getChildren().addAll(inputCard, summaryCard);
 
-        btnAdd.setOnAction(e -> addDietRecord(foodItems));
+        btnAdd.setOnAction(e -> addDietRecord());
         loadFoods();
         refreshSummary();
     }
@@ -102,7 +92,7 @@ public class DietPanel extends VBox {
         if (!cbFood.getItems().isEmpty()) cbFood.setValue(cbFood.getItems().get(0));
     }
 
-    private void addDietRecord(ObservableList<String[]> foodItems) {
+    private void addDietRecord() {
         String mealType = cbMealType.getValue();
         String foodName = cbFood.getValue();
         if (foodName == null) { alert("请选择食物"); return; }
@@ -188,6 +178,24 @@ public class DietPanel extends VBox {
 
     private static String f0(double v) { return String.format("%.0f", v); }
     private static String f1(double v) { return String.format("%.1f", v); }
+
+    private void showReportDialog(String title, String content) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.setHeaderText(null);
+        dialog.setResizable(true);
+        TextArea area = new TextArea(content);
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setStyle("-fx-font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; -fx-font-size: 14px;");
+        VBox box = new VBox(area);
+        VBox.setVgrow(area, Priority.ALWAYS);
+        box.setPrefSize(800, 600);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().setPrefSize(800, 600);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.show();
+    }
 
     private void alert(String m) {
         new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK).showAndWait();

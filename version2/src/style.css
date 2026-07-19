@@ -90,6 +90,14 @@
 }
 .table-view .table-row-cell:selected { -fx-background-color: #CDE8F0; }
 .table-view .table-row-cell:odd { -fx-background-color: #F7FBFC; }
+.table-view .table-cell {
+    -fx-text-fill: #28323C;
+    -fx-font-size: 13px;
+}
+.table-view .table-row-cell:selected .table-cell {
+    -fx-text-fill: #154B5A;
+    -fx-font-weight: bold;
+}
 
 /* ===== Tab 面板 ===== */
 .tab-pane .tab-header-area .tab {

@@ -42,7 +42,6 @@ public class MainView {
                 tab("AI 饮食推荐", new AIDietPanel()),
                 tab("AI 菜谱生成", new AICookbookPanel()),
                 tab("成就徽章", new AchievementPanel()),
-                tab("数据大屏", new DashboardPanel()),
                 tab("健康资讯", new HealthArticlePanel())
         );
         tabs.setPadding(new Insets(8));

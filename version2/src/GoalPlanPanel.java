@@ -39,7 +39,10 @@ public class GoalPlanPanel extends VBox {
         btnSet.getStyleClass().add("button-primary");
         Button btnRefresh = new Button("刷新");
         btnRefresh.getStyleClass().add("button-ghost");
-        ctrl.getChildren().addAll(lblG, cbGoalType, lblW, tfTargetWeight, btnRecommend, btnSet, btnRefresh);
+        Button btnReport = new Button("查看目标计划");
+        btnReport.getStyleClass().add("button-primary");
+        btnReport.setOnAction(e -> showReportDialog("目标计划详情", taPlan.getText()));
+        ctrl.getChildren().addAll(lblG, cbGoalType, lblW, tfTargetWeight, btnRecommend, btnSet, btnRefresh, btnReport);
 
         VBox ctrlCard = new VBox(10);
         ctrlCard.getStyleClass().add("card");
@@ -247,6 +250,24 @@ public class GoalPlanPanel extends VBox {
         sb.append("\n═══════════════════════════════════════════\n");
 
         taPlan.setText(sb.toString());
+    }
+
+    private void showReportDialog(String title, String content) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.setHeaderText(null);
+        dialog.setResizable(true);
+        TextArea area = new TextArea(content);
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setStyle("-fx-font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; -fx-font-size: 14px;");
+        VBox box = new VBox(area);
+        VBox.setVgrow(area, Priority.ALWAYS);
+        box.setPrefSize(800, 600);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().setPrefSize(800, 600);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.show();
     }
 
     private int[] getWeeklyTargets(String goalType) {
