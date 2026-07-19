@@ -75,8 +75,16 @@ public class GoalPlanPanel extends VBox {
 
         VBox overviewCard = new VBox(10);
         overviewCard.getStyleClass().add("card");
+        HBox overviewHeader = new HBox(10);
+        overviewHeader.setAlignment(Pos.CENTER_LEFT);
         Label t3 = new Label("目标概览");
         t3.getStyleClass().add("card-title");
+        Region sp = new Region();
+        HBox.setHgrow(sp, Priority.ALWAYS);
+        Button btnExercises = new Button("查看运动记录");
+        btnExercises.getStyleClass().add("button-accent");
+        btnExercises.setOnAction(e -> showExerciseDialog());
+        overviewHeader.getChildren().addAll(t3, sp, btnExercises);
         GridPane overviewGrid = new GridPane();
         overviewGrid.setHgap(24);
         overviewGrid.setVgap(14);
@@ -86,26 +94,16 @@ public class GoalPlanPanel extends VBox {
         overviewGrid.addRow(1, goalBox("距离目标", lblDiff, Theme.hex(Theme.DANGER)),
                                  goalBox("已进行天数", lblDays, Theme.hex(Theme.SUCCESS)));
         overviewGrid.addRow(2, goalBox("预测达成", lblPredict, "#8050A0"), new Label(""));
-        overviewCard.getChildren().addAll(t3, overviewGrid);
+        overviewCard.getChildren().addAll(overviewHeader, overviewGrid);
 
         buildExerciseTable();
-        ScrollPane exScroll = new ScrollPane(exerciseTable);
-        exScroll.setFitToWidth(true);
-        VBox exCard = new VBox(10);
-        exCard.getStyleClass().add("card");
-        VBox.setVgrow(exCard, Priority.ALWAYS);
-        Label t4 = new Label("运动记录");
-        t4.getStyleClass().add("card-title");
-        exCard.getChildren().addAll(t4, exScroll);
 
-        getChildren().addAll(ctrlCard, progressCard, overviewCard, exCard);
-        VBox.setVgrow(exCard, Priority.ALWAYS);
+        getChildren().addAll(ctrlCard, progressCard, overviewCard);
 
         btnRecommend.setOnAction(e -> recommendTarget());
         btnSet.setOnAction(e -> setGoal());
-        btnRefresh.setOnAction(e -> { refresh(); refreshExercise(); });
+        btnRefresh.setOnAction(e -> refresh());
         refresh();
-        refreshExercise();
     }
 
     private VBox goalBox(String title, Label valueLabel, String color) {
@@ -301,6 +299,22 @@ public class GoalPlanPanel extends VBox {
         VBox box = new VBox(area);
         VBox.setVgrow(area, Priority.ALWAYS);
         box.setPrefSize(800, 600);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().setPrefSize(800, 600);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.show();
+    }
+
+    private void showExerciseDialog() {
+        refreshExercise();
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("运动记录");
+        dialog.setHeaderText(null);
+        dialog.setResizable(true);
+        VBox box = new VBox(10, exerciseTable);
+        VBox.setVgrow(exerciseTable, Priority.ALWAYS);
+        box.setPrefSize(800, 600);
+        box.setPadding(new Insets(10));
         dialog.getDialogPane().setContent(box);
         dialog.getDialogPane().setPrefSize(800, 600);
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);

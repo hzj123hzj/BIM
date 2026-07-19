@@ -74,6 +74,11 @@ public class PredictionPanel extends VBox {
                              predBox("14 天后", lbl14, Theme.hex(Theme.ACCENT)));
         predGrid.addRow(1, predBox("30 天后", lbl30, Theme.hex(Theme.SUCCESS)),
                              predBox("30 天后风险", lblRisk, Theme.hex(Theme.DANGER)));
+        ColumnConstraints c1 = new ColumnConstraints();
+        c1.setPercentWidth(50);
+        ColumnConstraints c2 = new ColumnConstraints();
+        c2.setPercentWidth(50);
+        predGrid.getColumnConstraints().addAll(c1, c2);
         predCard.getChildren().addAll(t3, predGrid);
 
         getChildren().addAll(ctrlCard, chartCard, predCard);
@@ -84,8 +89,11 @@ public class PredictionPanel extends VBox {
 
     private VBox predBox(String title, Label valueLabel, String color) {
         VBox vb = new VBox(4);
+        vb.setMinHeight(58);
         Label lt = new Label(title);
         lt.getStyleClass().add("sub-title");
+        valueLabel.setWrapText(true);
+        valueLabel.setMinHeight(38);
         valueLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
         vb.getChildren().addAll(lt, valueLabel);
         return vb;
