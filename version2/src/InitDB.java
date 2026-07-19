@@ -336,6 +336,8 @@ public class InitDB {
             "  updated_at TIMESTAMP DEFAULT NOW()" +
             ")");
         System.out.println("  [OK] ai_api_config 表");
+        // 兼容已存在库：补 vision_model 列（识图用视觉模型）
+        try { execUpdate(conn, "ALTER TABLE ai_api_config ADD COLUMN IF NOT EXISTS vision_model VARCHAR(100) DEFAULT 'glm-4v-flash'"); } catch (SQLException ignore) {}
 
         // AI 提示词模板表
         execUpdate(conn,

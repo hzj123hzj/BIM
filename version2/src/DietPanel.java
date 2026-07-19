@@ -2,14 +2,27 @@ import javafx.geometry.*;
 import javafx.scene.control.*;
 import javafx.scene.chart.*;
 import javafx.scene.layout.*;
+import javafx.scene.image.*;
+import javafx.scene.Scene;
+import javafx.stage.*;
+import javafx.embed.swing.SwingFXUtils;
+import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
+import com.github.sarxos.webcam.Webcam;
+
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.Map;
+import java.util.Base64;
+import javax.imageio.ImageIO;
 
-/** 饮食管理面板 — 录入饮食记录、今日营养汇总(饼图)、今日饮食记录 */
+/** 饮食管理面板 — 录入饮食记录、AI 识图算热量、今日营养汇总(饼图)、今日饮食记录 */
 public class DietPanel extends VBox {
     private final ComboBox<String> cbMealType = new ComboBox<>();
     private final ComboBox<String> cbFood = new ComboBox<>();
@@ -20,6 +33,13 @@ public class DietPanel extends VBox {
     private final TableView<String[]> todayTable = new TableView<>();
     private final ObservableList<String[]> todayData = FXCollections.observableArrayList();
     private String reportContent = "";
+
+    // 识图结果区
+    private final VBox resultsBox = new VBox(8);
+    private final Label lblResultHint = new Label("点击上方「📷 上传识图」或「📸 摄像头拍照」，AI 会自动识别食物中的热量。");
+    private final ObservableList<FoodItem> visionItems = FXCollections.observableArrayList();
+    private final Button btnAddVision = new Button("加入今日饮食");
+    private final Button btnSelectAll = new Button("全选/取消");
 
     public DietPanel() {
         setSpacing(16);
@@ -39,11 +59,19 @@ public class DietPanel extends VBox {
         btnAdd.getStyleClass().add("button-primary");
         input.getChildren().addAll(l1, cbMealType, l2, cbFood, l3, tfGrams, btnAdd);
 
+        HBox btnRow2 = new HBox(10);
+        btnRow2.setAlignment(Pos.CENTER_LEFT);
+        Button btnUpload = new Button("📷 上传识图");
+        btnUpload.getStyleClass().add("button-accent");
+        Button btnCam = new Button("📸 摄像头拍照");
+        btnCam.getStyleClass().add("button-ghost");
+        btnRow2.getChildren().addAll(btnUpload, btnCam);
+
         VBox inputCard = new VBox(10);
         inputCard.getStyleClass().add("card");
         Label t1 = new Label("饮食记录录入");
         t1.getStyleClass().add("card-title");
-        inputCard.getChildren().addAll(t1, input);
+        inputCard.getChildren().addAll(t1, input, btnRow2);
 
         lblSummary.getStyleClass().add("card-title");
         pie.setTitle("营养素占比");
@@ -79,14 +107,235 @@ public class DietPanel extends VBox {
         summaryCard.getChildren().addAll(summaryHeader, top);
         VBox.setVgrow(summaryCard, Priority.ALWAYS);
 
-        getChildren().addAll(inputCard, summaryCard);
+        // 识图结果卡片
+        lblResultHint.getStyleClass().add("hint");
+        btnAddVision.getStyleClass().add("button-primary");
+        btnAddVision.setDisable(true);
+        btnSelectAll.getStyleClass().add("button-ghost");
+        btnSelectAll.setDisable(true);
+        HBox resultActions = new HBox(10, btnSelectAll, btnAddVision);
+        resultActions.setAlignment(Pos.CENTER_LEFT);
+        VBox resultCard = new VBox(10);
+        resultCard.getStyleClass().add("card");
+        Label t3 = new Label("AI 识图结果");
+        t3.getStyleClass().add("card-title");
+        resultCard.getChildren().addAll(t3, lblResultHint, resultsBox, resultActions);
+
+        getChildren().addAll(inputCard, resultCard, summaryCard);
         VBox.setVgrow(summaryCard, Priority.ALWAYS);
 
         btnAdd.setOnAction(e -> addDietRecord());
+        btnUpload.setOnAction(e -> uploadAndRecognize());
+        btnCam.setOnAction(e -> captureAndRecognize());
+        btnAddVision.setOnAction(e -> addVisionItems());
+        btnSelectAll.setOnAction(e -> toggleSelectAll());
         loadFoods();
         refreshSummary();
     }
 
+    // ===================== 识图逻辑 =====================
+    private static final String VISION_PROMPT = "你是营养识别助手。请识别图片中的食物，估算每种食物的重量(克)以及热量(千卡)、蛋白质(克)、碳水(克)、脂肪(克)。"
+            + "严格只按如下格式每行返回一条，不要解释、不要序号、不要 markdown：\n"
+            + "食物名|重量克|热量kcal|蛋白质g|碳水g|脂肪g\n"
+            + "例如：宫保鸡丁|250|420|28|18|22\n"
+            + "若图中无食物或无法识别，返回一行：未知|0|0|0|0|0";
+
+    private void showResults(List<FoodItem> items) {
+        resultsBox.getChildren().clear();
+        visionItems.setAll(items);
+        if (items.isEmpty()) {
+            lblResultHint.setText("未能从图片中识别出食物，请换一张更清晰的照片，或在上方手动录入。");
+            btnAddVision.setDisable(true);
+            btnSelectAll.setDisable(true);
+            return;
+        }
+        lblResultHint.setText("已识别 " + items.size() + " 项，可微调克数 / 餐次后一键加入：");
+        for (FoodItem it : items) resultsBox.getChildren().add(buildResultRow(it));
+        btnAddVision.setDisable(false);
+        btnSelectAll.setDisable(false);
+    }
+
+    private HBox buildResultRow(FoodItem it) {
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("vision-item");
+        CheckBox chk = new CheckBox();
+        chk.setSelected(true);
+        it.selected = true;
+        chk.selectedProperty().addListener((o, ov, nv) -> it.selected = nv);
+        Label name = new Label(it.name);
+        name.getStyleClass().add("sub-title");
+        name.setPrefWidth(96);
+        TextField gramsTf = new TextField(String.valueOf(it.grams));
+        gramsTf.setPrefWidth(56);
+        it.gramsField = gramsTf;
+        Label cal = new Label(it.cal + " kcal");
+        Label macro = new Label(String.format("P%.0f C%.0f F%.0f", it.protein, it.carbs, it.fat));
+        macro.getStyleClass().add("text-muted");
+        ComboBox<String> meal = new ComboBox<>();
+        meal.getItems().addAll("早餐", "午餐", "晚餐", "加餐");
+        meal.setValue("午餐");
+        it.mealBox = meal;
+        row.getChildren().addAll(chk, name, new Label("g:"), gramsTf, cal, macro, new Label("餐次:"), meal);
+        return row;
+    }
+
+    private void toggleSelectAll() {
+        boolean all = visionItems.stream().allMatch(i -> i.selected);
+        visionItems.forEach(i -> i.selected = !all);
+        resultsBox.getChildren().clear();
+        for (FoodItem it : visionItems) resultsBox.getChildren().add(buildResultRow(it));
+    }
+
+    private void uploadAndRecognize() {
+        FileChooser fc = new FileChooser();
+        fc.setTitle("选择食物照片");
+        fc.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("图片", "*.png", "*.jpg", "*.jpeg", "*.bmp"));
+        Window win = getScene() != null ? getScene().getWindow() : null;
+        File f = fc.showOpenDialog(win);
+        if (f == null) return;
+        try {
+            byte[] bytes = Files.readAllBytes(f.toPath());
+            recognize(bytes);
+        } catch (Exception ex) {
+            alert("读取图片失败: " + ex.getMessage());
+        }
+    }
+
+    private void captureAndRecognize() {
+        try {
+            final Webcam webcam = Webcam.getDefault();
+            if (webcam == null) { alert("未检测到摄像头设备"); return; }
+            final Stage stage = new Stage();
+            stage.setTitle("摄像头拍照");
+            ImageView view = new ImageView();
+            view.setFitWidth(480); view.setFitHeight(360); view.setPreserveRatio(true);
+            Button snap = new Button("📸 拍照识图");
+            snap.getStyleClass().add("button-primary");
+            VBox root = new VBox(10, view, snap);
+            root.setAlignment(Pos.CENTER);
+            root.setPadding(new Insets(12));
+            root.getStyleClass().add("card");
+            stage.setScene(new Scene(root));
+            final boolean[] closed = {false};
+            new Thread(() -> {
+                try {
+                    if (!webcam.isOpen()) webcam.open();
+                    while (!closed[0]) {
+                        BufferedImage img = webcam.getImage();
+                        if (img != null) {
+                            final Image fx = SwingFXUtils.toFXImage(img, null);
+                            Platform.runLater(() -> view.setImage(fx));
+                        }
+                        Thread.sleep(120);
+                    }
+                } catch (Throwable t) {
+                    Platform.runLater(() -> alert("摄像头打开失败: " + t.getMessage()));
+                }
+            }).start();
+            snap.setOnAction(ev -> {
+                try {
+                    BufferedImage img = webcam.getImage();
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    ImageIO.write(img, "png", baos);
+                    closed[0] = true;
+                    webcam.close();
+                    stage.close();
+                    recognize(baos.toByteArray());
+                } catch (Exception ex) {
+                    alert("拍照失败: " + ex.getMessage());
+                }
+            });
+            stage.setOnCloseRequest(e -> { closed[0] = true; try { webcam.close(); } catch (Exception ignore) {} });
+            stage.show();
+        } catch (Throwable t) {
+            alert("摄像头不可用: " + t.getMessage());
+        }
+    }
+
+    private void recognize(byte[] imageBytes) {
+        Map<String, String> cfg = DBUtil.getAIApiConfig();
+        String apiKey = cfg.getOrDefault("api_key", "");
+        if (apiKey.isEmpty()) { alert("请先在「管理员端 → API 配置」中填写 API Key"); return; }
+        String vision = cfg.getOrDefault("vision_model", "glm-4v-flash");
+        String b64 = Base64.getEncoder().encodeToString(imageBytes);
+        lblResultHint.setText("AI 正在识别中…");
+        btnAddVision.setDisable(true);
+        btnSelectAll.setDisable(true);
+        new Thread(() -> {
+            try {
+                String resp = DBUtil.callVision(apiKey, vision, VISION_PROMPT, b64);
+                List<FoodItem> items = parseVisionResult(resp);
+                Platform.runLater(() -> showResults(items));
+            } catch (Exception ex) {
+                Platform.runLater(() -> {
+                    lblResultHint.setText("识别失败: " + ex.getMessage());
+                    btnAddVision.setDisable(true);
+                    btnSelectAll.setDisable(true);
+                });
+            }
+        }).start();
+    }
+
+    private List<FoodItem> parseVisionResult(String text) {
+        List<FoodItem> list = new ArrayList<>();
+        if (text == null) return list;
+        for (String raw : text.split("\n")) {
+            String line = raw.trim();
+            if (line.isEmpty() || !line.contains("|")) continue;
+            String[] p = line.split("\\|");
+            if (p.length < 6) continue;
+            String name = p[0].trim();
+            if (name.isEmpty() || "未知".equals(name) || "食物名".equals(name)) continue;
+            try {
+                FoodItem it = new FoodItem();
+                it.name = name;
+                it.grams = (int) Math.max(0, Double.parseDouble(p[1].trim()));
+                it.cal = (int) Math.max(0, Double.parseDouble(p[2].trim()));
+                it.protein = Math.max(0, Double.parseDouble(p[3].trim()));
+                it.carbs = Math.max(0, Double.parseDouble(p[4].trim()));
+                it.fat = Math.max(0, Double.parseDouble(p[5].trim()));
+                list.add(it);
+            } catch (NumberFormatException ignore) {}
+        }
+        return list;
+    }
+
+    private void addVisionItems() {
+        int added = 0;
+        for (FoodItem it : visionItems) {
+            if (!it.selected) continue;
+            int newGrams;
+            try { newGrams = (int) Math.max(1, Double.parseDouble(it.gramsField.getText().trim())); }
+            catch (Exception ex) { newGrams = it.grams > 0 ? it.grams : 1; }
+            double ratio = it.grams > 0 ? (double) newGrams / it.grams : 1.0;
+            int cal = (int) Math.round(it.cal * ratio);
+            double p = it.protein * ratio, c = it.carbs * ratio, f = it.fat * ratio;
+            String meal = it.mealBox != null ? it.mealBox.getValue() : "午餐";
+            if (DBUtil.saveDietRecord(meal, it.name + "(" + newGrams + "g)", cal, p, c, f)) added++;
+        }
+        if (added > 0) {
+            refreshSummary();
+            alert("已加入 " + added + " 项饮食记录");
+            visionItems.clear();
+            resultsBox.getChildren().clear();
+            lblResultHint.setText("点击上方「📷 上传识图」或「📸 摄像头拍照」，AI 会自动识别食物中的热量。");
+            btnAddVision.setDisable(true);
+            btnSelectAll.setDisable(true);
+        } else {
+            alert("没有可加入的项");
+        }
+    }
+
+    private static class FoodItem {
+        String name; int grams; int cal; double protein, carbs, fat;
+        boolean selected = true;
+        TextField gramsField;
+        ComboBox<String> mealBox;
+    }
+
+    // ===================== 原有录入与汇总逻辑 =====================
     private void buildTodayTable() {
         String[] cols = {"餐次", "食物", "热量", "蛋白质", "碳水", "脂肪"};
         for (int i = 0; i < cols.length; i++) {

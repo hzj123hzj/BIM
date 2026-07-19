@@ -1908,8 +1908,9 @@ public class DBUtil {
             cfg.put("provider_name", "zhipu");
             cfg.put("api_key", "");
             cfg.put("model_name", "glm-4.7-flash");
+            cfg.put("vision_model", "glm-4v-flash");
             cfg.put("endpoint_url", "https://open.bigmodel.cn/api/paas/v4");
-            String sql = "SELECT provider_name, api_key, model_name, endpoint_url FROM ai_api_config WHERE provider_name = ? ORDER BY id DESC LIMIT 1";
+            String sql = "SELECT provider_name, api_key, model_name, vision_model, endpoint_url FROM ai_api_config WHERE provider_name = ? ORDER BY id DESC LIMIT 1";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, "zhipu");
@@ -1918,6 +1919,7 @@ public class DBUtil {
                     cfg.put("provider_name", rs.getString("provider_name"));
                     cfg.put("api_key", rs.getString("api_key") == null ? "" : rs.getString("api_key"));
                     cfg.put("model_name", rs.getString("model_name") == null ? "glm-4.7-flash" : rs.getString("model_name"));
+                    cfg.put("vision_model", rs.getString("vision_model") == null ? "glm-4v-flash" : rs.getString("vision_model"));
                     cfg.put("endpoint_url", rs.getString("endpoint_url") == null ? "https://open.bigmodel.cn/api/paas/v4" : rs.getString("endpoint_url"));
                 }
             } catch (SQLException e) {
@@ -1954,6 +1956,44 @@ public class DBUtil {
             if (code >= 400) return "AI 调用失败 (HTTP " + code + "): " + resp;
             String content = extractContent(resp);
             return content != null ? content : ("AI 返回: " + resp);
+        }
+
+        /** 多模态视觉调用：传入图片 base64，让模型识别食物并返回结构化文本 */
+        static String callVision(String apiKey, String visionModel, String prompt, String base64Image) throws Exception {
+            Map<String, String> cfg = getAIApiConfig();
+            String endpoint = cfg.getOrDefault("endpoint_url", "https://open.bigmodel.cn/api/paas/v4");
+            String model = (visionModel == null || visionModel.trim().isEmpty()) ? cfg.getOrDefault("vision_model", "glm-4v-flash") : visionModel.trim();
+            String fullUrl = endpoint.endsWith("/chat/completions") ? endpoint : endpoint + "/chat/completions";
+            URL url = new URL(fullUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(30000);
+            conn.setReadTimeout(60000);
+            String p = escJson(prompt);
+            String img = base64Image.replace("\\", "\\\\").replace("\"", "\\\"");
+            String body = "{\"model\":\"" + escJson(model) + "\","
+                    + "\"messages\":[{\"role\":\"user\",\"content\":["
+                    + "{\"type\":\"text\",\"text\":\"" + p + "\"},"
+                    + "{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/jpeg;base64," + img + "\"}}"
+                    + "]}]}";
+            try (OutputStream os = conn.getOutputStream()) { os.write(body.getBytes("UTF-8")); }
+            int code = conn.getResponseCode();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    code >= 400 ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) response.append(line);
+            String resp = response.toString();
+            if (code >= 400) return "AI 调用失败 (HTTP " + code + "): " + resp;
+            String content = extractContent(resp);
+            return content != null ? content : ("AI 返回: " + resp);
+        }
+
+        private static String escJson(String s) {
+            return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
         }
 
         /** 从 OpenAI 兼容响应中提取 message.content（支持转义字符） */
@@ -1999,28 +2039,30 @@ public class DBUtil {
             return sb.toString();
         }
 
-        /** 保存 AI API 配置 */
-        static boolean saveAIApiConfig(String apiKey, String modelName, String endpointUrl) {
+        /** 保存 AI API 配置（含视觉模型） */
+        static boolean saveAIApiConfig(String apiKey, String modelName, String visionModel, String endpointUrl) {
             Map<String, String> existing = getAIApiConfig();
             String sql;
             boolean hasRecord = existing != null && !existing.getOrDefault("api_key", "").isEmpty();
             try (Connection conn = getConnection()) {
                 if (hasRecord) {
-                    sql = "UPDATE ai_api_config SET api_key = ?, model_name = ?, endpoint_url = ?, updated_at = CURRENT_TIMESTAMP WHERE provider_name = ?";
+                    sql = "UPDATE ai_api_config SET api_key = ?, model_name = ?, vision_model = ?, endpoint_url = ?, updated_at = CURRENT_TIMESTAMP WHERE provider_name = ?";
                     try (PreparedStatement ps = conn.prepareStatement(sql)) {
                         ps.setString(1, apiKey);
                         ps.setString(2, modelName);
-                        ps.setString(3, endpointUrl);
-                        ps.setString(4, "zhipu");
+                        ps.setString(3, visionModel);
+                        ps.setString(4, endpointUrl);
+                        ps.setString(5, "zhipu");
                         return ps.executeUpdate() > 0;
                     }
                 } else {
-                    sql = "INSERT INTO ai_api_config (provider_name, api_key, model_name, endpoint_url) VALUES (?, ?, ?, ?)";
+                    sql = "INSERT INTO ai_api_config (provider_name, api_key, model_name, vision_model, endpoint_url) VALUES (?, ?, ?, ?, ?)";
                     try (PreparedStatement ps = conn.prepareStatement(sql)) {
                         ps.setString(1, "zhipu");
                         ps.setString(2, apiKey);
                         ps.setString(3, modelName);
-                        ps.setString(4, endpointUrl);
+                        ps.setString(4, visionModel);
+                        ps.setString(5, endpointUrl);
                         return ps.executeUpdate() > 0;
                     }
                 }

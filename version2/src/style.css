@@ -6,7 +6,7 @@
 
 /* ===== 品牌渐变（登录页左侧） ===== */
 .bg-gradient {
-    -fx-background-color: linear-gradient(135deg, #2D8CA0 0%, #1E6478 55%, #154B5A 100%);
+    -fx-background-color: linear-gradient(to bottom right, #2D8CA0 0%, #1E6478 55%, #154B5A 100%);
 }
 
 /* ===== 内容区多层渐变 ===== */
@@ -298,6 +298,16 @@
 .page-title { -fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #154B5A; }
 .sub-title { -fx-font-size: 14px; -fx-text-fill: #41525E; -fx-font-weight: bold; }
 .hint { -fx-font-size: 12px; -fx-text-fill: #6B7884; }
+
+/* 识图结果条目 */
+.vision-item {
+    -fx-background-color: #F7FBFC;
+    -fx-background-radius: 10;
+    -fx-border-color: #E2EBF0;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-padding: 8 10;
+}
 
 /* ===== 报告弹窗（渐变标题带 + 层次化阅读栏） ===== */
 .report-card {
