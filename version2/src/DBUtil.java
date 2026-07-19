@@ -350,6 +350,32 @@ public class DBUtil {
             return new int[]{0, 0, 0, 0};
         }
 
+        /** 获取今日饮食记录明细 */
+        static List<String[]> getTodayDietRecords() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT meal_type, food_name, calories, protein, carbs, fat " +
+                         "FROM diet_records WHERE username = ? AND record_date = CURRENT_DATE " +
+                         "ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, currentUsername);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    list.add(new String[]{
+                            rs.getString("meal_type"),
+                            rs.getString("food_name"),
+                            String.valueOf(rs.getInt("calories")),
+                            df2.format(rs.getDouble("protein")),
+                            df2.format(rs.getDouble("carbs")),
+                            df2.format(rs.getDouble("fat"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
         /** 获取食物列表 */
         static List<String[]> getAllFoods() {
             List<String[]> list = new ArrayList<>();

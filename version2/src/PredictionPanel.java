@@ -14,7 +14,11 @@ import java.text.SimpleDateFormat;
 /** 预测分析面板 — 线性回归趋势预测 + 目标达成预测 + 风险评估 */
 public class PredictionPanel extends VBox {
     private final LineChart<Number, Number> chart;
-    private final TextArea ta = new TextArea();
+    private String reportContent = "";
+    private final Label lbl7 = new Label("--");
+    private final Label lbl14 = new Label("--");
+    private final Label lbl30 = new Label("--");
+    private final Label lblRisk = new Label("--");
     private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
     public PredictionPanel() {
@@ -28,7 +32,7 @@ public class PredictionPanel extends VBox {
         btnRefresh.getStyleClass().add("button-primary");
         Button btnReport = new Button("查看预测报告");
         btnReport.getStyleClass().add("button-accent");
-        btnReport.setOnAction(e -> showReportDialog("预测分析报告", ta.getText()));
+        btnReport.setOnAction(e -> showReportDialog("预测分析报告", reportContent));
         Label hint = new Label("基于历史数据进行线性回归趋势预测");
         hint.getStyleClass().add("hint");
         ctrl.getChildren().addAll(btnRefresh, btnReport, hint);
@@ -46,38 +50,55 @@ public class PredictionPanel extends VBox {
         yAxis.setLabel("体重 (kg)");
         chart = new LineChart<>(xAxis, yAxis);
         chart.setTitle("体重趋势预测");
-        chart.setPrefHeight(300);
-        chart.setMinHeight(220);
+        chart.setPrefHeight(360);
+        chart.setMinHeight(260);
         chart.setCreateSymbols(true);
         chart.setStyle("-fx-series-color: " + Theme.hex(Theme.PRIMARY) + ";");
 
         VBox chartCard = new VBox(10);
         chartCard.getStyleClass().add("card");
+        VBox.setVgrow(chartCard, Priority.ALWAYS);
         Label t2 = new Label("历史 + 预测趋势图");
         t2.getStyleClass().add("card-title");
         chartCard.getChildren().addAll(t2, chart);
 
-        ta.setEditable(false);
-        ta.setWrapText(true);
-        ta.setStyle("-fx-font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; -fx-font-size: 13px;");
-        ScrollPane sp = new ScrollPane(ta);
-        sp.setFitToWidth(true);
-        VBox reportCard = new VBox(10);
-        reportCard.getStyleClass().add("card");
-        reportCard.setPrefHeight(300);
-        Label t3 = new Label("预测分析报告");
+        VBox predCard = new VBox(10);
+        predCard.getStyleClass().add("card");
+        Label t3 = new Label("预测结果概览");
         t3.getStyleClass().add("card-title");
-        reportCard.getChildren().addAll(t3, sp);
+        GridPane predGrid = new GridPane();
+        predGrid.setHgap(24);
+        predGrid.setVgap(14);
+        predGrid.setPadding(new Insets(4));
+        predGrid.addRow(0, predBox("7 天后", lbl7, Theme.hex(Theme.PRIMARY)),
+                             predBox("14 天后", lbl14, Theme.hex(Theme.ACCENT)));
+        predGrid.addRow(1, predBox("30 天后", lbl30, Theme.hex(Theme.SUCCESS)),
+                             predBox("30 天后风险", lblRisk, Theme.hex(Theme.DANGER)));
+        predCard.getChildren().addAll(t3, predGrid);
 
-        getChildren().addAll(ctrlCard, chartCard, reportCard);
+        getChildren().addAll(ctrlCard, chartCard, predCard);
+        VBox.setVgrow(chartCard, Priority.ALWAYS);
         btnRefresh.setOnAction(e -> refresh());
         refresh();
+    }
+
+    private VBox predBox(String title, Label valueLabel, String color) {
+        VBox vb = new VBox(4);
+        Label lt = new Label(title);
+        lt.getStyleClass().add("sub-title");
+        valueLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        vb.getChildren().addAll(lt, valueLabel);
+        return vb;
     }
 
     private void refresh() {
         List<Map<String, Object>> records = DBUtil.getHealthRecords(60);
         if (records.size() < 3) {
-            ta.setText("数据不足, 至少需要 3 条健康记录才能进行预测分析\n当前记录数: " + records.size());
+            reportContent = "数据不足, 至少需要 3 条健康记录才能进行预测分析\n当前记录数: " + records.size();
+            lbl7.setText("--");
+            lbl14.setText("--");
+            lbl30.setText("--");
+            lblRisk.setText("数据不足");
             chart.getData().clear();
             return;
         }
@@ -113,6 +134,12 @@ public class PredictionPanel extends VBox {
 
         Map<String, Object> goal = DBUtil.getGoal();
         String risk = HealthCalculator.assessRisk(predBMI30);
+
+        lbl7.setText(f1(pred7) + " kg (BMI " + f1(HealthCalculator.calcBMI(pred7, DBUtil.currentHeight)) + ")");
+        lbl14.setText(f1(pred14) + " kg (BMI " + f1(HealthCalculator.calcBMI(pred14, DBUtil.currentHeight)) + ")");
+        lbl30.setText(f1(pred30) + " kg (BMI " + f1(predBMI30) + ")");
+        String riskLevel = predBMI30 >= 28.0 ? "高风险" : (predBMI30 >= 24.0 || predBMI30 < 18.5 ? "中风险" : "低风险");
+        lblRisk.setText(riskLevel + " - " + risk);
 
         // --- 图表 ---
         final long base = dates.get(0).getTime();
@@ -198,7 +225,6 @@ public class PredictionPanel extends VBox {
 
         sb.append("【健康风险评估】\n");
         sb.append("  预测30天后BMI: ").append(f1(predBMI30)).append("\n");
-        String riskLevel = predBMI30 >= 28.0 ? "高风险" : (predBMI30 >= 24.0 || predBMI30 < 18.5 ? "中风险" : "低风险");
         sb.append("  风险等级: ").append(riskLevel).append("\n");
         sb.append("  ").append(risk).append("\n\n");
 
@@ -211,7 +237,7 @@ public class PredictionPanel extends VBox {
         }
         sb.append("\n═══════════════════════════════════════════\n");
 
-        ta.setText(sb.toString());
+        reportContent = sb.toString();
     }
 
     private void showReportDialog(String title, String content) {

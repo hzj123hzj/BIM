@@ -7,7 +7,7 @@ import java.util.*;
 
 /** 分析评估面板 — 综合 BMI、体脂率、BMR、TDEE 等指标生成评估报告 */
 public class AnalysisPanel extends VBox {
-    private final TextArea ta = new TextArea();
+    private String reportContent = "";
 
     public AnalysisPanel() {
         setSpacing(12);
@@ -20,7 +20,7 @@ public class AnalysisPanel extends VBox {
         btnRefresh.getStyleClass().add("button-primary");
         Button btnReport = new Button("查看报告");
         btnReport.getStyleClass().add("button-accent");
-        btnReport.setOnAction(e -> showReportDialog("健康分析评估报告", ta.getText()));
+        btnReport.setOnAction(e -> showReportDialog("健康分析评估报告", reportContent));
         Label hint = new Label("综合 BMI、体脂率、BMR、TDEE 等指标生成评估报告");
         hint.getStyleClass().add("hint");
         ctrl.getChildren().addAll(btnRefresh, btnReport, hint);
@@ -31,19 +31,26 @@ public class AnalysisPanel extends VBox {
         t1.getStyleClass().add("card-title");
         ctrlCard.getChildren().addAll(t1, ctrl);
 
-        ta.setEditable(false);
-        ta.setWrapText(true);
-        ta.setStyle("-fx-font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; -fx-font-size: 13px;");
-        ScrollPane sp = new ScrollPane(ta);
-        sp.setFitToWidth(true);
-        VBox reportCard = new VBox(10);
-        reportCard.getStyleClass().add("card");
-        reportCard.setPrefHeight(520);
-        Label t2 = new Label("健康分析评估报告");
+        VBox metricsCard = new VBox(10);
+        metricsCard.getStyleClass().add("card");
+        Label t2 = new Label("关键指标概览");
         t2.getStyleClass().add("card-title");
-        reportCard.getChildren().addAll(t2, sp);
+        GridPane metricsGrid = new GridPane();
+        metricsGrid.setHgap(24);
+        metricsGrid.setVgap(14);
+        metricsGrid.setPadding(new Insets(4));
+        metricsGrid.addRow(0, metricBox("BMI", "--", Theme.hex(Theme.PRIMARY)),
+                              metricBox("基础代谢 BMR", "-- kcal", Theme.hex(Theme.ACCENT)));
+        metricsGrid.addRow(1, metricBox("每日消耗 TDEE", "-- kcal", Theme.hex(Theme.PRIMARY)),
+                              metricBox("体脂率", "-- %", Theme.hex(Theme.ACCENT)));
+        metricsGrid.addRow(2, metricBox("内脏脂肪", "--", Theme.hex(Theme.DANGER)),
+                              metricBox("身体年龄", "--", Theme.hex(Theme.SUCCESS)));
+        metricsGrid.addRow(3, metricBox("骨骼肌肉量", "-- kg", "#8050A0"),
+                              metricBox("健康评分", "--", Theme.hex(Theme.SUCCESS)));
+        metricsCard.getChildren().addAll(t2, metricsGrid);
 
-        getChildren().addAll(ctrlCard, reportCard);
+        getChildren().addAll(ctrlCard, metricsCard);
+        VBox.setVgrow(metricsCard, Priority.ALWAYS);
         btnRefresh.setOnAction(e -> refresh());
         refresh();
     }
@@ -51,7 +58,7 @@ public class AnalysisPanel extends VBox {
     private void refresh() {
         Map<String, Object> latest = DBUtil.getLatestHealthRecord();
         if (latest == null) {
-            ta.setText("暂无健康记录, 请先在「数据录入」页面录入数据");
+            reportContent = "暂无健康记录, 请先在「数据录入」页面录入数据";
             return;
         }
 
@@ -77,6 +84,17 @@ public class AnalysisPanel extends VBox {
         double bmrC = HealthCalculator.calcBMR_China(weight, age, gender);
         double idealWeight = HealthCalculator.calcIdealWeight(height);
         int score = HealthCalculator.calcHealthScore(bmi, bodyFat, visceral, muscle, water, gender);
+
+        // 更新指标概览
+        GridPane grid = (GridPane) ((VBox) getChildren().get(1)).getChildren().get(1);
+        updateMetric(grid, 0, 0, "BMI", f1(bmi) + " (" + HealthCalculator.classifyBMI(bmi) + ")");
+        updateMetric(grid, 0, 1, "基础代谢 BMR", f0(bmr) + " kcal");
+        updateMetric(grid, 1, 0, "每日消耗 TDEE", f0(tdee) + " kcal");
+        updateMetric(grid, 1, 1, "体脂率", f1(bodyFat) + "%");
+        updateMetric(grid, 2, 0, "内脏脂肪", visceral + " 级");
+        updateMetric(grid, 2, 1, "身体年龄", bodyAge + " 岁");
+        updateMetric(grid, 3, 0, "骨骼肌肉量", f1(boneMuscle) + " kg");
+        updateMetric(grid, 3, 1, "健康评分", score + " 分");
 
         StringBuilder sb = new StringBuilder();
         sb.append("═══════════════════════════════════════════\n");
@@ -148,7 +166,24 @@ public class AnalysisPanel extends VBox {
 
         sb.append("═══════════════════════════════════════════\n");
 
-        ta.setText(sb.toString());
+        reportContent = sb.toString();
+    }
+
+    private VBox metricBox(String title, String defaultValue, String color) {
+        VBox vb = new VBox(4);
+        Label lt = new Label(title);
+        lt.getStyleClass().add("sub-title");
+        Label lv = new Label(defaultValue);
+        lv.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        lv.setWrapText(true);
+        vb.getChildren().addAll(lt, lv);
+        return vb;
+    }
+
+    private void updateMetric(GridPane grid, int row, int col, String title, String value) {
+        VBox vb = (VBox) grid.getChildren().get(row * 2 + col);
+        Label lv = (Label) vb.getChildren().get(1);
+        lv.setText(value);
     }
 
     private double num(Map<String, Object> m, String k) {
@@ -162,6 +197,8 @@ public class AnalysisPanel extends VBox {
     }
 
     private static String f0(double v) { return String.format("%.0f", v); }
+    private static String f1(double v) { return String.format("%.1f", v); }
+    private static String f2(double v) { return String.format("%.2f", v); }
 
     private void showReportDialog(String title, String content) {
         Dialog<Void> dialog = new Dialog<>();
@@ -180,6 +217,4 @@ public class AnalysisPanel extends VBox {
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         dialog.show();
     }
-    private static String f1(double v) { return String.format("%.1f", v); }
-    private static String f2(double v) { return String.format("%.2f", v); }
 }

@@ -9,15 +9,17 @@ import javafx.collections.ObservableList;
 import java.util.*;
 import java.util.Map;
 
-/** 饮食管理面板 — 录入饮食记录、今日营养汇总(饼图)、食物库列表 */
+/** 饮食管理面板 — 录入饮食记录、今日营养汇总(饼图)、今日饮食记录 */
 public class DietPanel extends VBox {
     private final ComboBox<String> cbMealType = new ComboBox<>();
     private final ComboBox<String> cbFood = new ComboBox<>();
     private final TextField tfGrams = new TextField("100");
     private final Label lblSummary = new Label("今日汇总: 暂无数据");
-    private final TextArea taReport = new TextArea();
     private final PieChart pie = new PieChart();
     private final Map<String, String[]> foodData = new LinkedHashMap<>();
+    private final TableView<String[]> todayTable = new TableView<>();
+    private final ObservableList<String[]> todayData = FXCollections.observableArrayList();
+    private String reportContent = "";
 
     public DietPanel() {
         setSpacing(12);
@@ -48,16 +50,18 @@ public class DietPanel extends VBox {
         pie.setLabelsVisible(true);
         pie.setPrefSize(320, 240);
 
+        VBox left = new VBox(8, lblSummary, pie);
+        left.setAlignment(Pos.TOP_LEFT);
+
+        buildTodayTable();
+        VBox right = new VBox(8, new Label("今日饮食记录") {{ getStyleClass().add("card-title"); }}, todayTable);
+        VBox.setVgrow(todayTable, Priority.ALWAYS);
+        right.setAlignment(Pos.TOP_LEFT);
+
         HBox top = new HBox(14);
         top.setAlignment(Pos.CENTER_LEFT);
-        VBox left = new VBox(8); left.getChildren().addAll(lblSummary, pie);
-        taReport.setEditable(false);
-        taReport.setWrapText(true);
-        taReport.setPrefWidth(360);
-        taReport.setStyle("-fx-font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; -fx-font-size: 13px;");
-        ScrollPane rp = new ScrollPane(taReport); rp.setFitToWidth(true);
-        VBox right = new VBox(8); right.getChildren().addAll(new Label("每日营养报告"){{getStyleClass().add("card-title");}}, rp);
         top.getChildren().addAll(left, right);
+        HBox.setHgrow(right, Priority.ALWAYS);
 
         HBox summaryHeader = new HBox(10);
         summaryHeader.setAlignment(Pos.CENTER_LEFT);
@@ -67,18 +71,31 @@ public class DietPanel extends VBox {
         HBox.setHgrow(sp, Priority.ALWAYS);
         Button btnReport = new Button("查看每日营养报告");
         btnReport.getStyleClass().add("button-primary");
-        btnReport.setOnAction(e -> showReportDialog("每日营养报告", taReport.getText()));
+        btnReport.setOnAction(e -> showReportDialog("每日营养报告", reportContent));
         summaryHeader.getChildren().addAll(t2, sp, btnReport);
 
         VBox summaryCard = new VBox(10);
         summaryCard.getStyleClass().add("card");
         summaryCard.getChildren().addAll(summaryHeader, top);
+        VBox.setVgrow(summaryCard, Priority.ALWAYS);
 
         getChildren().addAll(inputCard, summaryCard);
+        VBox.setVgrow(summaryCard, Priority.ALWAYS);
 
         btnAdd.setOnAction(e -> addDietRecord());
         loadFoods();
         refreshSummary();
+    }
+
+    private void buildTodayTable() {
+        String[] cols = {"餐次", "食物", "热量", "蛋白质", "碳水", "脂肪"};
+        for (int i = 0; i < cols.length; i++) {
+            final int idx = i;
+            TableColumn<String[], String> c = new TableColumn<>(cols[i]);
+            c.setCellValueFactory(cb -> new ReadOnlyStringWrapper(cb.getValue()[idx]));
+            todayTable.getColumns().add(c);
+        }
+        todayTable.setItems(todayData);
     }
 
     private void loadFoods() {
@@ -138,6 +155,8 @@ public class DietPanel extends VBox {
                 new PieChart.Data("脂肪 " + f1(fat * 9), fat * 9));
         pie.setData(pieData);
 
+        todayData.setAll(DBUtil.getTodayDietRecords());
+
         StringBuilder sb = new StringBuilder();
         sb.append("═══ 每日营养报告 ═══\n\n");
         sb.append("热量:\n");
@@ -168,7 +187,7 @@ public class DietPanel extends VBox {
             sb.append(String.format("  碳水:   %.1f%%\n", carbs * 4 / totalNutrientCal * 100));
             sb.append(String.format("  脂肪:   %.1f%%\n", fat * 9 / totalNutrientCal * 100));
         }
-        taReport.setText(sb.toString());
+        reportContent = sb.toString();
     }
 
     private double num(Map<String, Object> m, String k) {

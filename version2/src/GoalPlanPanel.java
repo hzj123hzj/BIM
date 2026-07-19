@@ -15,10 +15,16 @@ import java.time.ZoneId;
 public class GoalPlanPanel extends VBox {
     private final ComboBox<String> cbGoalType = new ComboBox<>();
     private final TextField tfTargetWeight = new TextField("60.0");
-    private final TextArea taPlan = new TextArea();
     private final ProgressBar[] progressBars = new ProgressBar[4];
     private final TableView<String[]> exerciseTable = new TableView<>();
     private final ObservableList<String[]> exerciseData = FXCollections.observableArrayList();
+    private String planContent = "";
+
+    private final Label lblCurrent = new Label("--");
+    private final Label lblTarget = new Label("--");
+    private final Label lblDiff = new Label("--");
+    private final Label lblDays = new Label("--");
+    private final Label lblPredict = new Label("--");
 
     public GoalPlanPanel() {
         setSpacing(12);
@@ -41,7 +47,7 @@ public class GoalPlanPanel extends VBox {
         btnRefresh.getStyleClass().add("button-ghost");
         Button btnReport = new Button("查看目标计划");
         btnReport.getStyleClass().add("button-primary");
-        btnReport.setOnAction(e -> showReportDialog("目标计划详情", taPlan.getText()));
+        btnReport.setOnAction(e -> showReportDialog("目标计划详情", planContent));
         ctrl.getChildren().addAll(lblG, cbGoalType, lblW, tfTargetWeight, btnRecommend, btnSet, btnRefresh, btnReport);
 
         VBox ctrlCard = new VBox(10);
@@ -67,34 +73,48 @@ public class GoalPlanPanel extends VBox {
         t2.getStyleClass().add("card-title");
         progressCard.getChildren().addAll(t2, progressGrid);
 
-        taPlan.setEditable(false);
-        taPlan.setWrapText(true);
-        taPlan.setStyle("-fx-font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; -fx-font-size: 13px;");
-        ScrollPane planScroll = new ScrollPane(taPlan);
-        planScroll.setFitToWidth(true);
-        VBox planCard = new VBox(10);
-        planCard.getStyleClass().add("card");
-        planCard.setPrefHeight(300);
-        Label t3 = new Label("目标计划详情");
+        VBox overviewCard = new VBox(10);
+        overviewCard.getStyleClass().add("card");
+        Label t3 = new Label("目标概览");
         t3.getStyleClass().add("card-title");
-        planCard.getChildren().addAll(t3, planScroll);
+        GridPane overviewGrid = new GridPane();
+        overviewGrid.setHgap(24);
+        overviewGrid.setVgap(14);
+        overviewGrid.setPadding(new Insets(4));
+        overviewGrid.addRow(0, goalBox("当前体重", lblCurrent, Theme.hex(Theme.PRIMARY)),
+                                 goalBox("目标体重", lblTarget, Theme.hex(Theme.ACCENT)));
+        overviewGrid.addRow(1, goalBox("距离目标", lblDiff, Theme.hex(Theme.DANGER)),
+                                 goalBox("已进行天数", lblDays, Theme.hex(Theme.SUCCESS)));
+        overviewGrid.addRow(2, goalBox("预测达成", lblPredict, "#8050A0"), new Label(""));
+        overviewCard.getChildren().addAll(t3, overviewGrid);
 
         buildExerciseTable();
         ScrollPane exScroll = new ScrollPane(exerciseTable);
         exScroll.setFitToWidth(true);
         VBox exCard = new VBox(10);
         exCard.getStyleClass().add("card");
+        VBox.setVgrow(exCard, Priority.ALWAYS);
         Label t4 = new Label("运动记录");
         t4.getStyleClass().add("card-title");
         exCard.getChildren().addAll(t4, exScroll);
 
-        getChildren().addAll(ctrlCard, progressCard, planCard, exCard);
+        getChildren().addAll(ctrlCard, progressCard, overviewCard, exCard);
+        VBox.setVgrow(exCard, Priority.ALWAYS);
 
         btnRecommend.setOnAction(e -> recommendTarget());
         btnSet.setOnAction(e -> setGoal());
         btnRefresh.setOnAction(e -> { refresh(); refreshExercise(); });
         refresh();
         refreshExercise();
+    }
+
+    private VBox goalBox(String title, Label valueLabel, String color) {
+        VBox vb = new VBox(4);
+        Label lt = new Label(title);
+        lt.getStyleClass().add("sub-title");
+        valueLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        vb.getChildren().addAll(lt, valueLabel);
+        return vb;
     }
 
     private void buildExerciseTable() {
@@ -142,18 +162,26 @@ public class GoalPlanPanel extends VBox {
         Map<String, Object> goal = DBUtil.getGoal();
 
         if (latest == null) {
-            taPlan.setText("暂无健康记录, 请先录入数据");
+            planContent = "暂无健康记录, 请先录入数据";
+            lblCurrent.setText("--");
+            lblTarget.setText("--");
+            lblDiff.setText("--");
+            lblDays.setText("--");
+            lblPredict.setText("--");
             for (ProgressBar pb : progressBars) pb.setProgress(0);
             return;
         }
 
         double currentWeight = num(latest, "weight");
-        StringBuilder sb = new StringBuilder();
+        lblCurrent.setText(f1(currentWeight) + " kg");
 
         if (goal == null) {
-            sb.append("尚未设置目标, 请选择目标类型和目标体重后点击「设置目标」\n\n");
-            sb.append("推荐目标体重: ").append(f1(HealthCalculator.calcIdealWeight(DBUtil.currentHeight))).append(" kg\n");
-            taPlan.setText(sb.toString());
+            planContent = "尚未设置目标, 请选择目标类型和目标体重后点击「设置目标」\n\n推荐目标体重: " +
+                    f1(HealthCalculator.calcIdealWeight(DBUtil.currentHeight)) + " kg";
+            lblTarget.setText("未设置");
+            lblDiff.setText("--");
+            lblDays.setText("--");
+            lblPredict.setText("请先设置目标");
             for (ProgressBar pb : progressBars) pb.setProgress(0);
             return;
         }
@@ -167,6 +195,11 @@ public class GoalPlanPanel extends VBox {
         int actualStage = (int) Math.min(4, Math.max(1, daysSinceStart / 7 + 1));
         DBUtil.updateGoalStage(actualStage);
 
+        lblTarget.setText(f1(targetWeight) + " kg");
+        lblDiff.setText(f1(Math.abs(currentWeight - targetWeight)) + " kg");
+        lblDays.setText(daysSinceStart + " 天");
+
+        StringBuilder sb = new StringBuilder();
         sb.append("═══════════════════════════════════════════\n");
         sb.append("              目标计划\n");
         sb.append("═══════════════════════════════════════════\n\n");
@@ -236,20 +269,24 @@ public class GoalPlanPanel extends VBox {
         int days = HealthCalculator.predictGoalDays(currentWeight, targetWeight, dailyDeficit, goalType);
         if (days == -2) {
             sb.append("  ⚠️ 当前进度过慢, 建议调整计划\n");
+            lblPredict.setText("进度过慢，建议调整");
         } else if (days == -1) {
             sb.append("  ⚠️ 当前饮食超过消耗, 无法达成目标\n");
+            lblPredict.setText("当前无法达成");
         } else if (days == 0) {
             sb.append("  ✅ 已达成目标!\n");
+            lblPredict.setText("已达成目标");
         } else {
             Calendar cal = Calendar.getInstance();
             cal.add(Calendar.DAY_OF_MONTH, days);
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
             sb.append("  预测达成日期: ").append(sdf.format(cal.getTime())).append(" (约 ").append(days).append(" 天)\n");
             sb.append("  每日热量差: ").append(f0(dailyDeficit)).append(" kcal\n");
+            lblPredict.setText("约 " + days + " 天后 (" + sdf.format(cal.getTime()) + ")");
         }
         sb.append("\n═══════════════════════════════════════════\n");
 
-        taPlan.setText(sb.toString());
+        planContent = sb.toString();
     }
 
     private void showReportDialog(String title, String content) {
