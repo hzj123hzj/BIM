@@ -1,6 +1,7 @@
 import javafx.geometry.*;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.*;
 
 import java.util.List;
@@ -34,10 +35,27 @@ public class SideNav {
         // 内容区：可滚动，宽度贴合视口，高度跟随内容（超出滚动）
         content.setFitToWidth(true);
         content.setFitToHeight(false);
-        content.setPannable(true);
+        content.setPannable(false); // 关闭拖拽平移，恢复标准鼠标滚轮滚动（避免灵敏度忽快忽慢）
         content.setPadding(new Insets(10));
         content.setStyle("-fx-background-color: #F0F6F9; -fx-border-width: 0;");
         content.getStyleClass().add("content-scroll");
+        // 标准化鼠标滚轮滚动：每次固定步长，避免灵敏度随鼠标硬件 delta 跳变
+        content.addEventFilter(ScrollEvent.SCROLL, e -> {
+            if (e.getDeltaY() != 0) {
+                double viewportH = content.getViewportBounds().getHeight();
+                Node c = content.getContent();
+                double contentH = (c != null) ? c.getBoundsInLocal().getHeight() : 0;
+                double scrollable = contentH - viewportH;
+                if (scrollable > 0 && viewportH > 0) {
+                    double sign = Math.signum(e.getDeltaY());
+                    double step = 50.0; // 每次滚轮滚动 50px，舒适一致
+                    double frac = sign * step / scrollable;
+                    double newV = content.getVvalue() - frac;
+                    content.setVvalue(Math.max(content.getVmin(), Math.min(content.getVmax(), newV)));
+                    e.consume();
+                }
+            }
+        });
 
         sidebar.getStyleClass().add("sidebar");
 
