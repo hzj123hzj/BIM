@@ -1,7 +1,9 @@
 import javafx.geometry.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.geometry.Side;
+
+import java.util.Arrays;
+import java.util.List;
 
 public class MainView {
     private BorderPane root = new BorderPane();
@@ -29,15 +31,8 @@ public class MainView {
             App.showLogin();
         });
 
-        // 左侧纵向 Tab
-        TabPane tabs = new TabPane();
-        tabs.setSide(Side.LEFT);
-        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        tabs.setTabMinHeight(110);
-        tabs.setTabMaxHeight(130);
-        tabs.setTabMinWidth(36);
-        tabs.setTabMaxWidth(42);
-        tabs.getTabs().addAll(
+        // 左侧导航 + 内容区（替代 TabPane，规避 JavaFX 左侧 Tab 文字旋转缺陷）
+        List<Tab> tabs = Arrays.asList(
                 tab("数据大屏", new UserDashboardPanel()),
                 tab("数据录入", new DataInputPanel()),
                 tab("历史趋势", new HistoryTrendPanel()),
@@ -51,18 +46,13 @@ public class MainView {
                 tab("成就徽章", new AchievementPanel()),
                 tab("健康资讯", new HealthArticlePanel())
         );
-        tabs.setPadding(new Insets(8));
-        root.setCenter(tabs);
-        root.setStyle("-fx-background-color: #F0F6F9;");
+        SideNav nav = new SideNav("健康管理系统", tabs);
+        root.setLeft(nav.getSidebar());
+        root.setCenter(nav.getContent());
     }
 
     private static Tab tab(String name, javafx.scene.Parent content) {
-        Tab t = new Tab(name, content);
-        return t;
-    }
-
-    private void alert(String msg) {
-        new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK).showAndWait();
+        return new Tab(name, content);
     }
 
     public BorderPane getRoot() {

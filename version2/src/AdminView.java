@@ -1,12 +1,13 @@
-import javafx.geometry.Side;
-
 import javafx.geometry.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * 管理员后台主视图（JavaFX 8 重写 version1 AdminMainFrame）
- * BorderPane 顶部栏 + 中间 TabPane（11 个 tab，TabClosingPolicy.UNAVAILABLE）。
+ * BorderPane 顶部栏 + 左侧 SideNav 导航（11 个面板，与用户端形式统一）。
  */
 public class AdminView {
     private BorderPane root = new BorderPane();
@@ -35,30 +36,27 @@ public class AdminView {
             App.showLogin();
         });
 
-        // 左侧纵向 Tab（与用户端一致）
-        TabPane tp = new TabPane();
-        tp.setSide(Side.LEFT);
-        tp.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        tp.setTabMinHeight(110);
-        tp.setTabMaxHeight(130);
-        tp.setTabMinWidth(36);
-        tp.setTabMaxWidth(42);
-        tp.getTabs().addAll(
-                new Tab("用户管理", new UserManagePanel()),
-                new Tab("食物数据库", new FoodManagePanel()),
-                new Tab("运动库", new ExerciseManagePanel()),
-                new Tab("健康文章", new ArticleManagePanel()),
-                new Tab("AI问答记录", new AIChatRecordPanel()),
-                new Tab("AI饮食记录", new AIDietRecordPanel()),
-                new Tab("AI菜谱记录", new AICookbookRecordPanel()),
-                new Tab("Prompt模板", new AITemplatePanel()),
-                new Tab("API配置", new ApiConfigPanel()),
-                new Tab("AI使用统计", new AIUsagePanel()),
-                new Tab("数据监控", new DataMonitorPanel())
+        // 左侧导航 + 内容区（替代 TabPane，规避 JavaFX 左侧 Tab 文字旋转缺陷）
+        List<Tab> tabs = Arrays.asList(
+                tab("用户管理", new UserManagePanel()),
+                tab("食物数据库", new FoodManagePanel()),
+                tab("运动库", new ExerciseManagePanel()),
+                tab("健康文章", new ArticleManagePanel()),
+                tab("AI问答记录", new AIChatRecordPanel()),
+                tab("AI饮食记录", new AIDietRecordPanel()),
+                tab("AI菜谱记录", new AICookbookRecordPanel()),
+                tab("Prompt模板", new AITemplatePanel()),
+                tab("API配置", new ApiConfigPanel()),
+                tab("AI使用统计", new AIUsagePanel()),
+                tab("数据监控", new DataMonitorPanel())
         );
-        tp.setPadding(new Insets(10));
-        root.setCenter(tp);
-        root.setStyle("-fx-background-color: #F0F6F9;");
+        SideNav nav = new SideNav("管理后台", tabs);
+        root.setLeft(nav.getSidebar());
+        root.setCenter(nav.getContent());
+    }
+
+    private static Tab tab(String name, javafx.scene.Parent content) {
+        return new Tab(name, content);
     }
 
     public BorderPane getRoot() {

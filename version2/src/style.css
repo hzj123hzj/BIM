@@ -101,31 +101,49 @@
     -fx-font-weight: bold;
 }
 
-/* ===== Tab 面板 ===== */
-.tab-pane .tab-header-area .tab {
-    -fx-background-radius: 8 8 0 0;
-    -fx-padding: 8 14;
+/* ===== 左侧导航栏 SideNav ===== */
+.sidebar {
+    -fx-background-color: #203A45;
+    -fx-pref-width: 198;
+    -fx-min-width: 176;
+    -fx-max-width: 230;
+    -fx-padding: 0 0 12 0;
 }
-.tab-pane .tab-header-background { -fx-background-color: #E1F0F5; }
-.tab:selected { -fx-background-color: #2D8CA0; }
-.tab:selected .tab-label { -fx-text-fill: white; -fx-font-weight: bold; }
-
-/* 左侧纵向 Tab：文字横向显示 */
-.tab-pane:left {
-    -fx-tab-min-width: 36;
-    -fx-tab-max-width: 42;
-    -fx-tab-min-height: 110;
-    -fx-tab-max-height: 130;
+.sidebar-brand {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-padding: 18 16 16 18;
+    -fx-border-color: transparent transparent rgba(255,255,255,0.10) transparent;
+    -fx-border-width: 0 0 1 0;
 }
-.tab-pane:left .tab-header-area .tab {
-    -fx-background-radius: 8 0 0 8;
-    -fx-padding: 0 6;
+.sidebar-scroll {
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
 }
-.tab-pane:left .tab-header-area .tab .tab-label {
-    -fx-text-alignment: center;
-    -fx-alignment: center;
-    -fx-wrap-text: false;
+.sidebar-scroll .viewport { -fx-background-color: transparent; }
+.sidebar-scroll .scroll-bar { -fx-background-color: transparent; }
+.sidebar-scroll .scroll-bar .thumb { -fx-background-color: rgba(255,255,255,0.25); }
+.sidebar-nav { -fx-padding: 8 10; }
+.sidebar-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #C7D6DD;
     -fx-font-size: 13px;
+    -fx-alignment: CENTER-LEFT;
+    -fx-padding: 12 16;
+    -fx-background-radius: 8;
+    -fx-cursor: hand;
+    -fx-border-width: 0;
+    -fx-wrap-text: false;
+}
+.sidebar-btn:hover {
+    -fx-background-color: #2D8CA0;
+    -fx-text-fill: #FFFFFF;
+}
+.sidebar-btn-active {
+    -fx-background-color: #2D8CA0;
+    -fx-text-fill: #FFFFFF;
+    -fx-font-weight: bold;
 }
 /* ===== 标题文字 ===== */
 .page-title { -fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #28323C; }
