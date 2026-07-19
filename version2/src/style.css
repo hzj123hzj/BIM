@@ -1,0 +1,119 @@
+/* JavaFX 8 主题样式 — BMI 体质评估与预测系统 (version2) */
+.root {
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    -fx-base: #f0f6f9;
+}
+
+/* ===== 布局背景 ===== */
+.bg-gradient {
+    -fx-background-color: linear-gradient(to bottom right, #2D8CA0, #1E6478);
+}
+
+/* ===== 按钮 ===== */
+.button-primary {
+    -fx-background-color: #2D8CA0;
+    -fx-text-fill: white;
+    -fx-background-radius: 8;
+    -fx-padding: 8 18;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+.button-primary:hover { -fx-background-color: #1E6478; }
+.button-primary:pressed { -fx-background-color: #154B5A; }
+
+.button-accent {
+    -fx-background-color: #FF9646;
+    -fx-text-fill: white;
+    -fx-background-radius: 8;
+    -fx-padding: 8 18;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+.button-accent:hover { -fx-background-color: #E07B2E; }
+.button-accent:pressed { -fx-background-color: #C76A26; }
+
+.button-ghost {
+    -fx-background-color: transparent;
+    -fx-text-fill: #2D8CA0;
+    -fx-border-color: #2D8CA0;
+    -fx-border-radius: 8;
+    -fx-padding: 7 16;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+}
+.button-ghost:hover { -fx-background-color: #E1F0F5; }
+
+/* ===== 卡片 ===== */
+.card {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12;
+    -fx-effect: dropshadow(three-pass-box, rgba(30,60,80,0.10), 10, 0, 0, 4);
+    -fx-padding: 16;
+}
+.card-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1E6478;
+}
+
+/* ===== 输入框 ===== */
+.text-field, .password-field, .combo-box, .text-area {
+    -fx-background-radius: 8;
+    -fx-border-color: #D2DCE4;
+    -fx-border-radius: 8;
+    -fx-padding: 6 8;
+    -fx-font-size: 13px;
+    -fx-background-color: #ffffff;
+}
+.text-field:focused, .password-field:focused, .combo-box:focused, .text-area:focused {
+    -fx-border-color: #2D8CA0;
+    -fx-border-width: 2;
+}
+.text-area { -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; }
+
+/* ===== 表格 ===== */
+.table-view {
+    -fx-background-radius: 8;
+    -fx-border-color: #D2DCE4;
+    -fx-border-radius: 8;
+}
+.table-view .column-header-background {
+    -fx-background-color: #2D8CA0;
+    -fx-background-radius: 8 8 0 0;
+}
+.table-view .column-header .label {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+}
+.table-view .table-row-cell:selected { -fx-background-color: #CDE8F0; }
+.table-view .table-row-cell:odd { -fx-background-color: #F7FBFC; }
+
+/* ===== Tab 面板 ===== */
+.tab-pane .tab-header-area .tab {
+    -fx-background-radius: 8 8 0 0;
+    -fx-padding: 8 14;
+}
+.tab-pane .tab-header-background { -fx-background-color: #E1F0F5; }
+.tab:selected { -fx-background-color: #2D8CA0; }
+.tab:selected .tab-label { -fx-text-fill: white; -fx-font-weight: bold; }
+
+/* ===== 标题文字 ===== */
+.page-title { -fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #28323C; }
+.sub-title { -fx-font-size: 14px; -fx-text-fill: #646E78; }
+.hint { -fx-font-size: 12px; -fx-text-fill: #646E78; }
+
+/* ===== 未读角标 ===== */
+.badge {
+    -fx-background-color: #E65A5A;
+    -fx-text-fill: white;
+    -fx-background-radius: 9;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-alignment: center;
+    -fx-min-width: 18;
+    -fx-min-height: 18;
+    -fx-padding: 0 5;
+}

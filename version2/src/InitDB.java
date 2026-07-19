@@ -183,6 +183,10 @@ public class InitDB {
             execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_er_username_date ON exercise_records(username, record_date)");
             System.out.println("  [OK] 索引创建");
 
+            // 管理员模块扩展表
+            System.out.println("\n正在初始化管理员模块...");
+            initAdminTables(conn);
+
             // 检查 foods 表是否已有数据
             boolean hasFoodData = false;
             try (Statement stmt = conn.createStatement();
@@ -214,6 +218,258 @@ public class InitDB {
     private static void execUpdate(Connection conn, String sql) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
             stmt.executeUpdate(sql);
+        }
+    }
+
+    private static void initAdminTables(Connection conn) throws SQLException {
+        // 用户表扩展字段
+        execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status VARCHAR(20) DEFAULT '启用'");
+        execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS expiry_date DATE");
+        execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP");
+        execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted BOOLEAN DEFAULT FALSE");
+        execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS checkin_days INT DEFAULT 0");
+        execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS device_type VARCHAR(50)");
+        execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_users_status ON users(account_status)");
+        execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_users_deleted ON users(deleted)");
+        System.out.println("  [OK] 用户表扩展字段");
+
+        // 管理员账号表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS admins (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  username VARCHAR(50) UNIQUE NOT NULL," +
+            "  password VARCHAR(255) NOT NULL," +
+            "  salt VARCHAR(64) NOT NULL," +
+            "  role VARCHAR(20) DEFAULT 'admin'," +
+            "  status VARCHAR(20) DEFAULT '启用'," +
+            "  expiry_date DATE," +
+            "  created_at TIMESTAMP DEFAULT NOW()," +
+            "  last_login TIMESTAMP" +
+            ")");
+        System.out.println("  [OK] admins 表");
+
+        // 系统配置表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS system_config (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  config_key VARCHAR(100) UNIQUE NOT NULL," +
+            "  config_value TEXT," +
+            "  description VARCHAR(255)," +
+            "  updated_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        System.out.println("  [OK] system_config 表");
+
+        // 系统日志表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS system_logs (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  log_type VARCHAR(50)," +
+            "  operator VARCHAR(50)," +
+            "  action VARCHAR(255)," +
+            "  detail TEXT," +
+            "  created_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_system_logs_time ON system_logs(created_at)");
+        System.out.println("  [OK] system_logs 表");
+
+        // 运动库表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS exercise_library (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  exercise_name VARCHAR(50) UNIQUE NOT NULL," +
+            "  exercise_type VARCHAR(20)," +
+            "  calories_per_hour INT," +
+            "  intensity_level VARCHAR(10)," +
+            "  description TEXT" +
+            ")");
+        System.out.println("  [OK] exercise_library 表");
+
+        // 健康文章表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS health_articles (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  title VARCHAR(200) NOT NULL," +
+            "  content TEXT," +
+            "  category VARCHAR(50)," +
+            "  published_at TIMESTAMP DEFAULT NOW()," +
+            "  status VARCHAR(20) DEFAULT '已发布'" +
+            ")");
+        System.out.println("  [OK] health_articles 表");
+
+        // 消息模板表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS message_templates (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  template_name VARCHAR(100) NOT NULL," +
+            "  template_content TEXT NOT NULL," +
+            "  type VARCHAR(20)," +
+            "  variables VARCHAR(255)" +
+            ")");
+        System.out.println("  [OK] message_templates 表");
+
+        // 通知消息表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS notifications (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  sender VARCHAR(50)," +
+            "  receiver VARCHAR(50)," +
+            "  title VARCHAR(200)," +
+            "  content TEXT," +
+            "  type VARCHAR(20)," +
+            "  status VARCHAR(20) DEFAULT '未读'," +
+            "  created_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_notifications_receiver ON notifications(receiver)");
+        System.out.println("  [OK] notifications 表");
+
+        // AI 配置表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS ai_api_config (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  provider VARCHAR(50)," +
+            "  api_key VARCHAR(255)," +
+            "  model_name VARCHAR(100)," +
+            "  endpoint VARCHAR(255)," +
+            "  enabled BOOLEAN DEFAULT TRUE," +
+            "  call_count INT DEFAULT 0," +
+            "  cost_estimate DECIMAL(10,2) DEFAULT 0.00," +
+            "  updated_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        System.out.println("  [OK] ai_api_config 表");
+
+        // AI 提示词模板表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS ai_templates (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  template_name VARCHAR(100) NOT NULL," +
+            "  prompt_text TEXT NOT NULL," +
+            "  template_type VARCHAR(50)," +
+            "  status VARCHAR(20) DEFAULT '有效'," +
+            "  updated_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        System.out.println("  [OK] ai_templates 表");
+
+        // AI 问答记录表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS ai_chat_records (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  username VARCHAR(50) REFERENCES users(username)," +
+            "  question TEXT," +
+            "  answer TEXT," +
+            "  status VARCHAR(20) DEFAULT '有效'," +
+            "  notified BOOLEAN DEFAULT FALSE," +
+            "  created_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        execUpdate(conn, "ALTER TABLE ai_chat_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'");
+        execUpdate(conn, "ALTER TABLE ai_chat_records ADD COLUMN IF NOT EXISTS notified BOOLEAN DEFAULT FALSE");
+        execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_ai_chat_user ON ai_chat_records(username)");
+        System.out.println("  [OK] ai_chat_records 表");
+
+        // AI 饮食推荐记录表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS ai_diet_records (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  username VARCHAR(50) REFERENCES users(username)," +
+            "  query TEXT," +
+            "  result TEXT," +
+            "  status VARCHAR(20) DEFAULT '有效'," +
+            "  notified BOOLEAN DEFAULT FALSE," +
+            "  created_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        execUpdate(conn, "ALTER TABLE ai_diet_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'");
+        execUpdate(conn, "ALTER TABLE ai_diet_records ADD COLUMN IF NOT EXISTS notified BOOLEAN DEFAULT FALSE");
+        System.out.println("  [OK] ai_diet_records 表");
+
+        // AI 菜谱生成记录表
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS ai_cookbook_records (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  username VARCHAR(50) REFERENCES users(username)," +
+            "  ingredients TEXT," +
+            "  flavor VARCHAR(50)," +
+            "  meal VARCHAR(20)," +
+            "  people INT," +
+            "  result TEXT," +
+            "  status VARCHAR(20) DEFAULT '有效'," +
+            "  notified BOOLEAN DEFAULT FALSE," +
+            "  created_at TIMESTAMP DEFAULT NOW()" +
+            ")");
+        execUpdate(conn, "ALTER TABLE ai_cookbook_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '有效'");
+        execUpdate(conn, "ALTER TABLE ai_cookbook_records ADD COLUMN IF NOT EXISTS notified BOOLEAN DEFAULT FALSE");
+        System.out.println("  [OK] ai_cookbook_records 表");
+
+        // 插入默认系统配置
+        insertConfigIfNotExists(conn, "weight_change_threshold", "5.0", "7天体重变化阈值(kg)");
+        insertConfigIfNotExists(conn, "body_fat_rise_days", "30", "体脂连续上升天数阈值");
+        insertConfigIfNotExists(conn, "no_checkin_days", "7", "长期未打卡天数阈值");
+        insertConfigIfNotExists(conn, "bmi_low", "18.5", "BMI 正常下限");
+        insertConfigIfNotExists(conn, "bmi_high", "24.9", "BMI 正常上限");
+        insertConfigIfNotExists(conn, "bmr_formula", "avg", "BMR 计算公式：mifflin/harris/avg");
+        insertConfigIfNotExists(conn, "weight_loss_speed", "0.5", "减脂速度 kg/周");
+        insertConfigIfNotExists(conn, "muscle_gain_speed", "0.3", "增肌速度 kg/周");
+        insertConfigIfNotExists(conn, "checkin_reminder_time", "20:00", "打卡提醒时间");
+        insertConfigIfNotExists(conn, "checkin_reward_rule", "连续7天打卡奖励1枚徽章", "连续打卡奖励规则");
+        System.out.println("  [OK] 默认系统配置");
+
+        // 插入默认运动库
+        insertExerciseLibIfNotExists(conn, "跑步", "有氧", 600, "中", "户外或跑步机跑步");
+        insertExerciseLibIfNotExists(conn, "游泳", "有氧", 700, "高", "全身性有氧运动");
+        insertExerciseLibIfNotExists(conn, "力量训练", "力量", 400, "高", "器械或自重训练");
+        insertExerciseLibIfNotExists(conn, "骑行", "有氧", 500, "中", "户外或动感单车");
+        insertExerciseLibIfNotExists(conn, "瑜伽", "有氧", 200, "低", "柔韧性及放松训练");
+        insertExerciseLibIfNotExists(conn, "跳绳", "有氧", 700, "高", "高强度间歇训练");
+        insertExerciseLibIfNotExists(conn, "快走", "有氧", 300, "低", "低强度有氧");
+        insertExerciseLibIfNotExists(conn, "球类", "有氧", 500, "中", "篮球、足球等");
+        System.out.println("  [OK] 默认运动库");
+
+        // 插入默认消息模板
+        insertTemplateIfNotExists(conn, "系统通知", "您好 {username}，系统将于 {date} 进行维护，请提前保存数据。", "系统通知", "{username},{date}");
+        insertTemplateIfNotExists(conn, "健康提醒", "您好 {username}，您已 {days} 天未打卡，记得保持健康记录！", "健康提醒", "{username},{days}");
+        insertTemplateIfNotExists(conn, "活动推送", "您好 {username}，本周有健康挑战活动，欢迎参加！", "活动推送", "{username}");
+        System.out.println("  [OK] 默认消息模板");
+
+        // 插入默认 AI 模板
+        insertAiTemplateIfNotExists(conn, "健康建议模板", "根据用户健康数据生成个性化健康建议...", "建议");
+        insertAiTemplateIfNotExists(conn, "周报模板", "根据本周数据生成健康周报...", "周报");
+        insertAiTemplateIfNotExists(conn, "饮食推荐模板", "根据用户目标推荐今日饮食...", "饮食推荐");
+        System.out.println("  [OK] 默认 AI 模板");
+    }
+
+    private static void insertConfigIfNotExists(Connection conn, String key, String value, String desc) throws SQLException {
+        String sql = "INSERT INTO system_config (config_key, config_value, description) VALUES (?, ?, ?) " +
+                     "ON CONFLICT (config_key) DO NOTHING";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, key);
+            ps.setString(2, value);
+            ps.setString(3, desc);
+            ps.executeUpdate();
+        }
+    }
+
+    private static void insertExerciseLibIfNotExists(Connection conn, String name, String type, int cal, String intensity, String desc) throws SQLException {
+        String sql = "INSERT INTO exercise_library (exercise_name, exercise_type, calories_per_hour, intensity_level, description) " +
+                     "VALUES (?, ?, ?, ?, ?) ON CONFLICT (exercise_name) DO NOTHING";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, name); ps.setString(2, type); ps.setInt(3, cal); ps.setString(4, intensity); ps.setString(5, desc);
+            ps.executeUpdate();
+        }
+    }
+
+    private static void insertTemplateIfNotExists(Connection conn, String name, String content, String type, String vars) throws SQLException {
+        String sql = "INSERT INTO message_templates (template_name, template_content, type, variables) " +
+                     "VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, name); ps.setString(2, content); ps.setString(3, type); ps.setString(4, vars);
+            ps.executeUpdate();
+        }
+    }
+
+    private static void insertAiTemplateIfNotExists(Connection conn, String name, String content, String type) throws SQLException {
+        String sql = "INSERT INTO ai_templates (template_name, template_type, prompt_text) " +
+                     "VALUES (?, ?, ?) ON CONFLICT DO NOTHING";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, name); ps.setString(2, type); ps.setString(3, content);
+            ps.executeUpdate();
         }
     }
 
