@@ -9,10 +9,13 @@ import javafx.collections.ObservableList;
 import java.util.Map;
 
 /**
- * 数据录入面板 — 改为 Accordion 折叠式布局。
+ * 数据录入面板 — 独立 TitledPane 折叠式布局（可同时展开多个）。
  *
- * 原 4 张卡（健康录入/运动录入/最近记录/运动记录表）全摊一屏，挤且杂乱。
- * 现收为 4 个 TitledPane 折叠条，点哪个展开哪个，默认只展开「今日健康数据录入」。
+ * 原 4 张卡全摊一屏，挤且杂乱；后改为 Accordion 互斥展开，但「运动录入」与
+ * 「今日运动记录」被「最近健康记录」隔开、且表压在最底，录完运动看不到结果。
+ *
+ * 现改为 4 个独立 TitledPane 顺序为：健康录入 → 运动录入 → 今日运动记录
+ * → 最近健康记录，运动录入与结果相邻；保存运动后自动展开记录表，数据即时可见。
  * 字段排成两列减少展开高度。
  */
 public class DataInputPanel extends VBox {
@@ -32,28 +35,24 @@ public class DataInputPanel extends VBox {
     private final TableView<String[]> exerciseTable = new TableView<>();
     private final ObservableList<String[]> exerciseData = FXCollections.observableArrayList();
 
+    // 折叠面板提为字段，便于保存运动后自动展开记录表
+    private final TitledPane tpHealth = new TitledPane("今日健康数据录入", buildHealthContent());
+    private final TitledPane tpExercise = new TitledPane("今日运动录入", buildExerciseContent());
+    private final TitledPane tpTodayEx = new TitledPane("今日运动记录", buildTodayExContent());
+    private final TitledPane tpLatest = new TitledPane("最近一次健康记录", buildLatestContent());
+
     public DataInputPanel() {
         setSpacing(14);
         setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
-        TitledPane tpHealth = new TitledPane("今日健康数据录入", buildHealthContent());
-        TitledPane tpExercise = new TitledPane("今日运动录入", buildExerciseContent());
-        TitledPane tpLatest = new TitledPane("最近一次健康记录", buildLatestContent());
-        TitledPane tpTodayEx = new TitledPane("今日运动记录", buildTodayExContent());
-
-        // 默认只展开健康录入，其余收起；Accordion 互斥展开，点哪个显示哪个
+        // 运动录入、今日运动记录相邻；默认展开健康录入与运动录入
         tpHealth.setExpanded(true);
-        tpExercise.setExpanded(false);
-        tpLatest.setExpanded(false);
+        tpExercise.setExpanded(true);
         tpTodayEx.setExpanded(false);
+        tpLatest.setExpanded(false);
 
-        Accordion accordion = new Accordion();
-        accordion.getPanes().addAll(tpHealth, tpExercise, tpLatest, tpTodayEx);
-        accordion.setExpandedPane(tpHealth);
-
-        getChildren().add(accordion);
-        VBox.setVgrow(accordion, Priority.ALWAYS);
+        getChildren().addAll(tpHealth, tpExercise, tpTodayEx, tpLatest);
 
         refreshLatest();
         refreshExercise();
@@ -132,7 +131,6 @@ public class DataInputPanel extends VBox {
     private VBox buildTodayExContent() {
         VBox box = new VBox(8);
         buildExerciseTable();
-        VBox.setVgrow(exerciseTable, Priority.ALWAYS);
         box.getChildren().add(exerciseTable);
         box.setPadding(new Insets(4, 8, 10, 8));
         return box;
@@ -147,6 +145,9 @@ public class DataInputPanel extends VBox {
             exerciseTable.getColumns().add(c);
         }
         exerciseTable.setItems(exerciseData);
+        // 限制展开高度，超出滚动，避免长表把页面撑爆
+        exerciseTable.setPrefHeight(180);
+        exerciseTable.setMaxHeight(240);
     }
 
     private void refreshExercise() {
@@ -187,6 +188,8 @@ public class DataInputPanel extends VBox {
             if (DBUtil.saveExerciseRecord(type, duration, intensity, calories)) {
                 alert("运动记录保存成功");
                 refreshExercise();
+                // 保存后自动展开记录表，刚录入的数据即时可见
+                tpTodayEx.setExpanded(true);
                 clearExercise();
             } else {
                 alert("保存失败");
