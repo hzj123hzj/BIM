@@ -130,18 +130,21 @@
 
 /* ===== 左侧导航栏 SideNav ===== */
 .sidebar {
-    -fx-background-color: linear-gradient(to bottom, #213C47, #18313A);
+    -fx-background-color: #FFFFFF;
     -fx-pref-width: 198;
     -fx-min-width: 176;
     -fx-max-width: 230;
     -fx-padding: 0 0 12 0;
+    -fx-border-color: #E2EBF0;
+    -fx-border-width: 0 1 0 0;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.08), 12, 0.1, 2, 0);
 }
 .sidebar-brand {
-    -fx-text-fill: #FFFFFF;
+    -fx-text-fill: #1E6478;
     -fx-font-size: 16px;
     -fx-font-weight: bold;
     -fx-padding: 18 16 16 18;
-    -fx-border-color: transparent transparent rgba(255,255,255,0.10) transparent;
+    -fx-border-color: transparent transparent #EDF2F5 transparent;
     -fx-border-width: 0 0 1 0;
 }
 .sidebar-scroll {
@@ -150,7 +153,7 @@
 }
 .sidebar-scroll .viewport { -fx-background-color: transparent; }
 .sidebar-scroll .scroll-bar { -fx-background-color: transparent; }
-.sidebar-scroll .scroll-bar .thumb { -fx-background-color: rgba(255,255,255,0.25); }
+.sidebar-scroll .scroll-bar .thumb { -fx-background-color: #B7C6CE; }
 .sidebar-nav { -fx-padding: 8 10; }
 .content-scroll {
     /* 多层柔和渐变，替代纯色平涂 */
@@ -163,7 +166,7 @@
 
 .sidebar-btn {
     -fx-background-color: transparent;
-    -fx-text-fill: #C7D6DD;
+    -fx-text-fill: #41525E;
     -fx-font-size: 13px;
     -fx-alignment: CENTER-LEFT;
     -fx-padding: 12 16;
@@ -173,8 +176,8 @@
     -fx-wrap-text: false;
 }
 .sidebar-btn:hover {
-    -fx-background-color: #2D8CA0;
-    -fx-text-fill: #FFFFFF;
+    -fx-background-color: #EAF3F7;
+    -fx-text-fill: #1E6478;
 }
 .sidebar-btn-active {
     -fx-background-color: #2D8CA0;
@@ -185,7 +188,7 @@
     -fx-border-radius: 0;
 }
 .sidebar-icon {
-    -fx-text-fill: #9FB8C2;
+    -fx-text-fill: #8AA0AB;
     -fx-font-size: 14px;
     -fx-font-family: "Segoe UI Symbol", "Microsoft YaHei", sans-serif;
 }
