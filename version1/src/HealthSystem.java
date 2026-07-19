@@ -1641,6 +1641,49 @@ public class HealthSystem {
             return list;
         }
 
+        /** 获取所有已发布健康文章（用户端展示，仅返回已发布状态） */
+        static List<String[]> getPublishedHealthArticles() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, title, category, status, published_at FROM health_articles WHERE status = '已发布' ORDER BY published_at DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("title"),
+                            rs.getString("category"),
+                            rs.getString("status"),
+                            sdf.format(rs.getTimestamp("published_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 根据 ID 获取文章正文 */
+        static Map<String, String> getHealthArticleById(int id) {
+            Map<String, String> map = new HashMap<>();
+            String sql = "SELECT title, content, category, published_at FROM health_articles WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    map.put("title", rs.getString("title"));
+                    map.put("content", rs.getString("content"));
+                    map.put("category", rs.getString("category"));
+                    map.put("published_at", new SimpleDateFormat("yyyy-MM-dd HH:mm").format(rs.getTimestamp("published_at")));
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return map;
+        }
+
         /** 保存健康文章 */
         static boolean saveHealthArticle(int id, String title, String content, String category) {
             try (Connection conn = getConnection()) {
@@ -3040,6 +3083,7 @@ public class HealthSystem {
             tabPane.addTab("AI 菜谱生成", new AICookbookPanel());
             tabPane.addTab("成就徽章", new AchievementPanel());
             tabPane.addTab("数据大屏", new DashboardPanel());
+            tabPane.addTab("健康资讯", new HealthArticlePanel());
             centerWrapper.add(tabPane, BorderLayout.CENTER);
             add(centerWrapper, BorderLayout.CENTER);
 
@@ -5537,6 +5581,77 @@ public class HealthSystem {
             card.add(lblValue, BorderLayout.CENTER);
 
             return card;
+        }
+    }
+
+    /** 用户端健康资讯浏览面板：仅展示已发布文章，点击查看正文 */
+    static class HealthArticlePanel extends JPanel {
+        private DefaultTableModel articleModel;
+        private JTable articleTable;
+
+        HealthArticlePanel() {
+            setLayout(new BorderLayout(8, 8));
+            setBackground(Theme.BG);
+            setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+
+            JPanel ctrl = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            ctrl.setOpaque(false);
+            JButton btnRefresh = new JButton("刷新");
+            Theme.stylePrimaryButton(btnRefresh);
+            btnRefresh.addActionListener(e -> loadArticles());
+            ctrl.add(btnRefresh);
+            add(ctrl, BorderLayout.NORTH);
+
+            articleModel = new DefaultTableModel(new String[]{"ID", "标题", "分类", "发布时间"}, 0) {
+                @Override
+                public boolean isCellEditable(int r, int c) { return false; }
+            };
+            articleTable = new JTable(articleModel);
+            Theme.styleTable(articleTable);
+            articleTable.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    int row = articleTable.getSelectedRow();
+                    if (row >= 0 && e.getClickCount() == 2) viewArticle(row);
+                }
+            });
+            add(new JScrollPane(articleTable), BorderLayout.CENTER);
+            loadArticles();
+        }
+
+        private void loadArticles() {
+            articleModel.setRowCount(0);
+            for (String[] row : DBUtil.getPublishedHealthArticles()) {
+                articleModel.addRow(new Object[]{row[0], row[1], row[2], row[4]});
+            }
+        }
+
+        private void viewArticle(int row) {
+            int id = Integer.parseInt((String) articleModel.getValueAt(row, 0));
+            Map<String, String> art = DBUtil.getHealthArticleById(id);
+            if (art.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "未找到该文章");
+                return;
+            }
+            JTextArea ta = new JTextArea(art.get("content"), 18, 60);
+            ta.setLineWrap(true);
+            ta.setWrapStyleWord(true);
+            ta.setEditable(false);
+            ta.setFont(Theme.FONT_BODY);
+            JLabel lblTitle = new JLabel("<html><div style='font-size:16px'><b>" + escapeHtml(art.get("title"))
+                    + "</b></div><div style='font-size:12px;color:#888'>分类：" + escapeHtml(art.get("category"))
+                    + " ｜ 发布：" + escapeHtml(art.get("published_at")) + "</div></html>");
+            lblTitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+            JPanel info = new JPanel(new BorderLayout(8, 8));
+            info.setPreferredSize(new Dimension(560, 420));
+            info.add(lblTitle, BorderLayout.NORTH);
+            info.add(new JScrollPane(ta), BorderLayout.CENTER);
+            JOptionPane.showMessageDialog(this, info, "健康资讯", JOptionPane.INFORMATION_MESSAGE);
+        }
+
+        private String escapeHtml(String s) {
+            if (s == null) return "";
+            return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
         }
     }
 }
