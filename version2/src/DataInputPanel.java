@@ -8,6 +8,13 @@ import javafx.collections.ObservableList;
 
 import java.util.Map;
 
+/**
+ * 数据录入面板 — 改为 Accordion 折叠式布局。
+ *
+ * 原 4 张卡（健康录入/运动录入/最近记录/运动记录表）全摊一屏，挤且杂乱。
+ * 现收为 4 个 TitledPane 折叠条，点哪个展开哪个，默认只展开「今日健康数据录入」。
+ * 字段排成两列减少展开高度。
+ */
 public class DataInputPanel extends VBox {
     private final TextField tfWeight = new TextField();
     private final TextField tfBodyFat = new TextField();
@@ -30,72 +37,41 @@ public class DataInputPanel extends VBox {
         setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
-        VBox healthCard = buildHealthCard();
-        VBox exerciseCard = buildExerciseCard();
-        HBox.setHgrow(healthCard, Priority.ALWAYS);
-        HBox.setHgrow(exerciseCard, Priority.ALWAYS);
-        healthCard.setMaxWidth(Double.MAX_VALUE);
-        exerciseCard.setMaxWidth(Double.MAX_VALUE);
+        TitledPane tpHealth = new TitledPane("今日健康数据录入", buildHealthContent());
+        TitledPane tpExercise = new TitledPane("今日运动录入", buildExerciseContent());
+        TitledPane tpLatest = new TitledPane("最近一次健康记录", buildLatestContent());
+        TitledPane tpTodayEx = new TitledPane("今日运动记录", buildTodayExContent());
 
-        HBox topRow = new HBox(14);
-        topRow.getChildren().addAll(healthCard, exerciseCard);
+        // 默认只展开健康录入，其余收起；Accordion 互斥展开，点哪个显示哪个
+        tpHealth.setExpanded(true);
+        tpExercise.setExpanded(false);
+        tpLatest.setExpanded(false);
+        tpTodayEx.setExpanded(false);
 
-        VBox latestCard = new VBox(8);
-        latestCard.getStyleClass().add("card");
-        Label t2 = new Label("最近一次健康记录");
-        t2.getStyleClass().add("card-title");
-        lblLatest.getStyleClass().add("sub-title");
-        latestCard.getChildren().addAll(t2, lblLatest);
+        Accordion accordion = new Accordion();
+        accordion.getPanes().addAll(tpHealth, tpExercise, tpLatest, tpTodayEx);
+        accordion.setExpandedPane(tpHealth);
 
-        VBox todayExCard = new VBox(10);
-        todayExCard.getStyleClass().add("card");
-        VBox.setVgrow(todayExCard, Priority.ALWAYS);
-        Label t3 = new Label("今日运动记录");
-        t3.getStyleClass().add("card-title");
-        buildExerciseTable();
-        VBox.setVgrow(exerciseTable, Priority.ALWAYS);
-        todayExCard.getChildren().addAll(t3, exerciseTable);
-
-        HBox.setHgrow(latestCard, Priority.ALWAYS);
-        HBox.setHgrow(todayExCard, Priority.ALWAYS);
-        latestCard.setMaxWidth(Double.MAX_VALUE);
-        todayExCard.setMaxWidth(Double.MAX_VALUE);
-        todayExCard.setMaxHeight(Double.MAX_VALUE);
-        HBox bottomRow = new HBox(14);
-        bottomRow.getChildren().addAll(latestCard, todayExCard);
-
-        getChildren().addAll(topRow, bottomRow);
-        VBox.setVgrow(bottomRow, Priority.ALWAYS);
+        getChildren().add(accordion);
+        VBox.setVgrow(accordion, Priority.ALWAYS);
 
         refreshLatest();
         refreshExercise();
     }
 
-    private VBox buildHealthCard() {
-        VBox card = new VBox(12);
-        card.getStyleClass().add("card");
-        Label title = new Label("今日健康数据录入");
-        title.getStyleClass().add("card-title");
-
+    private VBox buildHealthContent() {
         GridPane g = new GridPane();
-        g.setHgap(12);
+        g.setHgap(14);
         g.setVgap(10);
-        g.setPadding(new Insets(6, 2, 2, 2));
-        int r = 0;
-        g.add(new Label("体重(kg):"), 0, r);
-        g.add(tfWeight, 1, r++);
-        g.add(new Label("体脂率(%):"), 0, r);
-        g.add(tfBodyFat, 1, r++);
-        g.add(new Label("水分率(%):"), 0, r);
-        g.add(tfWater, 1, r++);
-        g.add(new Label("肌肉率(%):"), 0, r);
-        g.add(tfMuscle, 1, r++);
-        g.add(new Label("内脏脂肪等级:"), 0, r);
-        g.add(tfVisceral, 1, r++);
-        g.add(new Label("骨肌量(kg):"), 0, r);
-        g.add(tfBone, 1, r++);
-        g.add(new Label("腰围(cm):"), 0, r);
-        g.add(tfWaist, 1, r++);
+        g.setPadding(new Insets(4, 4, 4, 4));
+        // 两列布局，减少展开高度
+        g.add(new Label("体重(kg):"), 0, 0); g.add(tfWeight, 1, 0);
+        g.add(new Label("体脂率(%):"), 2, 0); g.add(tfBodyFat, 3, 0);
+        g.add(new Label("水分率(%):"), 0, 1); g.add(tfWater, 1, 1);
+        g.add(new Label("肌肉率(%):"), 2, 1); g.add(tfMuscle, 3, 1);
+        g.add(new Label("内脏脂肪:"), 0, 2); g.add(tfVisceral, 1, 2);
+        g.add(new Label("骨肌量(kg):"), 2, 2); g.add(tfBone, 3, 2);
+        g.add(new Label("腰围(cm):"), 0, 3); g.add(tfWaist, 1, 3);
 
         HBox btns = new HBox(10);
         Button btnSave = new Button("保存记录");
@@ -104,19 +80,15 @@ public class DataInputPanel extends VBox {
         btnScale.getStyleClass().add("button-ghost");
         btns.getChildren().addAll(btnSave, btnScale);
 
-        card.getChildren().addAll(title, g, btns);
-
         btnSave.setOnAction(e -> saveHealth());
         btnScale.setOnAction(e -> simulateScale());
-        return card;
+
+        VBox box = new VBox(12, g, btns);
+        box.setPadding(new Insets(4, 8, 10, 8));
+        return box;
     }
 
-    private VBox buildExerciseCard() {
-        VBox card = new VBox(12);
-        card.getStyleClass().add("card");
-        Label title = new Label("今日运动录入");
-        title.getStyleClass().add("card-title");
-
+    private VBox buildExerciseContent() {
         cbExerciseType.getItems().addAll("跑步", "快走", "游泳", "骑行", "跳绳", "力量训练", "瑜伽", "其他");
         cbExerciseType.setValue("跑步");
         cbIntensity.getItems().addAll("低", "中", "高");
@@ -125,18 +97,13 @@ public class DataInputPanel extends VBox {
         tfCalories.setPromptText("kcal");
 
         GridPane g = new GridPane();
-        g.setHgap(12);
+        g.setHgap(14);
         g.setVgap(10);
-        g.setPadding(new Insets(6, 2, 2, 2));
-        int r = 0;
-        g.add(new Label("运动类型:"), 0, r);
-        g.add(cbExerciseType, 1, r++);
-        g.add(new Label("时长(分钟):"), 0, r);
-        g.add(tfDuration, 1, r++);
-        g.add(new Label("强度:"), 0, r);
-        g.add(cbIntensity, 1, r++);
-        g.add(new Label("消耗热量:"), 0, r);
-        g.add(tfCalories, 1, r++);
+        g.setPadding(new Insets(4, 4, 4, 4));
+        g.add(new Label("运动类型:"), 0, 0); g.add(cbExerciseType, 1, 0);
+        g.add(new Label("时长(分钟):"), 2, 0); g.add(tfDuration, 3, 0);
+        g.add(new Label("强度:"), 0, 1); g.add(cbIntensity, 1, 1);
+        g.add(new Label("消耗热量:"), 2, 1); g.add(tfCalories, 3, 1);
 
         HBox btns = new HBox(10);
         Button btnEstimate = new Button("估算热量");
@@ -145,11 +112,30 @@ public class DataInputPanel extends VBox {
         btnSaveEx.getStyleClass().add("button-accent");
         btns.getChildren().addAll(btnEstimate, btnSaveEx);
 
-        card.getChildren().addAll(title, g, btns);
-
         btnEstimate.setOnAction(e -> estimateCalories());
         btnSaveEx.setOnAction(e -> saveExercise());
-        return card;
+
+        VBox box = new VBox(12, g, btns);
+        box.setPadding(new Insets(4, 8, 10, 8));
+        return box;
+    }
+
+    private VBox buildLatestContent() {
+        VBox box = new VBox(8);
+        lblLatest.getStyleClass().add("sub-title");
+        lblLatest.setWrapText(true);
+        box.getChildren().add(lblLatest);
+        box.setPadding(new Insets(4, 8, 10, 8));
+        return box;
+    }
+
+    private VBox buildTodayExContent() {
+        VBox box = new VBox(8);
+        buildExerciseTable();
+        VBox.setVgrow(exerciseTable, Priority.ALWAYS);
+        box.getChildren().add(exerciseTable);
+        box.setPadding(new Insets(4, 8, 10, 8));
+        return box;
     }
 
     private void buildExerciseTable() {

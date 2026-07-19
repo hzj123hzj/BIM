@@ -354,3 +354,47 @@
     -fx-min-height: 18;
     -fx-padding: 0 5;
 }
+
+/* ===== 折叠面板 TitledPane / Accordion（数据录入等收起展开式分区） ===== */
+.titled-pane {
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0 0 8 0;
+}
+.titled-pane > .title {
+    -fx-background-color: #FCFDFE;
+    -fx-background-radius: 12;
+    -fx-border-color: #E2EBF0;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-padding: 13 16;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.08), 8, 0.12, 0, 2);
+}
+.titled-pane > .title > .text {
+    -fx-text-fill: #1E6478;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+.titled-pane > .title > .arrow-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0 8 0 0;
+}
+.titled-pane > .title > .arrow-button .arrow {
+    -fx-background-color: #2D8CA0;
+}
+.titled-pane:expanded > .title {
+    -fx-background-radius: 12 12 0 0;
+    -fx-border-radius: 12 12 0 0;
+    -fx-border-color: #E2EBF0 #E2EBF0 transparent #E2EBF0;
+}
+.titled-pane > .content {
+    -fx-background-color: #FCFDFE;
+    -fx-background-radius: 0 0 12 12;
+    -fx-border-color: transparent #E2EBF0 #E2EBF0 #E2EBF0;
+    -fx-border-width: 0 1 1 1;
+    -fx-border-radius: 0 0 12 12;
+}
+.titled-pane:collapsed > .title {
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+}
