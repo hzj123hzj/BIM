@@ -136,6 +136,12 @@ public class DietPanel extends VBox {
         btnSelectAll.setOnAction(e -> toggleSelectAll());
         loadFoods();
         refreshSummary();
+
+        // 切换/打开本页时重新拉取食物库：管理员导入/新增的食物能立即在用户端可见，
+        // 避免面板仅在启动时加载一次导致"导入后用户端看不到"的错觉
+        this.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) loadFoods();
+        });
     }
 
     // ===================== 识图逻辑 =====================
