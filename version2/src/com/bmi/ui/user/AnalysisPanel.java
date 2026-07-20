@@ -54,6 +54,10 @@ public class AnalysisPanel extends VBox {
                               metricBox("身体年龄", "--", Theme.hex(Theme.SUCCESS)));
         metricsGrid.addRow(3, metricBox("骨骼肌肉量", "-- kg", "#8050A0"),
                               metricBox("健康评分", "--", Theme.hex(Theme.SUCCESS)));
+        metricsGrid.addRow(4, metricBox("体重", "-- kg", "#2D8CA0"),
+                              metricBox("腰围", "-- cm", "#2D8CA0"));
+        metricsGrid.addRow(5, metricBox("蛋白质率", "-- %", "#6A4CA0"),
+                              metricBox("骨量", "-- kg", "#6A4CA0"));
         metricsCard.getChildren().addAll(t2, metricsGrid);
 
         getChildren().addAll(ctrlCard, metricsCard);
@@ -75,6 +79,8 @@ public class AnalysisPanel extends VBox {
         double muscle = num(latest, "muscle_rate");
         int visceral = (int) num(latest, "visceral_fat");
         double boneMuscle = num(latest, "bone_muscle");
+        double boneMass = num(latest, "bone_mass");
+        double protein = num(latest, "protein_rate");
         double bmi = num(latest, "bmi");
         double bmr = num(latest, "bmr");
         double tdee = num(latest, "tdee");
@@ -102,6 +108,10 @@ public class AnalysisPanel extends VBox {
         updateMetric(grid, 2, 1, "身体年龄", bodyAge + " 岁");
         updateMetric(grid, 3, 0, "骨骼肌肉量", f1(boneMuscle) + " kg");
         updateMetric(grid, 3, 1, "健康评分", score + " 分");
+        updateMetric(grid, 4, 0, "体重", f1(weight) + " kg");
+        updateMetric(grid, 4, 1, "腰围", waist > 0 ? f1(waist) + " cm" : "未记录");
+        updateMetric(grid, 5, 0, "蛋白质率", f1(protein) + "%");
+        updateMetric(grid, 5, 1, "骨量", f1(boneMass) + " kg");
 
         StringBuilder sb = new StringBuilder();
         sb.append("═══════════════════════════════════════════\n");
@@ -110,7 +120,14 @@ public class AnalysisPanel extends VBox {
 
         sb.append("【BMI 体质指数】\n");
         sb.append("  BMI = ").append(f1(bmi)).append(" (").append(HealthCalculator.classifyBMI(bmi)).append(")\n");
-        sb.append("  中国标准: <18.5偏瘦 | 18.5-23.9正常 | 24-27.9超重 | >=28肥胖\n\n");
+        sb.append("  中国标准: <18.5偏瘦 | 18.5-23.9正常 | 24-27.9超重 | >=28肥胖\n");
+        sb.append("  粗略体型: ").append(HealthCalculator.classifyBodyShapeRough(bmi)).append("\n");
+        sb.append("  粗略肥胖分级: ").append(HealthCalculator.classifyObesityLevelRough(bmi)).append("\n");
+
+        double[] range = HealthCalculator.calcStandardWeightRange(height);
+        sb.append("  标准体重区间: ").append(f1(range[0])).append(" ~ ").append(f1(range[1])).append(" kg\n");
+        double diff = weight - (range[0] + range[1]) / 2.0;
+        sb.append("  与区间中值差距: ").append(diff >= 0 ? "+" : "").append(f1(diff)).append(" kg\n\n");
 
         sb.append("【基础代谢率 BMR (三种公式对比)】\n");
         sb.append("  Harris-Benedict : ").append(f0(bmrH)).append(" kcal\n");
@@ -143,6 +160,14 @@ public class AnalysisPanel extends VBox {
         sb.append("【骨骼肌肉量】\n");
         sb.append("  骨骼肌肉量: ").append(f1(boneMuscle)).append(" kg (");
         sb.append(HealthCalculator.assessMuscle(boneMuscle, weight, gender)).append(")\n\n");
+
+        sb.append("【蛋白质率与骨量】\n");
+        sb.append("  蛋白质率: ").append(f1(protein)).append("%\n");
+        String proteinLevel = "男".equals(gender)
+                ? (protein < 16 ? "偏低" : protein <= 20 ? "正常" : "偏高")
+                : (protein < 14 ? "偏低" : protein <= 18 ? "正常" : "偏高");
+        sb.append("  评级: ").append(proteinLevel).append("\n");
+        sb.append("  骨量: ").append(f1(boneMass)).append(" kg\n\n");
 
         sb.append("【身体年龄】\n");
         sb.append("  身体年龄: ").append(bodyAge).append(" 岁 (实际年龄: ").append(age).append(" 岁)\n");

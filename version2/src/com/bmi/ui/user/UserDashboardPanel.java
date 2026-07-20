@@ -54,9 +54,35 @@ public class UserDashboardPanel extends VBox {
         gridProfile.setHgap(24);
         gridProfile.setVgap(10);
         gridProfile.addRow(0, kv("用户名", DBUtil.currentUsername), kv("性别", DBUtil.currentGender));
-        gridProfile.addRow(1, kv("年龄", DBUtil.currentAge + " 岁"), kv("身高", DBUtil.currentHeight + " cm"));
-        gridProfile.addRow(2, kv("活动等级", DBUtil.currentActivityLevel), new Label(""));
-        profileCard.getChildren().addAll(tProfile, gridProfile);
+        gridProfile.addRow(1, kv("年龄", DBUtil.currentAge + " 岁"), kv("身高", f1(DBUtil.currentHeight) + " cm"));
+        gridProfile.addRow(2,
+                kv("体重", DBUtil.currentWeight > 0 ? f1(DBUtil.currentWeight) + " kg" : "未记录"),
+                kv("腰围", DBUtil.currentWaist > 0 ? f1(DBUtil.currentWaist) + " cm" : "未记录"));
+        gridProfile.addRow(3, kv("活动等级", DBUtil.currentActivityLevel), new Label(""));
+
+        // 计算属性 (由必备属性推导)
+        GridPane gridCalc = new GridPane();
+        gridCalc.setHgap(24);
+        gridCalc.setVgap(10);
+        gridCalc.setPadding(new Insets(6, 0, 0, 0));
+        String calcBodyShape = "数据不足";
+        if (DBUtil.currentWeight > 0 && DBUtil.currentHeight > 0) {
+            double bmi = HealthCalculator.calcBMI(DBUtil.currentWeight, DBUtil.currentHeight);
+            double bmr = HealthCalculator.calcAvgBMR(DBUtil.currentWeight, DBUtil.currentHeight,
+                    DBUtil.currentAge, DBUtil.currentGender);
+            double tdee = HealthCalculator.calcTDEE(bmr, DBUtil.currentActivityLevel);
+            double[] range = HealthCalculator.calcStandardWeightRange(DBUtil.currentHeight);
+            calcBodyShape = HealthCalculator.classifyBodyShapeRough(bmi);
+            gridCalc.addRow(0, kv("BMI", f2(bmi) + " (" + HealthCalculator.classifyBMI(bmi) + ")"),
+                    kv("体型(粗略)", calcBodyShape));
+            gridCalc.addRow(1, kv("BMR（基础代谢率）", f0(bmr) + " kcal"),
+                    kv("TDEE（每日总能量消耗）", f0(tdee) + " kcal"));
+            gridCalc.addRow(2, kv("标准体重区间", f1(range[0]) + " ~ " + f1(range[1]) + " kg"), new Label(""));
+        } else {
+            gridCalc.addRow(0, kv("BMI", "数据不足"), kv("BMR（基础代谢率）", "数据不足"));
+            gridCalc.addRow(1, kv("TDEE（每日总能量消耗）", "数据不足"), kv("标准体重区间", "数据不足"));
+        }
+        profileCard.getChildren().addAll(tProfile, gridProfile, gridCalc);
 
         // 最近体重趋势
         VBox trendCard = new VBox(10);
@@ -225,6 +251,7 @@ public class UserDashboardPanel extends VBox {
         return s.length() >= 10 ? s.substring(5, 10) : s;
     }
 
+    private static String f0(Object v) { return String.format("%.0f", toDouble(v)); }
     private static String f1(Object v) { return String.format("%.1f", toDouble(v)); }
     private static String f2(Object v) { return String.format("%.2f", toDouble(v)); }
 

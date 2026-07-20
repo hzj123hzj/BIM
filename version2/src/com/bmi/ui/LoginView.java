@@ -112,8 +112,12 @@ public class LoginView {
         cbGender.setValue("男");
         Spinner<Integer> spAge = new Spinner<>(5, 120, 25);
         TextField tfHeight = new TextField("170");
+        TextField tfWeight = new TextField();
+        tfWeight.setPromptText("如 65");
+        TextField tfWaist = new TextField();
+        tfWaist.setPromptText("可选，如 80");
         ComboBox<String> cbAct = new ComboBox<>();
-        cbAct.getItems().addAll("久坐", "轻度活动", "中度活动", "重度活动", "极重度活动");
+        cbAct.getItems().addAll("久坐", "轻度", "中度", "重度", "极重度");
         cbAct.setValue("久坐");
         Button btn = new Button("注 册");
         btn.getStyleClass().add("button-accent");
@@ -132,16 +136,22 @@ public class LoginView {
         p.add(spAge, 1, r++);
         p.add(new Label("身高(cm):"), 0, r);
         p.add(tfHeight, 1, r++);
+        p.add(new Label("体重(kg):"), 0, r);
+        p.add(tfWeight, 1, r++);
+        p.add(new Label("腰围(cm):(可选)"), 0, r);
+        p.add(tfWaist, 1, r++);
         p.add(new Label("活动等级:"), 0, r);
         p.add(cbAct, 1, r++);
         p.add(btn, 0, r, 2, 1);
 
         btn.setOnAction(e -> doRegister(tfUser.getText(), pf1.getText(), pf2.getText(),
-                cbGender.getValue(), spAge.getValue(), tfHeight.getText(), cbAct.getValue()));
+                cbGender.getValue(), spAge.getValue(), tfHeight.getText(), tfWeight.getText(),
+                tfWaist.getText(), cbAct.getValue()));
         return p;
     }
 
-    private void doRegister(String user, String p1, String p2, String gender, int age, String h, String act) {
+    private void doRegister(String user, String p1, String p2, String gender, int age, String h,
+                            String w, String waistStr, String act) {
         user = user == null ? "" : user.trim();
         if (user.isEmpty() || p1 == null || p1.isEmpty()) {
             alert(Alert.AlertType.WARNING, "提示", "用户名和密码不能为空");
@@ -162,7 +172,32 @@ public class LoginView {
             alert(Alert.AlertType.WARNING, "提示", "身高请输入数字");
             return;
         }
-        if (DBUtil.registerUser(user, p1, gender, age, height, act)) {
+        double weight;
+        try {
+            weight = Double.parseDouble(w.trim());
+            if (weight < 20 || weight > 500) {
+                alert(Alert.AlertType.WARNING, "提示", "体重范围 20-500kg");
+                return;
+            }
+        } catch (Exception ex) {
+            alert(Alert.AlertType.WARNING, "提示", "体重请输入数字");
+            return;
+        }
+        Double waist = null;
+        if (waistStr != null && !waistStr.trim().isEmpty()) {
+            try {
+                waist = Double.parseDouble(waistStr.trim());
+                if (waist < 30 || waist > 200) {
+                    alert(Alert.AlertType.WARNING, "提示", "腰围范围 30-200cm");
+                    return;
+                }
+            } catch (Exception ex) {
+                alert(Alert.AlertType.WARNING, "提示", "腰围请输入数字");
+                return;
+            }
+        }
+        if (DBUtil.registerUser(user, p1, gender, age, height, act, weight, waist)) {
+            DBUtil.saveBaselineHealthRecord(user, weight, height, age, gender, act, waist);
             alert(Alert.AlertType.INFORMATION, "成功", "注册成功! 请登录");
         } else {
             alert(Alert.AlertType.ERROR, "失败", "注册失败 (用户名可能已存在)");

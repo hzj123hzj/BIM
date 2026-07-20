@@ -54,14 +54,17 @@ public class HealthCalculator {
 
         // ==================== TDEE 计算 ====================
 
-        /** 活动系数映射 */
+        /** 活动系数映射 (兼容 "轻度活动"/"轻度" 两种写法) */
         public static double getActivityFactor(String level) {
-            switch (level) {
+            if (level == null) return 1.2;
+            // 去掉"活动"二字, 统一用短写法匹配
+            String k = level.replace("活动", "").trim();
+            switch (k) {
                 case "久坐": return 1.2;
-                case "轻度活动": return 1.375;
-                case "中度活动": return 1.55;
-                case "重度活动": return 1.725;
-                case "极重度活动": return 1.9;
+                case "轻度": return 1.375;
+                case "中度": return 1.55;
+                case "重度": return 1.725;
+                case "极重度": return 1.9;
                 default: return 1.2;
             }
         }
@@ -140,6 +143,56 @@ public class HealthCalculator {
         public static double calcIdealWeight(double heightCm) {
             double h = heightCm / 100.0;
             return h * h * 22;
+        }
+
+        // ==================== 标准体重区间 ====================
+
+        /**
+         * 标准体重区间 (中国标准 BMI 18.5 ~ 23.9)
+         * @return {下限kg, 上限kg}
+         */
+        public static double[] calcStandardWeightRange(double heightCm) {
+            double h = heightCm / 100.0;
+            return new double[]{ h * h * 18.5, h * h * 23.9 };
+        }
+
+        // ==================== 粗略肥胖/体型分级 (由 BMI 推导, 无需仪器) ====================
+
+        /** 粗略肥胖分级 — 复用 BMI 分类 */
+        public static String classifyObesityLevelRough(double bmi) {
+            return classifyBMI(bmi);
+        }
+
+        /** 粗略体型分级 (由 BMI 推导) */
+        public static String classifyBodyShapeRough(double bmi) {
+            if (bmi < 18.5) return "消瘦";
+            if (bmi < 24.0) return "标准";
+            if (bmi < 28.0) return "超重";
+            return "肥胖";
+        }
+
+        // ==================== 由 BMI 估算体脂率 ====================
+
+        /**
+         * Deurenberg 公式: 体脂率% = 1.20×BMI + 0.23×年龄 − 10.8×性别 − 5.4
+         * @param gender "男" / "女"
+         * @return 估算体脂率 (%)
+         */
+        public static double estimateBodyFatFromBMI(double bmi, int age, String gender) {
+            double sex = "男".equals(gender) ? 1.0 : 0.0;
+            return 1.20 * bmi + 0.23 * age - 10.8 * sex - 5.4;
+        }
+
+        // ==================== 去脂体重 / 脂肪体重 ====================
+
+        /** 去脂体重 (瘦体重) = 体重 × (1 − 体脂率/100) */
+        public static double calcLeanBodyMass(double weight, double bodyFatPercent) {
+            return weight * (1 - bodyFatPercent / 100.0);
+        }
+
+        /** 脂肪体重 = 体重 × 体脂率/100 */
+        public static double calcFatWeight(double weight, double bodyFatPercent) {
+            return weight * bodyFatPercent / 100.0;
         }
 
         // ==================== 身体形态评估 ====================

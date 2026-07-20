@@ -15,6 +15,8 @@ public class DBUtil {
     public static String currentGender = "";
     public static int currentAge = 0;
     public static double currentHeight = 0;
+    public static double currentWeight = 0;
+    public static double currentWaist = 0;
     public static String currentActivityLevel = "久坐";
     private static final String DB_URL = "jdbc:postgresql://localhost:5433/health_db";
     private static final String DB_USER = "postgres";
@@ -43,13 +45,14 @@ public class DBUtil {
 
         // ==================== 用户相关操作 ====================
 
-        /** 注册用户 */
+        /** 注册用户（含基础属性：性别/年龄/身高/体重/腰围/活动水平） */
         public static boolean registerUser(String username, String password, String gender,
-                                     int age, double height, String activityLevel) {
+                                     int age, double height, String activityLevel,
+                                     double weight, Double waist) {
             String salt = PasswordUtil.generateSalt();
             String hash = PasswordUtil.hash(password, salt);
-            String sql = "INSERT INTO users (username, password, salt, gender, age, height, activity_level) " +
-                         "VALUES (?, ?, ?, ?, ?, ?, ?)";
+            String sql = "INSERT INTO users (username, password, salt, gender, age, height, weight, waist, activity_level) " +
+                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, username);
@@ -58,7 +61,9 @@ public class DBUtil {
                 ps.setString(4, gender);
                 ps.setInt(5, age);
                 ps.setDouble(6, height);
-                ps.setString(7, activityLevel);
+                if (weight > 0) ps.setDouble(7, weight); else ps.setNull(7, Types.DOUBLE);
+                if (waist != null && waist > 0) ps.setDouble(8, waist); else ps.setNull(8, Types.DOUBLE);
+                ps.setString(9, activityLevel);
                 return ps.executeUpdate() > 0;
             } catch (SQLException e) {
                 if (e.getSQLState().equals("23505")) {
@@ -72,7 +77,7 @@ public class DBUtil {
 
         /** 验证登录 */
         public static boolean loginUser(String username, String password) {
-            String sql = "SELECT password, salt, gender, age, height, activity_level FROM users WHERE username = ?";
+            String sql = "SELECT password, salt, gender, age, height, weight, waist, activity_level FROM users WHERE username = ?";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, username);
@@ -85,6 +90,8 @@ public class DBUtil {
                         currentGender = rs.getString("gender");
                         currentAge = rs.getInt("age");
                         currentHeight = rs.getDouble("height");
+                        currentWeight = rs.getDouble("weight");
+                        currentWaist = rs.getDouble("waist");
                         currentActivityLevel = rs.getString("activity_level");
                         if (currentActivityLevel == null) currentActivityLevel = "久坐";
                         return true;
@@ -96,11 +103,42 @@ public class DBUtil {
             return false;
         }
 
+        /**
+         * 注册时生成初始健康记录：仅写基础属性(体重/腰围) + 由基础算出的 BMI/BMR/TDEE/粗略体型，
+         * 仪器测量列(body_fat/water_rate/...) 留 NULL（Postgres 中 CHECK 对 NULL 放行）。
+         * 让数据大屏/分析评估在注册后即可见数，无需先去数据录入逐项填仪器值。
+         */
+        public static boolean saveBaselineHealthRecord(String username, double weight, double height,
+                int age, String gender, String activityLevel, Double waist) {
+            if (weight <= 0) return false;
+            double bmi = HealthCalculator.calcBMI(weight, height);
+            double bmr = HealthCalculator.calcAvgBMR(weight, height, age, gender);
+            double tdee = HealthCalculator.calcTDEE(bmr, activityLevel);
+            String bodyType = HealthCalculator.classifyBMI(bmi); // 粗略体型/肥胖等级
+            String sql = "INSERT INTO health_records (username, weight, waist, bmi, bmr, tdee, body_type) " +
+                         "VALUES (?, ?, ?, ?, ?, ?, ?)";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ps.setDouble(2, weight);
+                if (waist != null && waist > 0) ps.setDouble(3, waist); else ps.setNull(3, Types.DOUBLE);
+                ps.setDouble(4, bmi);
+                ps.setDouble(5, bmr);
+                ps.setDouble(6, tdee);
+                ps.setString(7, bodyType);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
         // ==================== 健康记录操作 ====================
 
         /** 保存健康记录 */
         public static boolean saveHealthRecord(double weight, double bodyFat, double waterRate,
-                double muscleRate, int visceralFat, double boneMuscle, double waist) {
+                double proteinRate, double muscleRate, int visceralFat, double boneMuscle,
+                double boneMass, double waist) {
             // 计算派生数据
             double bmi = HealthCalculator.calcBMI(weight, currentHeight);
             double bmr = HealthCalculator.calcAvgBMR(weight, currentHeight, currentAge, currentGender);
@@ -108,9 +146,9 @@ public class DBUtil {
             int bodyAge = HealthCalculator.calcBodyAge(currentAge, bodyFat, muscleRate, visceralFat, currentGender);
             String bodyType = HealthCalculator.classifyBodyType(bmi, bodyFat, currentGender);
 
-            String sql = "INSERT INTO health_records (username, weight, body_fat, water_rate, muscle_rate, " +
-                         "visceral_fat, bone_muscle, bmr, tdee, bmi, waist, body_age, body_type) " +
-                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String sql = "INSERT INTO health_records (username, weight, body_fat, water_rate, protein_rate, " +
+                         "muscle_rate, visceral_fat, bone_muscle, bone_mass, bmr, tdee, bmi, waist, body_age, body_type) " +
+                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             String updateCheckinSql = "UPDATE users SET checkin_days = (" +
                     "SELECT COUNT(DISTINCT record_date) FROM health_records WHERE username = ?" +
                     ") WHERE username = ?";
@@ -121,15 +159,17 @@ public class DBUtil {
                 ps.setDouble(2, weight);
                 ps.setDouble(3, bodyFat);
                 ps.setDouble(4, waterRate);
-                ps.setDouble(5, muscleRate);
-                ps.setInt(6, visceralFat);
-                ps.setDouble(7, boneMuscle);
-                ps.setDouble(8, bmr);
-                ps.setDouble(9, tdee);
-                ps.setDouble(10, bmi);
-                ps.setDouble(11, waist);
-                ps.setInt(12, bodyAge);
-                ps.setString(13, bodyType);
+                ps.setDouble(5, proteinRate);
+                ps.setDouble(6, muscleRate);
+                ps.setInt(7, visceralFat);
+                ps.setDouble(8, boneMuscle);
+                ps.setDouble(9, boneMass);
+                ps.setDouble(10, bmr);
+                ps.setDouble(11, tdee);
+                ps.setDouble(12, bmi);
+                ps.setDouble(13, waist);
+                ps.setInt(14, bodyAge);
+                ps.setString(15, bodyType);
                 ps.executeUpdate();
 
                 try (PreparedStatement ps2 = conn.prepareStatement(updateCheckinSql)) {
@@ -161,6 +201,8 @@ public class DBUtil {
                     map.put("muscle_rate", rs.getDouble("muscle_rate"));
                     map.put("visceral_fat", rs.getInt("visceral_fat"));
                     map.put("bone_muscle", rs.getDouble("bone_muscle"));
+                    map.put("bone_mass", rs.getDouble("bone_mass"));
+                    map.put("protein_rate", rs.getDouble("protein_rate"));
                     map.put("bmr", rs.getDouble("bmr"));
                     map.put("tdee", rs.getDouble("tdee"));
                     map.put("bmi", rs.getDouble("bmi"));
@@ -198,6 +240,8 @@ public class DBUtil {
                     map.put("muscle_rate", rs.getDouble("muscle_rate"));
                     map.put("visceral_fat", rs.getInt("visceral_fat"));
                     map.put("bone_muscle", rs.getDouble("bone_muscle"));
+                    map.put("bone_mass", rs.getDouble("bone_mass"));
+                    map.put("protein_rate", rs.getDouble("protein_rate"));
                     map.put("bmr", rs.getDouble("bmr"));
                     map.put("tdee", rs.getDouble("tdee"));
                     map.put("bmi", rs.getDouble("bmi"));
@@ -1979,7 +2023,7 @@ public class DBUtil {
             cfg.put("model_name", "glm-4.7-flash");
             cfg.put("vision_model", "glm-4v-flash");
             cfg.put("endpoint_url", "https://open.bigmodel.cn/api/paas/v4");
-            String sql = "SELECT provider_name, api_key, model_name, vision_model, endpoint_url FROM ai_api_config WHERE provider_name = ? ORDER BY id DESC LIMIT 1";
+            String sql = "SELECT provider AS provider_name, api_key, model_name, vision_model, endpoint AS endpoint_url FROM ai_api_config WHERE provider = ? ORDER BY id DESC LIMIT 1";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, "zhipu");
@@ -2115,7 +2159,7 @@ public class DBUtil {
             boolean hasRecord = existing != null && !existing.getOrDefault("api_key", "").isEmpty();
             try (Connection conn = getConnection()) {
                 if (hasRecord) {
-                    sql = "UPDATE ai_api_config SET api_key = ?, model_name = ?, vision_model = ?, endpoint_url = ?, updated_at = CURRENT_TIMESTAMP WHERE provider_name = ?";
+                    sql = "UPDATE ai_api_config SET api_key = ?, model_name = ?, vision_model = ?, endpoint = ?, updated_at = CURRENT_TIMESTAMP WHERE provider = ?";
                     try (PreparedStatement ps = conn.prepareStatement(sql)) {
                         ps.setString(1, apiKey);
                         ps.setString(2, modelName);
@@ -2125,7 +2169,7 @@ public class DBUtil {
                         return ps.executeUpdate() > 0;
                     }
                 } else {
-                    sql = "INSERT INTO ai_api_config (provider_name, api_key, model_name, vision_model, endpoint_url) VALUES (?, ?, ?, ?, ?)";
+                    sql = "INSERT INTO ai_api_config (provider, api_key, model_name, vision_model, endpoint) VALUES (?, ?, ?, ?, ?)";
                     try (PreparedStatement ps = conn.prepareStatement(sql)) {
                         ps.setString(1, "zhipu");
                         ps.setString(2, apiKey);

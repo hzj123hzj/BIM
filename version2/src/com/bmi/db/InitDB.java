@@ -71,10 +71,21 @@ public class InitDB {
                 "  gender VARCHAR(10)," +
                 "  age INT CHECK (age > 0 AND age < 150)," +
                 "  height DECIMAL(5,2) CHECK (height > 0)," +
+                "  weight DECIMAL(5,2)," +
+                "  waist DECIMAL(5,2)," +
                 "  activity_level VARCHAR(20) DEFAULT '久坐'," +
                 "  created_at TIMESTAMP DEFAULT NOW()" +
                 ")");
             System.out.println("  [OK] users 表");
+
+            // 兼容已存在库：补 weight / waist 列（注册时录入的基础属性）
+            try {
+                execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS weight DECIMAL(5,2)");
+                execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS waist DECIMAL(5,2)");
+                System.out.println("  [OK] users 表 weight/waist 字段已确认");
+            } catch (SQLException e) {
+                System.out.println("  [INFO] users 表 weight/waist 字段检查: " + e.getMessage());
+            }
 
             // 健康记录表
             execUpdate(conn,
@@ -85,9 +96,11 @@ public class InitDB {
                 "  weight DECIMAL(5,2) CHECK (weight > 0 AND weight < 500)," +
                 "  body_fat DECIMAL(4,2) CHECK (body_fat >= 0 AND body_fat <= 100)," +
                 "  water_rate DECIMAL(4,2) CHECK (water_rate >= 0 AND water_rate <= 100)," +
+                "  protein_rate DECIMAL(4,2) CHECK (protein_rate >= 0 AND protein_rate <= 100)," +
                 "  muscle_rate DECIMAL(4,2) CHECK (muscle_rate >= 0 AND muscle_rate <= 100)," +
                 "  visceral_fat INT CHECK (visceral_fat >= 0 AND visceral_fat <= 30)," +
                 "  bone_muscle DECIMAL(5,2)," +
+                "  bone_mass DECIMAL(5,2)," +
                 "  bmr DECIMAL(6,2)," +
                 "  tdee DECIMAL(6,2)," +
                 "  bmi DECIMAL(4,2)," +
@@ -104,6 +117,15 @@ public class InitDB {
                 System.out.println("  [OK] body_type 字段已确认");
             } catch (SQLException e) {
                 System.out.println("  [INFO] body_type 字段检查: " + e.getMessage());
+            }
+
+            // 兼容旧表: 补 protein_rate / bone_mass（仪器测量属性）
+            try {
+                execUpdate(conn, "ALTER TABLE health_records ADD COLUMN IF NOT EXISTS protein_rate DECIMAL(4,2)");
+                execUpdate(conn, "ALTER TABLE health_records ADD COLUMN IF NOT EXISTS bone_mass DECIMAL(5,2)");
+                System.out.println("  [OK] protein_rate / bone_mass 字段已确认");
+            } catch (SQLException e) {
+                System.out.println("  [INFO] protein_rate / bone_mass 字段检查: " + e.getMessage());
             }
 
             // 运动记录表

@@ -18,17 +18,19 @@ import java.util.Map;
  * 原 4 张卡全摊一屏，挤且杂乱；后改为 Accordion 互斥展开，但「运动录入」与
  * 「今日运动记录」被「最近健康记录」隔开、且表压在最底，录完运动看不到结果。
  *
- * 现改为 4 个独立 TitledPane 顺序为：健康录入 → 运动录入 → 今日运动记录
- * → 最近健康记录，运动录入与结果相邻；保存运动后自动展开记录表，数据即时可见。
+ * 现改为 4 个独立 TitledPane 顺序为：今日运动记录 → 健康录入 → 运动录入
+ * → 最近健康记录；今日运动记录置顶，保存运动后自动展开记录表，数据即时可见。
  * 字段排成两列减少展开高度。
  */
 public class DataInputPanel extends VBox {
     private final TextField tfWeight = new TextField();
     private final TextField tfBodyFat = new TextField();
     private final TextField tfWater = new TextField();
+    private final TextField tfProtein = new TextField();
     private final TextField tfMuscle = new TextField();
     private final TextField tfVisceral = new TextField();
     private final TextField tfBone = new TextField();
+    private final TextField tfBoneMass = new TextField();
     private final TextField tfWaist = new TextField();
     private final Label lblLatest = new Label();
 
@@ -50,13 +52,13 @@ public class DataInputPanel extends VBox {
         setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
-        // 运动录入、今日运动记录相邻；默认展开健康录入与运动录入
+        // 今日运动记录置顶并默认展开；健康录入、运动录入也默认展开
+        tpTodayEx.setExpanded(true);
         tpHealth.setExpanded(true);
         tpExercise.setExpanded(true);
-        tpTodayEx.setExpanded(false);
         tpLatest.setExpanded(false);
 
-        getChildren().addAll(tpHealth, tpExercise, tpTodayEx, tpLatest);
+        getChildren().addAll(tpTodayEx, tpHealth, tpExercise, tpLatest);
 
         refreshLatest();
         refreshExercise();
@@ -71,10 +73,12 @@ public class DataInputPanel extends VBox {
         g.add(new Label("体重(kg):"), 0, 0); g.add(tfWeight, 1, 0);
         g.add(new Label("体脂率(%):"), 2, 0); g.add(tfBodyFat, 3, 0);
         g.add(new Label("水分率(%):"), 0, 1); g.add(tfWater, 1, 1);
-        g.add(new Label("肌肉率(%):"), 2, 1); g.add(tfMuscle, 3, 1);
-        g.add(new Label("内脏脂肪:"), 0, 2); g.add(tfVisceral, 1, 2);
-        g.add(new Label("骨肌量(kg):"), 2, 2); g.add(tfBone, 3, 2);
-        g.add(new Label("腰围(cm):"), 0, 3); g.add(tfWaist, 1, 3);
+        g.add(new Label("蛋白质率(%):"), 2, 1); g.add(tfProtein, 3, 1);
+        g.add(new Label("肌肉率(%):"), 0, 2); g.add(tfMuscle, 1, 2);
+        g.add(new Label("内脏脂肪:"), 2, 2); g.add(tfVisceral, 3, 2);
+        g.add(new Label("骨肌量(kg):"), 0, 3); g.add(tfBone, 1, 3);
+        g.add(new Label("骨量(kg):"), 2, 3); g.add(tfBoneMass, 3, 3);
+        g.add(new Label("腰围(cm):"), 0, 4); g.add(tfWaist, 1, 4);
 
         HBox btns = new HBox(10);
         Button btnSave = new Button("保存记录");
@@ -163,11 +167,13 @@ public class DataInputPanel extends VBox {
             double w = Double.parseDouble(tfWeight.getText().trim());
             double bf = Double.parseDouble(tfBodyFat.getText().trim());
             double wr = Double.parseDouble(tfWater.getText().trim());
+            double pr = tfProtein.getText().trim().isEmpty() ? 0 : Double.parseDouble(tfProtein.getText().trim());
             double mr = Double.parseDouble(tfMuscle.getText().trim());
             int vf = Integer.parseInt(tfVisceral.getText().trim());
             double bm = Double.parseDouble(tfBone.getText().trim());
+            double bma = tfBoneMass.getText().trim().isEmpty() ? 0 : Double.parseDouble(tfBoneMass.getText().trim());
             double wa = Double.parseDouble(tfWaist.getText().trim());
-            if (DBUtil.saveHealthRecord(w, bf, wr, mr, vf, bm, wa)) {
+            if (DBUtil.saveHealthRecord(w, bf, wr, pr, mr, vf, bm, bma, wa)) {
                 alert("保存成功");
                 refreshLatest();
                 clearHealth();
@@ -243,9 +249,11 @@ public class DataInputPanel extends VBox {
         tfWeight.setText(String.format("%.1f", base));
         tfBodyFat.setText(String.format("%.1f", 15 + Math.random() * 15));
         tfWater.setText(String.format("%.1f", 50 + Math.random() * 10));
+        tfProtein.setText(String.format("%.1f", 16 + Math.random() * 6));
         tfMuscle.setText(String.format("%.1f", 30 + Math.random() * 15));
         tfVisceral.setText(String.valueOf(5 + (int) (Math.random() * 8)));
         tfBone.setText(String.format("%.1f", 2 + Math.random() * 2));
+        tfBoneMass.setText(String.format("%.1f", 2.5 + Math.random() * 1.5));
         tfWaist.setText(String.format("%.1f", 70 + Math.random() * 20));
     }
 
@@ -256,16 +264,19 @@ public class DataInputPanel extends VBox {
             return;
         }
         lblLatest.setText("体重: " + rec.get("weight") + " kg   BMI: " + rec.get("bmi")
-                + "   体脂率: " + rec.get("body_fat") + "%");
+                + "   体脂率: " + rec.get("body_fat") + "%   蛋白质率: " + rec.get("protein_rate")
+                + "%   骨量: " + rec.get("bone_mass") + " kg");
     }
 
     private void clearHealth() {
         tfWeight.clear();
         tfBodyFat.clear();
         tfWater.clear();
+        tfProtein.clear();
         tfMuscle.clear();
         tfVisceral.clear();
         tfBone.clear();
+        tfBoneMass.clear();
         tfWaist.clear();
     }
 
