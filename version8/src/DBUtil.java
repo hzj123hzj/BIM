@@ -1251,13 +1251,14 @@ public class DBUtil {
         /** 获取所有食物 */
         static List<String[]> getFoods() {
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, food_name, calories, protein, carbs, fat FROM foods ORDER BY id";
+            String sql = "SELECT id, COALESCE(category,'') AS category, food_name, calories, protein, carbs, fat FROM foods ORDER BY id";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
                     list.add(new String[]{
                             String.valueOf(rs.getInt("id")),
+                            rs.getString("category"),
                             rs.getString("food_name"),
                             String.valueOf(rs.getInt("calories")),
                             df2.format(rs.getDouble("protein")),
@@ -1272,26 +1273,28 @@ public class DBUtil {
         }
 
         /** 添加/更新食物 */
-        static boolean saveFood(int id, String name, int calories, double protein, double carbs, double fat) {
+        static boolean saveFood(int id, String category, String name, int calories, double protein, double carbs, double fat) {
             try (Connection conn = getConnection()) {
                 if (id <= 0) {
-                    String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
+                    String sql = "INSERT INTO foods (category, food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?, ?)";
                     PreparedStatement ps = conn.prepareStatement(sql);
-                    ps.setString(1, name);
-                    ps.setInt(2, calories);
-                    ps.setDouble(3, protein);
-                    ps.setDouble(4, carbs);
-                    ps.setDouble(5, fat);
+                    ps.setString(1, category);
+                    ps.setString(2, name);
+                    ps.setInt(3, calories);
+                    ps.setDouble(4, protein);
+                    ps.setDouble(5, carbs);
+                    ps.setDouble(6, fat);
                     return ps.executeUpdate() > 0;
                 } else {
-                    String sql = "UPDATE foods SET food_name = ?, calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?";
+                    String sql = "UPDATE foods SET category = ?, food_name = ?, calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?";
                     PreparedStatement ps = conn.prepareStatement(sql);
-                    ps.setString(1, name);
-                    ps.setInt(2, calories);
-                    ps.setDouble(3, protein);
-                    ps.setDouble(4, carbs);
-                    ps.setDouble(5, fat);
-                    ps.setInt(6, id);
+                    ps.setString(1, category);
+                    ps.setString(2, name);
+                    ps.setInt(3, calories);
+                    ps.setDouble(4, protein);
+                    ps.setDouble(5, carbs);
+                    ps.setDouble(6, fat);
+                    ps.setInt(7, id);
                     return ps.executeUpdate() > 0;
                 }
             } catch (SQLException e) {
@@ -1313,24 +1316,40 @@ public class DBUtil {
             }
         }
 
-        /** 批量导入食物(事务) rows: {name, calories, protein, carbs, fat} */
+        /** 批量导入食物(事务) rows: {category, name, calories, protein, carbs, fat} 或 {name, calories, protein, carbs, fat} */
         static int[] batchInsertFoods(List<String[]> rows) throws SQLException {
-            String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
-            int ok = 0, fail = 0;
+            int[] result = new int[]{0, 0};
+            if (rows == null || rows.isEmpty()) return result;
+
+            // 判断是 5 列还是 6 列
+            int len = rows.get(0).length;
+            boolean hasCategory = len >= 6;
+            String sql = hasCategory
+                ? "INSERT INTO foods (category, food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?, ?)"
+                : "INSERT INTO foods (food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
             try (Connection conn = getConnection()) {
                 conn.setAutoCommit(false);
                 try (PreparedStatement ps = conn.prepareStatement(sql)) {
                     for (String[] row : rows) {
                         try {
-                            ps.setString(1, row[0]);
-                            ps.setInt(2, Integer.parseInt(row[1]));
-                            ps.setDouble(3, Double.parseDouble(row[2]));
-                            ps.setDouble(4, Double.parseDouble(row[3]));
-                            ps.setDouble(5, Double.parseDouble(row[4]));
+                            if (hasCategory) {
+                                ps.setString(1, row[0] == null ? "" : row[0]);
+                                ps.setString(2, row[1]);
+                                ps.setInt(3, Integer.parseInt(row[2]));
+                                ps.setDouble(4, Double.parseDouble(row[3]));
+                                ps.setDouble(5, Double.parseDouble(row[4]));
+                                ps.setDouble(6, Double.parseDouble(row[5]));
+                            } else {
+                                ps.setString(1, row[0]);
+                                ps.setInt(2, Integer.parseInt(row[1]));
+                                ps.setDouble(3, Double.parseDouble(row[2]));
+                                ps.setDouble(4, Double.parseDouble(row[3]));
+                                ps.setDouble(5, Double.parseDouble(row[4]));
+                            }
                             ps.addBatch();
-                            ok++;
+                            result[0]++;
                         } catch (Exception parseEx) {
-                            fail++;
+                            result[1]++;
                         }
                     }
                     ps.executeBatch();
@@ -1340,7 +1359,7 @@ public class DBUtil {
                     throw e;
                 }
             }
-            return new int[]{ok, fail};
+            return result;
         }
         static List<String[]> getExerciseLibrary() {
             List<String[]> list = new ArrayList<>();

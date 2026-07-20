@@ -8,8 +8,8 @@ import java.util.List;
 import java.util.ArrayList;
 
 /**
- * 食物库管理面板（JavaFX 8 重写 version1 ContentManagementPanel 食物部分）
- * 列表、新增/编辑/删除。getFoods() 返回 String[]{id,name,cal,protein,carbs,fat}。
+ * 食物库管理面板（JavaFX 8 重写）
+ * 列表、新增/编辑/删除/批量导入。getFoods() 返回 String[]{id,category,name,cal,protein,carbs,fat}。
  */
 public class FoodManagePanel extends VBox {
     private final TableView<String[]> table = new TableView<>();
@@ -39,12 +39,13 @@ public class FoodManagePanel extends VBox {
         card.getChildren().add(ctrl);
 
         table.getColumns().addAll(
-                colA("ID", 0, 60),
-                colA("名称", 1, 160),
-                colA("热量", 2, 90),
-                colA("蛋白质", 3, 90),
-                colA("碳水", 4, 90),
-                colA("脂肪", 5, 90)
+                colA("ID", 0, 50),
+                colA("分类", 1, 80),
+                colA("名称", 2, 150),
+                colA("热量", 3, 80),
+                colA("蛋白质", 4, 80),
+                colA("碳水", 5, 80),
+                colA("脂肪", 6, 80)
         );
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         card.getChildren().add(table);
@@ -85,34 +86,37 @@ public class FoodManagePanel extends VBox {
     }
 
     private void editFood(int id) {
-        String name = "", cal = "0", p = "0", c = "0", f = "0";
+        String category = "", name = "", cal = "0", p = "0", c = "0", f = "0";
         if (id > 0) {
             String[] row = table.getSelectionModel().getSelectedItem();
-            name = row[1];
-            cal = row[2];
-            p = row[3];
-            c = row[4];
-            f = row[5];
+            category = row[1];
+            name = row[2];
+            cal = row[3];
+            p = row[4];
+            c = row[5];
+            f = row[6];
         }
+        TextField tfCategory = new TextField(category);
         TextField tfName = new TextField(name);
         TextField tfCal = new TextField(cal);
         TextField tfP = new TextField(p);
         TextField tfC = new TextField(c);
         TextField tfF = new TextField(f);
-        for (TextField t : new TextField[]{tfName, tfCal, tfP, tfC, tfF}) t.getStyleClass().add("text-field");
+        for (TextField t : new TextField[]{tfCategory, tfName, tfCal, tfP, tfC, tfF}) t.getStyleClass().add("text-field");
 
         GridPane g = new GridPane();
         g.setHgap(10);
         g.setVgap(8);
-        g.addRow(0, new Label("名称"), tfName);
-        g.addRow(1, new Label("热量"), tfCal);
-        g.addRow(2, new Label("蛋白质"), tfP);
-        g.addRow(3, new Label("碳水"), tfC);
-        g.addRow(4, new Label("脂肪"), tfF);
+        g.addRow(0, new Label("分类"), tfCategory);
+        g.addRow(1, new Label("名称"), tfName);
+        g.addRow(2, new Label("热量"), tfCal);
+        g.addRow(3, new Label("蛋白质"), tfP);
+        g.addRow(4, new Label("碳水"), tfC);
+        g.addRow(5, new Label("脂肪"), tfF);
 
         if (confirmDialog(id > 0 ? "编辑食物" : "新增食物", g)) {
             try {
-                if (DBUtil.saveFood(id, tfName.getText().trim(),
+                if (DBUtil.saveFood(id, tfCategory.getText().trim(), tfName.getText().trim(),
                         Integer.parseInt(tfCal.getText().trim()),
                         Double.parseDouble(tfP.getText().trim()),
                         Double.parseDouble(tfC.getText().trim()),
@@ -139,23 +143,19 @@ public class FoodManagePanel extends VBox {
     }
 
     private void batchImportFoods() {
-        List<String[]> rows = ExcelImportDialog.show("批量导入食物",
-                "请选择 Excel（.xlsx）文件。列顺序：名称, 热量, 蛋白质, 碳水, 脂肪。\n" +
-                "热量为整数，其余可为小数；首行可设为表头（自动跳过）。");
-        if (rows == null || rows.isEmpty()) return;
+        List<String[]> rawRows = ExcelImportDialog.show("批量导入食物",
+                "请选择 Excel（.xlsx）文件。\n" +
+                "支持表头自动识别，列如：分类, 产品名称, 热量(kcal), 蛋白质(g), 碳水(g), 脂肪(g)。\n" +
+                "中间带汉堡、小食、甜品这样的分组行也能自动识别。");
+        if (rawRows == null || rawRows.isEmpty()) return;
 
-        List<String[]> cleaned = new ArrayList<>();
-        for (String[] r : rows) {
-            if (r.length < 5) continue;
-            for (int i = 0; i < r.length; i++) r[i] = (r[i] == null ? "" : r[i].trim());
-            cleaned.add(r);
-        }
-        if (cleaned.isEmpty()) {
-            warn("未解析到有效数据，请检查列数（需至少 5 列：名称/热量/蛋白质/碳水/脂肪）");
+        List<String[]> rows = FoodExcelParser.parse(rawRows);
+        if (rows.isEmpty()) {
+            warn("未解析到有效数据，请检查表格格式（至少包含 名称、热量、蛋白质、碳水、脂肪 五列）");
             return;
         }
         try {
-            int[] result = DBUtil.batchInsertFoods(cleaned);
+            int[] result = DBUtil.batchInsertFoods(rows);
             info("导入完成：成功 " + result[0] + " 条，跳过/失败 " + result[1] + " 条");
             DBUtil.logAction("ADMIN", DBUtil.currentUsername, "批量导入食物", "成功 " + result[0] + " 条");
             loadFoods();

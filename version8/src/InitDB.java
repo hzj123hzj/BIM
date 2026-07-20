@@ -182,6 +182,7 @@ public class InitDB {
             execUpdate(conn,
                 "CREATE TABLE IF NOT EXISTS foods (" +
                 "  id SERIAL PRIMARY KEY," +
+                "  category VARCHAR(50)," +
                 "  food_name VARCHAR(100)," +
                 "  calories INT," +
                 "  protein DECIMAL(5,2)," +
@@ -190,6 +191,13 @@ public class InitDB {
                 ")");
             System.out.println("  [OK] foods 表");
 
+            // 兼容旧表：给 foods 增加分类字段
+            try {
+                execUpdate(conn, "ALTER TABLE foods ADD COLUMN IF NOT EXISTS category VARCHAR(50)");
+                System.out.println("  [OK] foods.category 字段已确认");
+            } catch (SQLException e) {
+                System.out.println("  [INFO] foods.category 字段检查: " + e.getMessage());
+            }
             // 创建索引
             execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_hr_username_date ON health_records(username, record_date)");
             execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_dr_username_date ON diet_records(username, record_date)");
