@@ -1,0 +1,410 @@
+/* JavaFX 8 主题 — BMI 健康系统 version2 | 视觉系统 v3（去塑料+图表美化） */
+.root {
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    -fx-base: #EAF3F7;
+}
+
+/* ===== 品牌渐变（登录页左侧） ===== */
+.bg-gradient {
+    -fx-background-color: linear-gradient(to bottom right, #2D8CA0 0%, #1E6478 55%, #154B5A 100%);
+}
+
+/* ===== 内容区多层渐变 ===== */
+.content-scroll {
+    -fx-background-color: linear-gradient(to bottom, #F4FAFC 0%, #EAF3F7 42%, #E3EEF4 100%);
+    -fx-border-width: 0;
+}
+.content-scroll .scroll-bar:vertical .thumb { -fx-background-color: #9DBAC4; -fx-background-radius: 6; }
+.content-scroll .scroll-bar:vertical .track { -fx-background-color: transparent; }
+.content-scroll .scroll-bar:horizontal { -fx-opacity: 0; }
+
+/* ===== 按钮（两段渐变，降饱和去塑料感） ===== */
+.button-primary {
+    -fx-background-color: linear-gradient(to bottom, #2D8CA0, #1E6478);
+    -fx-text-fill: #FFFFFF;
+    -fx-background-radius: 9;
+    -fx-padding: 8 18;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(30,100,120,0.28), 8, 0.18, 0, 2);
+}
+.button-primary:hover { -fx-background-color: linear-gradient(to bottom, #3CA0B5, #2D8CA0); }
+.button-primary:pressed { -fx-background-color: #154B5A; }
+
+.button-accent {
+    -fx-background-color: linear-gradient(to bottom, #FF9646, #E07B2E);
+    -fx-text-fill: #FFFFFF;
+    -fx-background-radius: 9;
+    -fx-padding: 8 18;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(224,123,46,0.32), 8, 0.18, 0, 2);
+}
+.button-accent:hover { -fx-background-color: linear-gradient(to bottom, #FFA85F, #F08538); }
+.button-accent:pressed { -fx-background-color: #C76A26; }
+
+.button-ghost {
+    -fx-background-color: transparent;
+    -fx-text-fill: #1E6478;
+    -fx-border-color: #2D8CA0;
+    -fx-border-radius: 9;
+    -fx-border-width: 1.5;
+    -fx-padding: 7 16;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+.button-ghost:hover { -fx-background-color: #E1F0F5; }
+
+/* ===== 卡片（微冷白去塑料 + 更柔更长投影 + 大留白） ===== */
+.card {
+    -fx-background-color: #FCFDFE;
+    -fx-background-radius: 16;
+    -fx-border-color: transparent transparent transparent #2D8CA0;
+    -fx-border-width: 0 0 0 4;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.10), 20, 0.12, 0, 6);
+    -fx-padding: 20;
+}
+.card:hover {
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.16), 28, 0.18, 0, 10);
+    -fx-translate-y: -2;
+}
+.card-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1E6478;
+    -fx-padding: 0 0 12 0;
+    -fx-border-color: transparent transparent #E1F0F5 transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+/* ===== 排版层级 ===== */
+.h-page { -fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #154B5A; }
+.text-body { -fx-font-size: 14px; -fx-text-fill: #3C4A55; }
+.text-muted { -fx-font-size: 13px; -fx-text-fill: #6B7884; }
+
+/* ===== 指标胶囊 ===== */
+.stat-chip {
+    -fx-background-color: #EAF3F7;
+    -fx-text-fill: #1E6478;
+    -fx-background-radius: 20;
+    -fx-padding: 6 14;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+.stat-chip-accent { -fx-background-color: #FDEBDD; -fx-text-fill: #C76A26; }
+
+/* ===== 输入框 ===== */
+.text-field, .password-field, .combo-box {
+    -fx-background-radius: 9;
+    -fx-border-color: #CFDCE3;
+    -fx-border-radius: 9;
+    -fx-border-width: 1.5;
+    -fx-padding: 7 10;
+    -fx-font-size: 13px;
+    -fx-background-color: #FFFFFF;
+}
+.text-field:focused, .password-field:focused, .combo-box:focused {
+    -fx-border-color: #2D8CA0;
+    -fx-border-width: 2;
+    -fx-effect: dropshadow(gaussian, rgba(45,140,160,0.16), 8, 0.3, 0, 0);
+}
+/* TextArea 单独：柔和底色去塑料感 */
+.text-area {
+    -fx-background-color: #F7FBFC;
+    -fx-background-radius: 10;
+    -fx-border-color: #E2EBF0;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-padding: 10;
+    -fx-font-size: 13px;
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+}
+.text-area .content { -fx-background-color: transparent; }
+.text-area:focused {
+    -fx-border-color: #2D8CA0;
+    -fx-background-color: #FFFFFF;
+}
+
+/* ===== 表格（深青渐变表头 + 白字） ===== */
+.table-view {
+    -fx-background-radius: 10;
+    -fx-border-color: #D2DCE4;
+    -fx-border-radius: 10;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.06), 10, 0.15, 0, 3);
+}
+.table-view .column-header-background {
+    -fx-background-color: linear-gradient(to bottom, #2D8CA0, #1E6478);
+    -fx-background-radius: 10 10 0 0;
+    -fx-border-color: transparent transparent #154B5A transparent;
+    -fx-border-width: 0 0 1 0;
+}
+.table-view .column-header .label {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+}
+.table-view .table-row-cell:selected { -fx-background-color: #CDE8F0; }
+.table-view .table-row-cell:odd { -fx-background-color: #F7FBFC; }
+.table-view .table-cell {
+    -fx-text-fill: #28323C;
+    -fx-font-size: 13px;
+}
+.table-view .table-row-cell:selected .table-cell {
+    -fx-text-fill: #154B5A;
+    -fx-font-weight: bold;
+}
+
+/* ===== 图表美化（LineChart/BarChart 通用） ===== */
+.chart {
+    -fx-background-color: transparent;
+}
+.chart-title {
+    -fx-text-fill: #154B5A;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 8 0;
+}
+.chart-plot-background {
+    -fx-background-color: #F7FBFC;
+    -fx-background-radius: 10;
+    -fx-border-color: #E2EBF0;
+    -fx-border-width: 1;
+    -fx-border-radius: 10;
+}
+.chart-vertical-grid-line {
+    -fx-stroke: #E4EDF2;
+    -fx-stroke-dash-array: 2 5;
+}
+.chart-horizontal-grid-line {
+    -fx-stroke: #E4EDF2;
+    -fx-stroke-dash-array: 2 5;
+}
+.chart-alternative-row-fill {
+    -fx-fill: transparent;
+}
+.axis {
+    -fx-tick-label-fill: #6B7884;
+    -fx-tick-label-font-size: 11px;
+    -fx-axis-line-color: #CFDCE3;
+    -fx-tick-mark-color: #CFDCE3;
+}
+.axis-label {
+    -fx-text-fill: #41525E;
+    -fx-font-size: 12px;
+}
+.chart-series-line {
+    -fx-stroke: #2D8CA0;
+    -fx-stroke-width: 2.5;
+}
+.default-color0.chart-series-line { -fx-stroke: #2D8CA0; }
+.default-color0.chart-line-symbol {
+    -fx-background-color: #FFFFFF, #2D8CA0;
+    -fx-background-radius: 6px;
+    -fx-background-insets: 0, 2px;
+    -fx-border-color: #2D8CA0;
+    -fx-border-width: 2;
+    -fx-border-radius: 6px;
+    -fx-padding: 4px;
+}
+.chart-legend {
+    -fx-background-color: transparent;
+    -fx-padding: 0 0 0 0;
+}
+.chart-legend-item-symbol {
+    -fx-background-color: #2D8CA0, #FFFFFF;
+    -fx-background-radius: 4px;
+    -fx-background-insets: 0, 2px;
+}
+.chart-legend-item {
+    -fx-text-fill: #41525E;
+    -fx-font-size: 12px;
+}
+
+/* ===== 左侧导航栏 SideNav ===== */
+.sidebar {
+    -fx-background-color: linear-gradient(to bottom, #FFFFFF, #F4F9FB);
+    -fx-pref-width: 210;
+    -fx-min-width: 190;
+    -fx-max-width: 240;
+    -fx-padding: 0 0 12 0;
+    -fx-border-color: #E2EBF0;
+    -fx-border-width: 0 1 0 0;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.08), 14, 0.12, 2, 0);
+}
+.sidebar-brand {
+    -fx-background-color: linear-gradient(to right, #2D8CA0, #1E6478);
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-padding: 20 16 18 18;
+    -fx-background-radius: 0;
+}
+.sidebar-scroll {
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+}
+.sidebar-scroll .viewport { -fx-background-color: transparent; }
+.sidebar-scroll .scroll-bar { -fx-background-color: transparent; }
+.sidebar-scroll .scroll-bar .thumb { -fx-background-color: #B7C6CE; -fx-background-radius: 6; }
+.sidebar-nav { -fx-padding: 10 10; }
+.sidebar-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #3C4A55;
+    -fx-font-size: 13px;
+    -fx-alignment: CENTER-LEFT;
+    -fx-padding: 12 16;
+    -fx-background-radius: 9;
+    -fx-cursor: hand;
+    -fx-border-width: 0;
+    -fx-wrap-text: false;
+}
+.sidebar-btn:hover {
+    -fx-background-color: #E1F0F5;
+    -fx-text-fill: #1E6478;
+}
+.sidebar-btn-active {
+    -fx-background-color: linear-gradient(to right, #2D8CA0, #3CA0B5);
+    -fx-text-fill: #FFFFFF;
+    -fx-font-weight: bold;
+    -fx-border-color: transparent transparent transparent #FF9646;
+    -fx-border-width: 0 0 0 3;
+    -fx-border-radius: 0;
+    -fx-effect: dropshadow(gaussian, rgba(45,140,160,0.28), 8, 0.2, 0, 2);
+}
+.sidebar-icon {
+    -fx-text-fill: #6B8A95;
+    -fx-font-size: 14px;
+    -fx-font-family: "Segoe UI Symbol", "Microsoft YaHei", sans-serif;
+}
+.sidebar-btn-active .sidebar-icon { -fx-text-fill: #FFFFFF; }
+
+/* ===== 顶栏 header ===== */
+.top-bar {
+    -fx-background-color: linear-gradient(to right, #1E6478, #2D8CA0 60%, #1E6478);
+    -fx-border-color: transparent transparent #154B5A transparent;
+    -fx-border-width: 0 0 2 0;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.22), 10, 0.2, 0, 2);
+}
+.top-bar-label {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+/* ===== 页面标题 ===== */
+.page-title { -fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #154B5A; }
+.sub-title { -fx-font-size: 14px; -fx-text-fill: #41525E; -fx-font-weight: bold; }
+.hint { -fx-font-size: 12px; -fx-text-fill: #6B7884; }
+
+/* 识图结果条目 */
+.vision-item {
+    -fx-background-color: #F7FBFC;
+    -fx-background-radius: 10;
+    -fx-border-color: #E2EBF0;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-padding: 8 10;
+}
+
+/* ===== 报告弹窗（渐变标题带 + 层次化阅读栏） ===== */
+.report-card {
+    -fx-background-color: #FCFDFE;
+    -fx-background-radius: 18;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.24), 32, 0.3, 0, 14);
+    -fx-padding: 0;
+    -fx-overflow: hidden;
+}
+.report-hero {
+    -fx-background-color: linear-gradient(to right, #2D8CA0, #1E6478);
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-padding: 22 26;
+    -fx-background-radius: 18 18 0 0;
+}
+.report-body {
+    -fx-padding: 26 30;
+    -fx-background-color: #FCFDFE;
+}
+.report-text {
+    -fx-fill: #2A3742;
+    -fx-font-size: 14px;
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    -fx-line-spacing: 6px;
+}
+.report-section-title {
+    -fx-fill: #1E6478;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+}
+.report-divider {
+    -fx-fill: #E2EBF0;
+}
+.report-scroll {
+    -fx-background-color: #FCFDFE;
+    -fx-border-width: 0;
+}
+.report-scroll .scroll-bar:vertical .thumb { -fx-background-color: #B7C6CE; -fx-background-radius: 6; }
+.report-scroll .scroll-bar:vertical .track { -fx-background-color: transparent; }
+.report-scroll .scroll-bar:horizontal { -fx-opacity: 0; }
+
+/* ===== 未读角标 ===== */
+.badge {
+    -fx-background-color: #E65A5A;
+    -fx-text-fill: white;
+    -fx-background-radius: 9;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-alignment: center;
+    -fx-min-width: 18;
+    -fx-min-height: 18;
+    -fx-padding: 0 5;
+}
+
+/* ===== 折叠面板 TitledPane / Accordion（数据录入等收起展开式分区） ===== */
+.titled-pane {
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0 0 8 0;
+}
+.titled-pane > .title {
+    -fx-background-color: #FCFDFE;
+    -fx-background-radius: 12;
+    -fx-border-color: #E2EBF0;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-padding: 13 16;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.08), 8, 0.12, 0, 2);
+}
+.titled-pane > .title > .text {
+    -fx-text-fill: #1E6478;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+.titled-pane > .title > .arrow-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0 8 0 0;
+}
+.titled-pane > .title > .arrow-button .arrow {
+    -fx-background-color: #2D8CA0;
+}
+.titled-pane:expanded > .title {
+    -fx-background-radius: 12 12 0 0;
+    -fx-border-radius: 12 12 0 0;
+    -fx-border-color: #E2EBF0 #E2EBF0 transparent #E2EBF0;
+}
+.titled-pane > .content {
+    -fx-background-color: #FCFDFE;
+    -fx-background-radius: 0 0 12 12;
+    -fx-border-color: transparent #E2EBF0 #E2EBF0 #E2EBF0;
+    -fx-border-width: 0 1 1 1;
+    -fx-border-radius: 0 0 12 12;
+}
+.titled-pane:collapsed > .title {
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+}
