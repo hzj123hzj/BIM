@@ -145,8 +145,8 @@ public class FoodManagePanel extends VBox {
     private void batchImportFoods() {
         List<String[]> rawRows = ExcelImportDialog.show("批量导入食物",
                 "请选择 Excel（.xlsx）文件。\n" +
-                "支持表头自动识别，列如：分类, 产品名称, 热量(kcal), 蛋白质(g), 碳水(g), 脂肪(g)。\n" +
-                "中间带汉堡、小食、甜品这样的分组行也能自动识别。");
+                "程序会自动识别表头（分类/名称/热量/蛋白质/碳水/脂肪），并自动跳过“汉堡、小食”这类分组行。\n" +
+                "只有第一行不是表头（而是标题/说明）时，才勾选“跳过首行”。支持 5~7 列（可含备注列），单位会自动去掉。");
         if (rawRows == null || rawRows.isEmpty()) return;
 
         List<String[]> rows = FoodExcelParser.parse(rawRows);

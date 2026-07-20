@@ -47,8 +47,8 @@ public class ExcelImportDialog {
         HBox fileRow = new HBox(8, tfPath, btnChoose);
         HBox.setHgrow(tfPath, Priority.ALWAYS);
 
-        CheckBox cbHeader = new CheckBox("首行作为表头（导入时跳过）");
-        cbHeader.setSelected(true);
+        CheckBox cbHeader = new CheckBox("首行是标题/说明（导入时跳过首行）");
+        cbHeader.setSelected(false);
 
         Label status = new Label();
         status.setStyle("-fx-text-fill: #c0392b;");

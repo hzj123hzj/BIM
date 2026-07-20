@@ -31,8 +31,16 @@ public class FoodExcelParser {
             carbsIdx = cols[4];
             fatIdx = cols[5];
         } else {
-            // 无表头：按列数默认
-            categoryIdx = rawRows.get(0).length >= 6 ? 0 : -1;
+            // 无表头：从第一个长度>=5的行推断列数
+            // 兼容「首行被跳过」或「首行是分组标题行（长度很短）」的情况
+            int inferLen = 5;
+            for (String[] r : rawRows) {
+                if (r != null && r.length >= 5) {
+                    inferLen = r.length;
+                    break;
+                }
+            }
+            categoryIdx = inferLen >= 6 ? 0 : -1;
             nameIdx = categoryIdx >= 0 ? 1 : 0;
             calIdx = nameIdx + 1;
             proteinIdx = calIdx + 1;
