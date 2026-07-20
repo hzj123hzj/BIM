@@ -32,7 +32,7 @@ public class HistoryTrendPanel extends VBox {
         setPadding(new Insets(18));
         setStyle("-fx-background-color: transparent;");
 
-        cbMetric.getItems().addAll("体重", "体脂率", "肌肉率", "BMI", "腰围");
+        cbMetric.getItems().addAll("体重", "体脂率", "肌肉率", "BMI", "腰围", "蛋白质率", "骨量", "水分率", "内脏脂肪");
         cbMetric.setValue("体重");
 
         HBox ctrl = new HBox(10);
@@ -95,6 +95,8 @@ public class HistoryTrendPanel extends VBox {
         addCol("内脏脂肪", r -> r.get("visceral_fat") + "级");
         addCol("BMI", r -> f1(num(r, "bmi")));
         addCol("腰围", r -> f1(num(r, "waist")) + "cm");
+        addCol("蛋白质率", r -> f1(num(r, "protein_rate")) + "%");
+        addCol("骨量", r -> f1(num(r, "bone_mass")) + "kg");
         addCol("身体年龄", r -> r.get("body_age") + "岁");
         addCol("体质分类", r -> str(r, "body_type"));
         table.setItems(tableData);
@@ -123,6 +125,10 @@ public class HistoryTrendPanel extends VBox {
                 case "肌肉率": values.add(num(r, "muscle_rate")); break;
                 case "BMI": values.add(num(r, "bmi")); break;
                 case "腰围": values.add(num(r, "waist")); break;
+                case "蛋白质率": values.add(num(r, "protein_rate")); break;
+                case "骨量": values.add(num(r, "bone_mass")); break;
+                case "水分率": values.add(num(r, "water_rate")); break;
+                case "内脏脂肪": values.add(num(r, "visceral_fat")); break;
                 default: values.add(num(r, "weight"));
             }
         }
@@ -136,6 +142,10 @@ public class HistoryTrendPanel extends VBox {
             series.getData().add(d);
         }
         chart.setTitle(metric + " 历史趋势");
+        chart.getYAxis().setLabel(metric.equals("体重") ? "kg"
+                : metric.equals("腰围") ? "cm"
+                : metric.equals("内脏脂肪") ? "级"
+                : metric.equals("BMI") ? "BMI" : "%");
         chart.getData().clear();
         chart.getData().add(series);
 

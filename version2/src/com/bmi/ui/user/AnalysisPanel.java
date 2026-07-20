@@ -9,12 +9,16 @@ import javafx.geometry.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.*;
+import javafx.scene.chart.*;
 
 import java.util.*;
 
 /** 分析评估面板 — 综合 BMI、体脂率、BMR、TDEE 等指标生成评估报告 */
 public class AnalysisPanel extends VBox {
     private String reportContent = "";
+
+    private final BarChart<String, Number> scoreChart;
+    private final StackedBarChart<String, Number> compChart;
 
     public AnalysisPanel() {
         setSpacing(16);
@@ -60,7 +64,45 @@ public class AnalysisPanel extends VBox {
                               metricBox("骨量", "-- kg", "#6A4CA0"));
         metricsCard.getChildren().addAll(t2, metricsGrid);
 
-        getChildren().addAll(ctrlCard, metricsCard);
+        // 体质多维对比（本环境 JavaFX 未含 RadarChart，改用柱状图做多维度归一化对比）
+        CategoryAxis scoreCat = new CategoryAxis();
+        NumberAxis scoreVal = new NumberAxis(0, 100, 20);
+        scoreVal.setLabel("健康度(0-100)");
+        scoreChart = new BarChart<>(scoreCat, scoreVal);
+        scoreChart.setTitle("体质多维对比（雷达替代）");
+        scoreChart.setPrefHeight(320);
+        scoreChart.setLegendVisible(false);
+        scoreChart.setAnimated(false);
+        scoreChart.setCategoryGap(20);
+        VBox radarCard = new VBox(10);
+        radarCard.getStyleClass().add("card");
+        Label tRadar = new Label("体质多维对比（归一化，仅作可视化）");
+        tRadar.getStyleClass().add("card-title");
+        radarCard.getChildren().addAll(tRadar, scoreChart);
+
+        // 身体成分构成图
+        CategoryAxis compCat = new CategoryAxis();
+        NumberAxis compVal = new NumberAxis();
+        compVal.setLabel("kg");
+        compChart = new StackedBarChart<>(compCat, compVal);
+        compChart.setTitle("身体成分构成");
+        compChart.setPrefHeight(320);
+        compChart.setLegendVisible(true);
+        compChart.setAnimated(false);
+        compChart.setCategoryGap(40);
+        VBox compBox = new VBox(10);
+        compBox.getStyleClass().add("card");
+        Label tComp = new Label("身体成分构成（脂肪体重 / 去脂体重）");
+        tComp.getStyleClass().add("card-title");
+        compBox.getChildren().addAll(tComp, compChart);
+
+        HBox chartsRow = new HBox(16);
+        chartsRow.setSpacing(16);
+        HBox.setHgrow(radarCard, Priority.ALWAYS);
+        HBox.setHgrow(compBox, Priority.ALWAYS);
+        chartsRow.getChildren().addAll(radarCard, compBox);
+
+        getChildren().addAll(ctrlCard, metricsCard, chartsRow);
         VBox.setVgrow(metricsCard, Priority.ALWAYS);
         btnRefresh.setOnAction(e -> refresh());
         refresh();
@@ -70,6 +112,8 @@ public class AnalysisPanel extends VBox {
         Map<String, Object> latest = DBUtil.getLatestHealthRecord();
         if (latest == null) {
             reportContent = "暂无健康记录, 请先在「数据录入」页面录入数据";
+            scoreChart.getData().clear();
+            compChart.getData().clear();
             return;
         }
 
@@ -112,6 +156,30 @@ public class AnalysisPanel extends VBox {
         updateMetric(grid, 4, 1, "腰围", waist > 0 ? f1(waist) + " cm" : "未记录");
         updateMetric(grid, 5, 0, "蛋白质率", f1(protein) + "%");
         updateMetric(grid, 5, 1, "骨量", f1(boneMass) + " kg");
+
+        // 体质多维对比（展示用启发式归一化，不影响任何计算/评分）
+        XYChart.Series<String, Number> scoreSeries = new XYChart.Series<>();
+        scoreSeries.setName("体质");
+        scoreSeries.getData().add(new XYChart.Data<>("BMI", scoreBMI(bmi)));
+        scoreSeries.getData().add(new XYChart.Data<>("体脂率", scoreBodyFat(bodyFat, gender)));
+        scoreSeries.getData().add(new XYChart.Data<>("肌肉率", scoreMuscle(muscle, gender)));
+        scoreSeries.getData().add(new XYChart.Data<>("水分率", scoreWater(water, gender)));
+        scoreSeries.getData().add(new XYChart.Data<>("内脏脂肪", scoreVisceral(visceral)));
+        scoreSeries.getData().add(new XYChart.Data<>("蛋白质率", scoreProtein(protein, gender)));
+        scoreChart.getData().clear();
+        scoreChart.getData().add(scoreSeries);
+
+        // 身体成分构成（脂肪体重 / 去脂体重）
+        double fatW = HealthCalculator.calcFatWeight(weight, bodyFat);
+        double leanW = HealthCalculator.calcLeanBodyMass(weight, bodyFat);
+        XYChart.Series<String, Number> sFat = new XYChart.Series<>();
+        sFat.setName("脂肪体重 " + f1(fatW) + "kg");
+        sFat.getData().add(new XYChart.Data<>("身体成分", fatW));
+        XYChart.Series<String, Number> sLean = new XYChart.Series<>();
+        sLean.setName("去脂体重 " + f1(leanW) + "kg");
+        sLean.getData().add(new XYChart.Data<>("身体成分", leanW));
+        compChart.getData().clear();
+        compChart.getData().addAll(sFat, sLean);
 
         StringBuilder sb = new StringBuilder();
         sb.append("═══════════════════════════════════════════\n");
@@ -168,6 +236,10 @@ public class AnalysisPanel extends VBox {
                 : (protein < 14 ? "偏低" : protein <= 18 ? "正常" : "偏高");
         sb.append("  评级: ").append(proteinLevel).append("\n");
         sb.append("  骨量: ").append(f1(boneMass)).append(" kg\n\n");
+
+        sb.append("【身体成分构成】\n");
+        sb.append("  脂肪体重: ").append(f1(fatW)).append(" kg (").append(f1(bodyFat)).append("%)\n");
+        sb.append("  去脂体重: ").append(f1(leanW)).append(" kg (").append(f1(100 - bodyFat)).append("%)\n\n");
 
         sb.append("【身体年龄】\n");
         sb.append("  身体年龄: ").append(bodyAge).append(" 岁 (实际年龄: ").append(age).append(" 岁)\n");
@@ -231,6 +303,40 @@ public class AnalysisPanel extends VBox {
     private static String f0(double v) { return String.format("%.0f", v); }
     private static String f1(double v) { return String.format("%.1f", v); }
     private static String f2(double v) { return String.format("%.2f", v); }
+
+    // ===== 雷达图归一化（仅可视化用，不影响计算/评分逻辑）=====
+    private static double clamp100(double v) { return Math.max(0, Math.min(100, v)); }
+    private static double scoreBMI(double bmi) {
+        return clamp100(100 - Math.abs(bmi - 22) * 10);
+    }
+    private static double scoreBodyFat(double bf, String gender) {
+        boolean male = "男".equals(gender);
+        double lo = male ? 12 : 20, hi = male ? 25 : 32;
+        if (bf >= lo && bf <= hi) return 100;
+        return clamp100(100 - Math.abs(bf - (bf < lo ? lo : hi)) * 8);
+    }
+    private static double scoreMuscle(double mr, String gender) {
+        double base = "男".equals(gender) ? 40 : 35;
+        return clamp100(mr / base * 100);
+    }
+    private static double scoreWater(double wr, String gender) {
+        boolean male = "男".equals(gender);
+        double lo = male ? 50 : 45, hi = male ? 65 : 60;
+        if (wr >= lo && wr <= hi) return 100;
+        return clamp100(100 - Math.abs(wr - (wr < lo ? lo : hi)) * 5);
+    }
+    private static double scoreVisceral(int vf) {
+        if (vf <= 4) return 100;
+        if (vf <= 8) return 75;
+        if (vf <= 12) return 45;
+        return 20;
+    }
+    private static double scoreProtein(double pr, String gender) {
+        boolean male = "男".equals(gender);
+        double lo = male ? 16 : 14, hi = male ? 20 : 18;
+        if (pr >= lo && pr <= hi) return 100;
+        return clamp100(100 - Math.abs(pr - (pr < lo ? lo : hi)) * 10);
+    }
 
     private void showReportDialog(String title, String content) {
         ReportDialog.showText(title, content);
