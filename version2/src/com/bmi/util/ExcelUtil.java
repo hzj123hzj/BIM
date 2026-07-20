@@ -17,29 +17,41 @@ public final class ExcelUtil {
 
     /** 字段顺序: 0=名称 1=热量 2=蛋白质 3=碳水 4=脂肪 */
     public static List<String[]> readFoods(File file) throws Exception {
-        List<String[]> rows = new ArrayList<>();
+        List<String[]> all = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(file);
              Workbook wb = WorkbookFactory.create(fis)) {
-            Sheet sheet = wb.getSheetAt(0);
-            if (sheet == null) return rows;
-
-            Iterator<Row> it = sheet.rowIterator();
-            if (!it.hasNext()) return rows;
-
-            Row first = it.next();
-            int[] map = detectHeader(first);
-            boolean hasHeader = map != null;
-            int[] colMap = hasHeader ? map : new int[]{0, 1, 2, 3, 4};
-
-            if (!hasHeader) {
-                rows.add(parseRow(first, colMap));
+            // 合并工作簿内所有 Sheet（兼容多 Sheet：如按品牌分表的快餐营养数据）
+            int n = wb.getNumberOfSheets();
+            for (int i = 0; i < n; i++) {
+                Sheet sheet = wb.getSheetAt(i);
+                if (sheet == null) continue;
+                all.addAll(parseSheet(sheet));
             }
-            while (it.hasNext()) {
-                Row r = it.next();
-                String[] parsed = parseRow(r, colMap);
-                if (parsed[0] == null || parsed[0].trim().isEmpty()) continue; // 跳过空行
-                rows.add(parsed);
-            }
+        }
+        return all;
+    }
+
+    private static List<String[]> parseSheet(Sheet sheet) {
+        List<String[]> rows = new ArrayList<>();
+        Iterator<Row> it = sheet.rowIterator();
+        if (!it.hasNext()) return rows;
+
+        Row first = it.next();
+        int[] map = detectHeader(first);
+        boolean hasHeader = map != null;
+        int[] colMap = hasHeader ? map : new int[]{0, 1, 2, 3, 4};
+
+        if (!hasHeader) {
+            rows.add(parseRow(first, colMap));
+        }
+        while (it.hasNext()) {
+            Row r = it.next();
+            String[] parsed = parseRow(r, colMap);
+            if (parsed[0] == null || parsed[0].trim().isEmpty()) continue; // 跳过空行
+            // 跳过“分类/分组”行：名称有值但营养数据全为空（如“🥣 主食谷物”）
+            if (parsed[1].trim().isEmpty() && parsed[2].trim().isEmpty()
+                    && parsed[3].trim().isEmpty() && parsed[4].trim().isEmpty()) continue;
+            rows.add(parsed);
         }
         return rows;
     }

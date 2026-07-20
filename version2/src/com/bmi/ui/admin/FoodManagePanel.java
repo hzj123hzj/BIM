@@ -9,8 +9,10 @@ import javafx.scene.layout.*;
 import javafx.scene.text.*;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.stage.FileChooser;
+import javafx.stage.Window;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -167,42 +169,63 @@ public class FoodManagePanel extends VBox {
 
     private void importFromExcel() {
         FileChooser fc = new FileChooser();
-        fc.setTitle("选择食物 Excel 文件");
+        fc.setTitle("选择要导入的食物 Excel 文件（可多选）");
         fc.getExtensionFilters().addAll(
                 new FileChooser.ExtensionFilter("Excel 文件 (*.xlsx, *.xls)", "*.xlsx", "*.xls"),
                 new FileChooser.ExtensionFilter("所有文件", "*.*"));
-        File file = fc.showOpenDialog(getScene().getWindow());
-        if (file == null) return;
+        Window owner = (getScene() != null) ? getScene().getWindow() : null;
+        List<File> files = fc.showOpenMultipleDialog(owner);
+        if (files == null || files.isEmpty()) return;
 
-        List<String[]> rows;
-        try {
-            rows = ExcelUtil.readFoods(file);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            err("读取 Excel 失败: " + ex.getMessage());
-            return;
+        List<String[]> rows = new ArrayList<>();
+        StringBuilder failed = new StringBuilder();
+        int okFiles = 0;
+        for (File f : files) {
+            try {
+                List<String[]> r = ExcelUtil.readFoods(f);
+                if (!r.isEmpty()) {
+                    rows.addAll(r);
+                    okFiles++;
+                } else {
+                    failed.append("\n• ").append(f.getName()).append("：无数据行");
+                }
+            } catch (Throwable ex) {
+                ex.printStackTrace();
+                failed.append("\n• ").append(f.getName()).append("：")
+                        .append(ex.getClass().getSimpleName()).append(" - ").append(ex.getMessage());
+            }
         }
         if (rows.isEmpty()) {
-            warn("该文件中没有可导入的数据（请检查列：名称、热量、蛋白质、碳水、脂肪）");
+            warn("所选文件中没有可导入的数据（请检查列：名称、热量、蛋白质、碳水、脂肪）"
+                    + (failed.length() > 0 ? "\n\n以下文件读取失败：" + failed : ""));
             return;
         }
-        showImportPreview(rows, file.getName());
+
+        String fileInfo = okFiles + "/" + files.size() + " 个文件，" + rows.size() + " 行"
+                + (failed.length() > 0 ? "；" + countLines(failed) + " 个文件读取失败" : "");
+        showImportPreview(rows, fileInfo);
+    }
+
+    private int countLines(StringBuilder sb) {
+        int c = 0;
+        for (int i = 0; i < sb.length(); i++) if (sb.charAt(i) == '\n') c++;
+        return c;
     }
 
     private void showImportPreview(List<String[]> rows, String fileName) {
         TableView<String[]> preview = new TableView<>();
         preview.getColumns().addAll(
-                colA("名称", 1, 160),
-                colA("热量", 2, 90),
-                colA("蛋白质", 3, 90),
-                colA("碳水", 4, 90),
-                colA("脂肪", 5, 90)
+                colA("名称", 0, 160),
+                colA("热量", 1, 90),
+                colA("蛋白质", 2, 90),
+                colA("碳水", 3, 90),
+                colA("脂肪", 4, 90)
         );
         preview.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         preview.setPrefHeight(360);
         preview.getItems().addAll(rows);
 
-        Label info = new Label("文件: " + fileName + "    共 " + rows.size() + " 行（按名称同步：已存在则更新，不存在则新增）");
+        Label info = new Label("来源: " + fileName + "    共 " + rows.size() + " 行（按名称同步：已存在则更新，不存在则新增）");
         info.setWrapText(true);
 
         VBox box = new VBox(10, info, preview);
@@ -216,10 +239,10 @@ public class FoodManagePanel extends VBox {
                 String result = DBUtil.importFoods(rows);
                 DBUtil.logAction("ADMIN", DBUtil.currentUsername, "批量导入食物", fileName + " -> " + result);
                 loadFoods();
-                new Alert(Alert.AlertType.INFORMATION, "导入完成: " + result, ButtonType.OK).showAndWait();
-            } catch (Exception ex) {
+                new Alert(Alert.AlertType.INFORMATION, "导入成功！\n" + result, ButtonType.OK).showAndWait();
+            } catch (Throwable ex) {
                 ex.printStackTrace();
-                err("导入失败: " + ex.getMessage());
+                err("导入失败: " + ex.getClass().getSimpleName() + " - " + ex.getMessage());
             }
         }
     }
