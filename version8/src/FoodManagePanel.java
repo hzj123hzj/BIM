@@ -5,6 +5,7 @@ import javafx.scene.text.*;
 import javafx.beans.property.ReadOnlyStringWrapper;
 
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * 食物库管理面板（JavaFX 8 重写 version1 ContentManagementPanel 食物部分）
@@ -27,12 +28,14 @@ public class FoodManagePanel extends VBox {
         HBox ctrl = new HBox(8);
         ctrl.setAlignment(Pos.CENTER_LEFT);
         Button btnAdd = new Button("新增");
+        Button btnBatch = new Button("批量导入");
         Button btnEdit = new Button("编辑");
         Button btnDel = new Button("删除");
         btnAdd.getStyleClass().add("button-primary");
+        btnBatch.getStyleClass().add("button-primary");
         btnEdit.getStyleClass().add("button-primary");
         btnDel.getStyleClass().add("button-ghost");
-        ctrl.getChildren().addAll(btnAdd, btnEdit, btnDel);
+        ctrl.getChildren().addAll(btnAdd, btnBatch, btnEdit, btnDel);
         card.getChildren().add(ctrl);
 
         table.getColumns().addAll(
@@ -48,6 +51,7 @@ public class FoodManagePanel extends VBox {
         getChildren().add(card);
 
         btnAdd.setOnAction(e -> editFood(0));
+        btnBatch.setOnAction(e -> batchImportFoods());
         btnEdit.setOnAction(e -> {
             int id = getSelectedId();
             if (id > 0) editFood(id);
@@ -134,6 +138,32 @@ public class FoodManagePanel extends VBox {
         }
     }
 
+    private void batchImportFoods() {
+        List<String[]> rows = ExcelImportDialog.show("批量导入食物",
+                "请选择 Excel（.xlsx）文件。列顺序：名称, 热量, 蛋白质, 碳水, 脂肪。\n" +
+                "热量为整数，其余可为小数；首行可设为表头（自动跳过）。");
+        if (rows == null || rows.isEmpty()) return;
+
+        List<String[]> cleaned = new ArrayList<>();
+        for (String[] r : rows) {
+            if (r.length < 5) continue;
+            for (int i = 0; i < r.length; i++) r[i] = (r[i] == null ? "" : r[i].trim());
+            cleaned.add(r);
+        }
+        if (cleaned.isEmpty()) {
+            warn("未解析到有效数据，请检查列数（需至少 5 列：名称/热量/蛋白质/碳水/脂肪）");
+            return;
+        }
+        try {
+            int[] result = DBUtil.batchInsertFoods(cleaned);
+            info("导入完成：成功 " + result[0] + " 条，跳过/失败 " + result[1] + " 条");
+            DBUtil.logAction("ADMIN", DBUtil.currentUsername, "批量导入食物", "成功 " + result[0] + " 条");
+            loadFoods();
+        } catch (Exception ex) {
+            err("批量导入失败：" + ex.getMessage());
+        }
+    }
+
     private boolean confirmDialog(String title, GridPane content) {
         Alert a = new Alert(Alert.AlertType.CONFIRMATION, "", ButtonType.OK, ButtonType.CANCEL);
         a.setTitle(title);
@@ -143,6 +173,10 @@ public class FoodManagePanel extends VBox {
 
     private void warn(String m) {
         new Alert(Alert.AlertType.WARNING, m, ButtonType.OK).showAndWait();
+    }
+
+    private void info(String m) {
+        new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK).showAndWait();
     }
 
     private void err(String m) {

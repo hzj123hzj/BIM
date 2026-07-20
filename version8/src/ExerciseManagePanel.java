@@ -4,6 +4,7 @@ import javafx.scene.layout.*;
 import javafx.beans.property.ReadOnlyStringWrapper;
 
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * 运动库管理面板（JavaFX 8 重写 version1 ContentManagementPanel 运动部分）
@@ -26,12 +27,14 @@ public class ExerciseManagePanel extends VBox {
         HBox ctrl = new HBox(8);
         ctrl.setAlignment(Pos.CENTER_LEFT);
         Button btnAdd = new Button("新增");
+        Button btnBatch = new Button("批量导入");
         Button btnEdit = new Button("编辑");
         Button btnDel = new Button("删除");
         btnAdd.getStyleClass().add("button-primary");
+        btnBatch.getStyleClass().add("button-primary");
         btnEdit.getStyleClass().add("button-primary");
         btnDel.getStyleClass().add("button-ghost");
-        ctrl.getChildren().addAll(btnAdd, btnEdit, btnDel);
+        ctrl.getChildren().addAll(btnAdd, btnBatch, btnEdit, btnDel);
         card.getChildren().add(ctrl);
 
         table.getColumns().addAll(
@@ -47,6 +50,7 @@ public class ExerciseManagePanel extends VBox {
         getChildren().add(card);
 
         btnAdd.setOnAction(e -> editExercise(0));
+        btnBatch.setOnAction(e -> batchImportExercises());
         btnEdit.setOnAction(e -> {
             int id = getSelectedId();
             if (id > 0) editExercise(id);
@@ -135,6 +139,36 @@ public class ExerciseManagePanel extends VBox {
         }
     }
 
+    private void batchImportExercises() {
+        List<String[]> rows = ExcelImportDialog.show("批量导入运动",
+                "请选择 Excel（.xlsx）文件。列顺序：名称, 类型, 热量/小时, 强度, 说明。\n" +
+                "类型填 有氧/力量，强度填 低/中/高；首行可设为表头（自动跳过）。");
+        if (rows == null || rows.isEmpty()) return;
+
+        List<String[]> cleaned = new ArrayList<>();
+        for (String[] r : rows) {
+            if (r.length < 5) continue;
+            for (int i = 0; i < r.length; i++) r[i] = (r[i] == null ? "" : r[i].trim());
+            String type = r[1];
+            if (!"有氧".equals(type) && !"力量".equals(type)) type = "有氧";
+            String intensity = r[3];
+            if (!"低".equals(intensity) && !"中".equals(intensity) && !"高".equals(intensity)) intensity = "中";
+            cleaned.add(new String[]{r[0], type, r[2], intensity, r[4]});
+        }
+        if (cleaned.isEmpty()) {
+            warn("未解析到有效数据，请检查列数（需至少 5 列：名称/类型/热量/强度/说明）");
+            return;
+        }
+        try {
+            int[] result = DBUtil.batchInsertExercises(cleaned);
+            info("导入完成：成功 " + result[0] + " 条，跳过/失败 " + result[1] + " 条");
+            DBUtil.logAction("ADMIN", DBUtil.currentUsername, "批量导入运动", "成功 " + result[0] + " 条");
+            loadExercises();
+        } catch (Exception ex) {
+            err("批量导入失败：" + ex.getMessage());
+        }
+    }
+
     private boolean confirmDialog(String title, GridPane content) {
         Alert a = new Alert(Alert.AlertType.CONFIRMATION, "", ButtonType.OK, ButtonType.CANCEL);
         a.setTitle(title);
@@ -144,6 +178,10 @@ public class ExerciseManagePanel extends VBox {
 
     private void warn(String m) {
         new Alert(Alert.AlertType.WARNING, m, ButtonType.OK).showAndWait();
+    }
+
+    private void info(String m) {
+        new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK).showAndWait();
     }
 
     private void err(String m) {

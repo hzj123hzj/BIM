@@ -1313,7 +1313,35 @@ public class DBUtil {
             }
         }
 
-        /** 获取所有运动库项目 */
+        /** 批量导入食物(事务) rows: {name, calories, protein, carbs, fat} */
+        static int[] batchInsertFoods(List<String[]> rows) throws SQLException {
+            String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
+            int ok = 0, fail = 0;
+            try (Connection conn = getConnection()) {
+                conn.setAutoCommit(false);
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    for (String[] row : rows) {
+                        try {
+                            ps.setString(1, row[0]);
+                            ps.setInt(2, Integer.parseInt(row[1]));
+                            ps.setDouble(3, Double.parseDouble(row[2]));
+                            ps.setDouble(4, Double.parseDouble(row[3]));
+                            ps.setDouble(5, Double.parseDouble(row[4]));
+                            ps.addBatch();
+                            ok++;
+                        } catch (Exception parseEx) {
+                            fail++;
+                        }
+                    }
+                    ps.executeBatch();
+                    conn.commit();
+                } catch (SQLException e) {
+                    conn.rollback();
+                    throw e;
+                }
+            }
+            return new int[]{ok, fail};
+        }
         static List<String[]> getExerciseLibrary() {
             List<String[]> list = new ArrayList<>();
             String sql = "SELECT id, exercise_name, exercise_type, calories_per_hour, intensity_level, description FROM exercise_library ORDER BY id";
@@ -1378,7 +1406,36 @@ public class DBUtil {
             }
         }
 
-        /** 获取所有健康文章 */
+        /** 批量导入运动库(事务) rows: {name, type, caloriesPerHour, intensity, desc} */
+        static int[] batchInsertExercises(List<String[]> rows) throws SQLException {
+            String sql = "INSERT INTO exercise_library (exercise_name, exercise_type, calories_per_hour, intensity_level, description) " +
+                         "VALUES (?, ?, ?, ?, ?) ON CONFLICT (exercise_name) DO NOTHING";
+            int ok = 0, fail = 0;
+            try (Connection conn = getConnection()) {
+                conn.setAutoCommit(false);
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    for (String[] row : rows) {
+                        try {
+                            ps.setString(1, row[0]);
+                            ps.setString(2, row[1]);
+                            ps.setInt(3, Integer.parseInt(row[2]));
+                            ps.setString(4, row[3]);
+                            ps.setString(5, row[4]);
+                            ps.addBatch();
+                            ok++;
+                        } catch (Exception parseEx) {
+                            fail++;
+                        }
+                    }
+                    ps.executeBatch();
+                    conn.commit();
+                } catch (SQLException e) {
+                    conn.rollback();
+                    throw e;
+                }
+            }
+            return new int[]{ok, fail};
+        }
         static List<String[]> getHealthArticles() {
             List<String[]> list = new ArrayList<>();
             String sql = "SELECT id, title, category, status, published_at FROM health_articles ORDER BY id DESC";
