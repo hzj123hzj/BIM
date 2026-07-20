@@ -14,54 +14,49 @@
 - **表现层与逻辑层解耦**：`DBUtil` / `HealthCalculator` / `PasswordUtil` 为独立顶层类，无 UI 依赖，可直接复用
 
 ## 技术栈
-- **语言**: Java (JDK 8，Oracle JDK 1.8.0_291)
-- **UI 框架**: JavaFX 8（随 JDK 自带）
+- **语言**: Java (JDK 17)
+- **UI 框架**: JavaFX 17（独立依赖，置于 `lib/`，运行需通过 `--module-path` 加载）
 - **数据库**: PostgreSQL
 - **驱动**: postgresql-42.7.3.jar
+- **其他依赖**: webcam-capture（摄像头拍照识图）、bridj、slf4j-api
 
 ## 目录结构
 ```
 version2/
-├── src/                          # Java 源代码
+├── src/com/bmi/                  # 源代码（按职责分包）
 │   ├── App.java                  # JavaFX 入口 (extends Application)，场景切换
-│   ├── LoginView.java            # 登录 / 注册界面
-│   ├── MainView.java             # 用户端主框架（11 个功能 Tab）
-│   ├── AdminView.java            # 管理员端主框架（11 个功能 Tab）
-│   ├── Theme.java                # 配色常量与场景样式工具
-│   ├── DBUtil.java               # 数据访问层（登录/注册/健康记录/AI记录/统计/资讯等）
-│   ├── HealthCalculator.java     # 体质指标计算（BMI/体脂/基础代谢等）
-│   ├── PasswordUtil.java         # 密码哈希工具
-│   ├── InitDB.java               # 数据库初始化工具
-│   ├── style.css                 # JavaFX 样式表
-│   ├── DataInputPanel.java       # 数据录入
-│   ├── HistoryTrendPanel.java    # 历史趋势
-│   ├── AnalysisPanel.java        # 分析评估
-│   ├── PredictionPanel.java      # 预测分析
-│   ├── GoalPlanPanel.java        # 目标计划
-│   ├── DietPanel.java            # 饮食管理
-│   ├── AIChatPanel.java          # AI 对话
-│   ├── AIDietPanel.java          # AI 饮食建议
-│   ├── AICookbookPanel.java      # AI 食谱
-│   ├── AchievementPanel.java     # 成就徽章
-│   ├── DashboardPanel.java       # 数据大屏
-│   ├── HealthArticlePanel.java   # 健康资讯
-│   ├── UserManagePanel.java      # 用户管理
-│   ├── FoodManagePanel.java      # 食物库管理
-│   ├── ExerciseManagePanel.java  # 运动库管理
-│   ├── ArticleManagePanel.java   # 健康文章管理
-│   ├── AIChatRecordPanel.java    # AI 对话记录
-│   ├── AIDietRecordPanel.java    # AI 饮食记录
-│   ├── AICookbookRecordPanel.java# AI 食谱记录
-│   ├── AITemplatePanel.java      # AI 提示词模板
-│   ├── ApiConfigPanel.java       # AI 接口配置
-│   ├── AIUsagePanel.java         # AI 调用统计
-│   └── DataMonitorPanel.java     # 数据监控
-├── lib/                          # 第三方依赖库
-│   └── postgresql-42.7.3.jar     # PostgreSQL JDBC 驱动
+│   ├── util/                     # 工具层（无 UI 依赖，可独立复用）
+│   │   ├── Theme.java            # 配色常量与场景样式工具
+│   │   ├── HealthCalculator.java # 体质指标计算（BMI/体脂/基础代谢等）
+│   │   ├── PasswordUtil.java     # 密码哈希工具
+│   │   └── ImageUtil.java        # BufferedImage -> JavaFX Image（替代 javafx.swing）
+│   ├── db/                       # 数据访问层
+│   │   ├── DBUtil.java           # 登录/注册/健康记录/AI记录/统计/资讯等
+│   │   └── InitDB.java           # 数据库初始化工具
+│   ├── ui/                       # 表现层（视图与容器）
+│   │   ├── LoginView.java        # 登录 / 注册界面
+│   │   ├── MainView.java         # 用户端主框架（12 个功能 Tab）
+│   │   ├── AdminView.java        # 管理员端主框架（11 个功能 Tab）
+│   │   ├── SideNav.java          # 左侧导航栏组件
+│   │   ├── NotificationCenter.java # 消息中心弹窗
+│   │   ├── ReportDialog.java     # 通用报告弹窗
+│   │   ├── user/                 # 用户端功能面板
+│   │   │   ├── UserDashboardPanel / DataInputPanel / HistoryTrendPanel
+│   │   │   ├── AnalysisPanel / PredictionPanel / GoalPlanPanel
+│   │   │   ├── DietPanel / AIChatPanel / AIDietPanel / AICookbookPanel
+│   │   │   ├── AchievementPanel / HealthArticlePanel
+│   │   └── admin/                # 管理员端功能面板
+│   │       ├── UserManagePanel / FoodManagePanel / ExerciseManagePanel
+│   │       ├── ArticleManagePanel / DashboardPanel / DataMonitorPanel
+│   │       ├── AIChatRecordPanel / AIDietRecordPanel / AICookbookRecordPanel
+│   │       ├── AITemplatePanel / ApiConfigPanel / AIUsagePanel
+│   └── style.css                 # JavaFX 样式表（编译时复制到 out/）
+├── lib/                          # 第三方依赖库（JavaFX 17 + PostgreSQL + webcam 等）
 ├── sql/                          # 数据库脚本
 │   └── init_database.sql         # 建表脚本
 ├── docs/                         # 项目文档
-├── run.bat                       # Windows 一键运行脚本
+├── run.bat                       # Windows 一键编译运行脚本
+├── build.sh                      # Linux / macOS 编译运行脚本
 └── README.md                     # 本文件
 ```
 
@@ -74,18 +69,30 @@ CREATE DATABASE health_db;
 ```
 
 数据库配置（默认）：
-- 地址: `localhost:5432`
+- 地址: `localhost:5433`（端口 5432 在 WSL 内被 Windows 预留，故 PostgreSQL 改用 5433）
 - 数据库名: `health_db`
 - 用户名: `postgres`
 - 密码: `12345678`
 
 ### 2. 运行系统
-- **方式一**：双击 `run.bat`（自动编译并启动）
-- **方式二**：手动编译运行
+- **方式一（Windows）**：双击 `run.bat`（自动编译并启动）
+- **方式二（Linux / macOS）**：执行 `bash build.sh`（自动编译并启动）
+- **方式三**：手动编译运行（模块化工程，见 `src/module-info.java`）
   ```bash
-  javac -encoding UTF-8 -cp lib/postgresql-42.7.3.jar -d out src/*.java
-  java -cp out;lib/postgresql-42.7.3.jar App
+  # 构造模块路径：lib 下全部 jar
+  MP=$(printf '%s:' lib/*.jar); MP=${MP%:}
+
+  # 编译
+  javac --module-path "$MP" -d out $(find src -name '*.java')
+  cp src/style.css out/style.css
+
+  # 运行
+  java --module-path "$MP:out" -m com.bmi.app/com.bmi.App
   ```
+  > 说明：本项目为 Java 平台模块系统（JPMS）工程，`module-info.java` 已声明对 `javafx.controls`、
+  > `javafx.fxml` 等模块的依赖；`lib/` 下所有 jar（含 JavaFX / PostgreSQL / webcam）均通过
+  > `--module-path` 加载，IntelliJ / Eclipse 导入后即可直接编译运行。
+  > 注意：`lib/` 中的 JavaFX jar 需与操作系统匹配（当前为 `*-linux.jar`，Windows 请替换为 `*-win.jar`）。
 
 ## 功能模块
 ### 用户端
@@ -122,7 +129,7 @@ CREATE DATABASE health_db;
 ## 与旧版差异
 | 项目 | 旧版 (Swing) | 本版 (JavaFX) |
 |------|------|------|
-| UI 框架 | Java Swing + Nimbus | JavaFX 8 |
+| UI 框架 | Java Swing + Nimbus | JavaFX 17 |
 | 入口类 | `HealthSystem` | `App` (extends Application) |
 | 布局 | 手写绝对值布局 / GridBag | BorderPane/VBox/HBox/GridPane/TabPane |
 | 样式 | Java 代码内联 | CSS (`style.css`) + `Theme` |
@@ -132,4 +139,5 @@ CREATE DATABASE health_db;
 
 ## 备注
 - 本版本仅替换表现层（Swing → JavaFX），业务逻辑与数据库结构沿用现有实现。
-- 编译需要 JDK 8；JavaFX 8 已随 JDK 提供，无需额外下载。
+- 编译需要 JDK 17；JavaFX 17 为独立依赖（置于 `lib/`），通过 `src/module-info.java` 模块描述符声明依赖，构建时统一经 `--module-path` 加载。
+- 源代码已按职责分包（`com.bmi.ui` / `com.bmi.ui.user` / `com.bmi.ui.admin` / `com.bmi.db` / `com.bmi.util`），结构清晰、可维护。
