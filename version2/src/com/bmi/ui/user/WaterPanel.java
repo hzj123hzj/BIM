@@ -124,13 +124,14 @@ public class WaterPanel extends VBox {
     }
 
     private VBox createStatBox(Label big, String sub, boolean leftAlign) {
-        big.setFont(Font.font("Microsoft YaHei", FontWeight.BOLD, 28));
-        big.setStyle("-fx-text-fill: #2D5A73;");
+        big.setFont(Font.font("Microsoft YaHei", FontWeight.BOLD, 24));
+        big.setStyle("-fx-text-fill: #2D5A73; -fx-wrap-text: false;");
         Label small = new Label(sub);
         small.setStyle("-fx-text-fill: #5A7A8C; -fx-font-size: 13px;");
         VBox box = new VBox(2, big, small);
         box.setAlignment(leftAlign ? Pos.CENTER_LEFT : Pos.CENTER);
-        box.setPrefWidth(90);
+        box.setPrefWidth(120);
+        box.setMinWidth(120);
         return box;
     }
 
