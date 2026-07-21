@@ -49,6 +49,12 @@ public class DietPanel extends VBox {
     /** 最近一次上传/拍照的原始图片字节，供缩略图与草稿入库使用 */
     private byte[] lastUploadedImage = null;
 
+    // 食物图库（用户端浏览带图食物并一键加入）
+    private final FlowPane galleryPane = new FlowPane(12, 12);
+    private final TextField tfGallerySearch = new TextField();
+    private final VBox galleryCard = new VBox(10);
+    private List<DBUtil.FoodRow> galleryAll = new ArrayList<>();
+
     public DietPanel() {
         setSpacing(16);
         setPadding(new Insets(18));
@@ -129,7 +135,7 @@ public class DietPanel extends VBox {
         t3.getStyleClass().add("card-title");
         resultCard.getChildren().addAll(t3, lblResultHint, resultsBox, resultActions);
 
-        getChildren().addAll(inputCard, resultCard, summaryCard);
+        getChildren().addAll(inputCard, resultCard, galleryCard, summaryCard);
         VBox.setVgrow(summaryCard, Priority.ALWAYS);
 
         btnAdd.setOnAction(e -> addDietRecord());
@@ -137,14 +143,116 @@ public class DietPanel extends VBox {
         btnCam.setOnAction(e -> captureAndRecognize());
         btnAddVision.setOnAction(e -> addVisionItems());
         btnSelectAll.setOnAction(e -> toggleSelectAll());
+        buildFoodGallery();
         loadFoods();
+        loadGallery();
         refreshSummary();
 
         // 切换/打开本页时重新拉取食物库：管理员导入/新增的食物能立即在用户端可见，
         // 避免面板仅在启动时加载一次导致"导入后用户端看不到"的错觉
         this.sceneProperty().addListener((obs, oldScene, newScene) -> {
-            if (newScene != null) loadFoods();
+            if (newScene != null) { loadFoods(); loadGallery(); }
         });
+    }
+
+    // ===================== 食物图库（用户端） =====================
+    private void buildFoodGallery() {
+        Label title = new Label("食物图库");
+        title.getStyleClass().add("card-title");
+        tfGallerySearch.setPromptText("搜索食物名…");
+        tfGallerySearch.setPrefWidth(220);
+        tfGallerySearch.textProperty().addListener((o, ov, nv) -> filterGallery(nv));
+        HBox searchRow = new HBox(10, new Label("搜索:"), tfGallerySearch);
+        searchRow.setAlignment(Pos.CENTER_LEFT);
+        ScrollPane scroll = new ScrollPane(galleryPane);
+        scroll.setFitToWidth(true);
+        scroll.setPrefHeight(260);
+        scroll.setStyle("-fx-background: transparent;");
+        galleryCard.getStyleClass().add("card");
+        galleryCard.getChildren().addAll(title, searchRow, scroll);
+    }
+
+    private void loadGallery() {
+        galleryAll = DBUtil.getFoodsWithImage();
+        renderGallery(galleryAll);
+    }
+
+    private void renderGallery(List<DBUtil.FoodRow> list) {
+        galleryPane.getChildren().clear();
+        if (list == null || list.isEmpty()) {
+            Label empty = new Label("暂无食物数据");
+            empty.getStyleClass().add("hint");
+            galleryPane.getChildren().add(empty);
+            return;
+        }
+        for (DBUtil.FoodRow fr : list) galleryPane.getChildren().add(buildFoodCard(fr));
+    }
+
+    private void filterGallery(String kw) {
+        if (kw == null || kw.trim().isEmpty()) {
+            renderGallery(galleryAll);
+            return;
+        }
+        String k = kw.trim().toLowerCase();
+        List<DBUtil.FoodRow> filtered = new ArrayList<>();
+        for (DBUtil.FoodRow fr : galleryAll) {
+            if (fr.name() != null && fr.name().toLowerCase().contains(k)) filtered.add(fr);
+        }
+        renderGallery(filtered);
+    }
+
+    private VBox buildFoodCard(DBUtil.FoodRow fr) {
+        VBox card = new VBox(6);
+        card.setAlignment(Pos.CENTER);
+        card.setPrefWidth(120);
+        card.setPadding(new Insets(8));
+        card.getStyleClass().add("vision-item");
+
+        Node pic;
+        if (fr.image() != null && fr.image().length > 0) {
+            ImageView iv = new ImageView(ImageUtil.byteArrayToImage(fr.image()));
+            iv.setFitWidth(90);
+            iv.setFitHeight(90);
+            iv.setPreserveRatio(true);
+            pic = iv;
+        } else {
+            pic = placeholderNode(90);
+        }
+
+        Label name = new Label(fr.name());
+        name.getStyleClass().add("sub-title");
+        name.setWrapText(true);
+        name.setAlignment(Pos.CENTER);
+        name.setPrefWidth(110);
+        Label cal = new Label(fr.cal() + " kcal");
+        cal.getStyleClass().add("text-muted");
+        Button add = new Button("加入");
+        add.getStyleClass().add("button-primary");
+        add.setOnAction(e -> addFoodFromGallery(fr));
+
+        card.getChildren().addAll(pic, name, cal, add);
+        return card;
+    }
+
+    /** 从图库一键加入今日饮食：用量取当前录入区的餐次与克数。 */
+    private void addFoodFromGallery(DBUtil.FoodRow fr) {
+        String mealType = cbMealType.getValue();
+        double grams;
+        try {
+            grams = Double.parseDouble(tfGrams.getText().trim());
+        } catch (Exception ex) {
+            grams = 100;
+        }
+        if (grams <= 0 || grams > 5000) grams = 100;
+        double ratio = grams / 100.0;
+        int calories = (int) (fr.cal() * ratio);
+        if (DBUtil.saveDietRecord(mealType, fr.name() + "(" + f0(grams) + "g)",
+                calories, fr.protein() * ratio, fr.carbs() * ratio, fr.fat() * ratio)) {
+            refreshSummary();
+            alert("已加入 " + fr.name() + " (" + f0(grams) + "g)");
+        } else {
+            alert("加入失败");
+        }
     }
 
     // ===================== 识图逻辑 =====================
