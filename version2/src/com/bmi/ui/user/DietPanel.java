@@ -15,6 +15,7 @@ import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.scene.Node;
 
 import com.github.sarxos.webcam.Webcam;
 
@@ -45,6 +46,8 @@ public class DietPanel extends VBox {
     private final ObservableList<FoodItem> visionItems = FXCollections.observableArrayList();
     private final Button btnAddVision = new Button("加入今日饮食");
     private final Button btnSelectAll = new Button("全选/取消");
+    /** 最近一次上传/拍照的原始图片字节，供缩略图与草稿入库使用 */
+    private byte[] lastUploadedImage = null;
 
     public DietPanel() {
         setSpacing(16);
@@ -149,7 +152,9 @@ public class DietPanel extends VBox {
             + "严格只按如下格式每行返回一条，不要解释、不要序号、不要 markdown：\n"
             + "食物名|重量克|热量kcal|蛋白质g|碳水g|脂肪g\n"
             + "例如：宫保鸡丁|250|420|28|18|22\n"
-            + "若图中无食物或无法识别，返回一行：未知|0|0|0|0|0";
+            + "若图中无食物或无法识别，返回一行：未知|0|0|0|0|0\n"
+            + "品牌识别：若图片中可见品牌、包装或门店字样（如「塔斯汀」「肯德基」「麦当劳」），请务必保留品牌名，"
+            + "例如「塔斯汀香辣鸡腿堡」而非泛化的「鸡肉汉堡」或「汉堡」。";
 
     private void showResults(List<FoodItem> items) {
         resultsBox.getChildren().clear();
@@ -170,13 +175,21 @@ public class DietPanel extends VBox {
         HBox row = new HBox(8);
         row.setAlignment(Pos.CENTER_LEFT);
         row.getStyleClass().add("vision-item");
+        row.getChildren().add(thumbNode(it));
+
         CheckBox chk = new CheckBox();
         chk.setSelected(true);
         it.selected = true;
         chk.selectedProperty().addListener((o, ov, nv) -> it.selected = nv);
+
         Label name = new Label(it.name);
         name.getStyleClass().add("sub-title");
         name.setPrefWidth(96);
+
+        Label status = new Label(it.matched != null ? "已匹配: " + it.matched.name()
+                : (it.approved ? "已入库" : "新食物(待确认)"));
+        status.getStyleClass().add((it.matched != null || it.approved) ? "sub-title" : "text-muted");
+
         TextField gramsTf = new TextField(String.valueOf(it.grams));
         gramsTf.setPrefWidth(56);
         it.gramsField = gramsTf;
@@ -187,8 +200,60 @@ public class DietPanel extends VBox {
         meal.getItems().addAll("早餐", "午餐", "晚餐", "加餐");
         meal.setValue("午餐");
         it.mealBox = meal;
-        row.getChildren().addAll(chk, name, new Label("g:"), gramsTf, cal, macro, new Label("餐次:"), meal);
+
+        row.getChildren().addAll(chk, name, status, new Label("g:"), gramsTf, cal, macro, new Label("餐次:"), meal);
+
+        if (it.matched == null && !it.approved) {
+            Button btnApprove = new Button("确认入库");
+            Button btnReject = new Button("放弃");
+            btnApprove.getStyleClass().add("button-primary");
+            btnReject.getStyleClass().add("button-ghost");
+            btnApprove.setOnAction(ev -> {
+                if (it.draftId > 0) {
+                    DBUtil.approveFood(it.draftId);
+                    it.approved = true;
+                    status.setText("已入库");
+                    btnApprove.setDisable(true);
+                    btnReject.setDisable(true);
+                }
+            });
+            btnReject.setOnAction(ev -> {
+                if (it.draftId > 0) {
+                    DBUtil.rejectFood(it.draftId);
+                    it.selected = false;
+                    chk.setSelected(false);
+                    status.setText("已放弃");
+                    btnApprove.setDisable(true);
+                    btnReject.setDisable(true);
+                }
+            });
+            row.getChildren().addAll(btnApprove, btnReject);
+        }
         return row;
+    }
+
+    /** 结果行缩略图：优先命中食物的库图，其次本次上传图，再否则占位节点。 */
+    private Node thumbNode(FoodItem it) {
+        byte[] bytes = (it.matched != null && it.matched.image() != null && it.matched.image().length > 0)
+                ? it.matched.image() : lastUploadedImage;
+        if (bytes != null && bytes.length > 0) {
+            ImageView iv = new ImageView(ImageUtil.byteArrayToImage(bytes));
+            iv.setFitWidth(40);
+            iv.setFitHeight(40);
+            iv.setPreserveRatio(true);
+            return iv;
+        }
+        return placeholderNode(40);
+    }
+
+    /** 无图占位节点（灰色圆角方块 + 「无图」）。 */
+    private Node placeholderNode(int size) {
+        StackPane ph = new StackPane(new Label("无图"));
+        ph.setPrefSize(size, size);
+        ph.setStyle("-fx-background-color:#E3E8EE; -fx-background-radius:6; "
+                + "-fx-border-color:#C7D0DA; -fx-border-radius:6;");
+        ph.getChildren().get(0).setStyle("-fx-text-fill:#8A97A5; -fx-font-size:10px;");
+        return ph;
     }
 
     private void toggleSelectAll() {
@@ -278,6 +343,21 @@ public class DietPanel extends VBox {
             try {
                 String resp = DBUtil.callVision(apiKey, vision, VISION_PROMPT, b64);
                 List<FoodItem> items = parseVisionResult(resp);
+                long uploadHash = ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(imageBytes));
+                for (FoodItem it : items) {
+                    DBUtil.FoodRow matched = DBUtil.matchFood(it.name, uploadHash);
+                    if (matched != null) {
+                        it.matched = matched;
+                        // 库里该食物无图 → 用本次上传图补充（"相似则加上"）
+                        if (matched.image() == null || matched.image().length == 0) {
+                            DBUtil.updateFoodImage(matched.id(), imageBytes);
+                        }
+                    } else {
+                        // 库里没有 → 建草稿待确认
+                        it.draftId = DBUtil.saveDraftFood(it.name, it.cal, it.protein, it.carbs, it.fat, imageBytes);
+                    }
+                }
+                lastUploadedImage = imageBytes;
                 Platform.runLater(() -> showResults(items));
             } catch (Exception ex) {
                 Platform.runLater(() -> {
@@ -344,6 +424,9 @@ public class DietPanel extends VBox {
         boolean selected = true;
         TextField gramsField;
         ComboBox<String> mealBox;
+        DBUtil.FoodRow matched = null;   // 命中的本地食物（含图）
+        int draftId = -1;               // 草稿 id（未命中时新建）
+        boolean approved = false;       // 草稿是否已被审核通过
     }
 
     // ===================== 原有录入与汇总逻辑 =====================

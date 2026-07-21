@@ -1,6 +1,7 @@
 package com.bmi.db;
 
 import com.bmi.util.HealthCalculator;
+import com.bmi.util.ImageUtil;
 import com.bmi.util.PasswordUtil;
 
 import java.sql.*;
@@ -571,8 +572,9 @@ public class DBUtil {
 
         /** 获取食物列表 */
         public static List<String[]> getAllFoods() {
+            ensureFoodColumns();
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT food_name, calories, protein, carbs, fat FROM foods ORDER BY id";
+            String sql = "SELECT food_name, calories, protein, carbs, fat FROM foods WHERE COALESCE(status,'已发布')<>'待确认' ORDER BY id";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -1389,8 +1391,9 @@ public class DBUtil {
 
         /** 获取所有食物 */
         public static List<String[]> getFoods() {
+            ensureFoodColumns();
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, food_name, calories, protein, carbs, fat FROM foods ORDER BY id";
+            String sql = "SELECT id, food_name, calories, protein, carbs, fat FROM foods WHERE COALESCE(status,'已发布')<>'待确认' ORDER BY id";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -1499,6 +1502,243 @@ public class DBUtil {
                 conn.commit();
             }
             return String.format("新增 %d 条，更新 %d 条，跳过 %d 条", inserted, updated, skipped);
+        }
+
+        /** 食物图片相似度哈希阈值：汉明距离 ≤ 该值视为同一/近似食物 */
+        public static final int FOOD_PHASH_THRESHOLD = 10;
+
+        private static boolean foodColumnsReady = false;
+
+        /** 自愈合：首次调用时为 foods 表补 图片/phash/status 列（兼容老库，不破坏已有数据） */
+        public static void ensureFoodColumns() {
+            if (foodColumnsReady) return;
+            try (Connection conn = getConnection();
+                 Statement stmt = conn.createStatement()) {
+                try { stmt.executeUpdate("ALTER TABLE foods ADD COLUMN IF NOT EXISTS food_image BYTEA"); } catch (SQLException ignore) {}
+                try { stmt.executeUpdate("ALTER TABLE foods ADD COLUMN IF NOT EXISTS food_phash BIGINT"); } catch (SQLException ignore) {}
+                try { stmt.executeUpdate("ALTER TABLE foods ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '已发布'"); } catch (SQLException ignore) {}
+                try { stmt.executeUpdate("UPDATE foods SET status='已发布' WHERE status IS NULL"); } catch (SQLException ignore) {}
+                foodColumnsReady = true;
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+
+        /** 带图食物行（含感知哈希与状态）。图片为 BYTEA 原始字节。 */
+        public record FoodRow(int id, String name, int cal, double protein, double carbs, double fat,
+                              byte[] image, Long phash, String status) {}
+
+        private static FoodRow foodRowFromRs(ResultSet rs) throws SQLException {
+            return new FoodRow(
+                    rs.getInt("id"),
+                    rs.getString("food_name"),
+                    rs.getInt("calories"),
+                    rs.getDouble("protein"),
+                    rs.getDouble("carbs"),
+                    rs.getDouble("fat"),
+                    rs.getBytes("food_image"),
+                    (Long) rs.getObject("food_phash"),
+                    rs.getString("status"));
+        }
+
+        private static final String FOOD_SELECT =
+                "SELECT id, food_name, calories, protein, carbs, fat, food_image, food_phash, COALESCE(status,'已发布') AS status FROM foods ";
+
+        /** 已发布食物（含图/phash），供管理面板与识图匹配（排除草稿）。 */
+        public static List<FoodRow> getFoodsWithImage() {
+            ensureFoodColumns();
+            List<FoodRow> list = new ArrayList<>();
+            String sql = FOOD_SELECT + "WHERE COALESCE(status,'已发布')<>'待确认' ORDER BY id";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) list.add(foodRowFromRs(rs));
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 待确认草稿食物（AI 识图新增，待审核）。 */
+        public static List<FoodRow> getDraftFoods() {
+            ensureFoodColumns();
+            List<FoodRow> list = new ArrayList<>();
+            String sql = FOOD_SELECT + "WHERE status='待确认' ORDER BY id";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) list.add(foodRowFromRs(rs));
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 模糊候选：food_name 双向 LIKE（解决「香辣鸡腿堡」↔「塔斯汀香辣鸡腿堡」）。 */
+        public static List<FoodRow> searchFoodsFuzzy(String name) {
+            ensureFoodColumns();
+            List<FoodRow> list = new ArrayList<>();
+            if (name == null || name.trim().isEmpty()) return list;
+            String n = name.trim();
+            String sql = FOOD_SELECT
+                    + "WHERE COALESCE(status,'已发布')<>'待确认' AND (food_name ILIKE ? OR ? ILIKE '%'||food_name||'%') ORDER BY id";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, "%" + n + "%");
+                ps.setString(2, n);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) list.add(foodRowFromRs(rs));
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /**
+         * 识图匹配：1) 精确名 → 2) 模糊候选 → 3) pHash 在候选间消歧。
+         * 命中返回食物行；无匹配返回 null（调用方应建草稿）。
+         */
+        public static FoodRow matchFood(String name, long uploadHash) {
+            if (name == null || name.trim().isEmpty()) return null;
+            String n = name.trim();
+            // 1. 精确匹配（忽略大小写/空格由模型命名决定，这里直接相等）
+            for (FoodRow fr : getFoodsWithImage()) {
+                if (fr.name() != null && fr.name().trim().equalsIgnoreCase(n)) return fr;
+            }
+            // 2. 模糊候选
+            List<FoodRow> cands = searchFoodsFuzzy(n);
+            if (cands.isEmpty()) return null;
+            if (cands.size() == 1) return cands.get(0); // 唯一候选可信
+            // 3. 多个候选 → pHash 消歧
+            FoodRow best = null;
+            int bestDist = Integer.MAX_VALUE;
+            for (FoodRow fr : cands) {
+                if (fr.phash() == null) continue;
+                int d = ImageUtil.hamming(uploadHash, fr.phash());
+                if (d < bestDist) { bestDist = d; best = fr; }
+            }
+            return (best != null && bestDist <= FOOD_PHASH_THRESHOLD) ? best : null;
+        }
+
+        /** 保存食物（带图）。有图时计算 pHash 一并写入；无图则写 NULL。 */
+        public static boolean saveFood(int id, String name, int calories, double protein, double carbs, double fat, byte[] image) {
+            ensureFoodColumns();
+            try (Connection conn = getConnection()) {
+                if (id <= 0) {
+                    Long phash = (image != null && image.length > 0)
+                            ? ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(image)) : null;
+                    String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat, food_image, food_phash, status) "
+                            + "VALUES (?,?,?,?,?,?,?,'已发布')";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, name);
+                    ps.setInt(2, calories);
+                    ps.setDouble(3, protein);
+                    ps.setDouble(4, carbs);
+                    ps.setDouble(5, fat);
+                    if (image != null && image.length > 0) {
+                        ps.setBytes(6, image);
+                        ps.setObject(7, phash);
+                    } else {
+                        ps.setNull(6, Types.BINARY);
+                        ps.setNull(7, Types.BIGINT);
+                    }
+                    return ps.executeUpdate() > 0;
+                } else {
+                    if (image != null && image.length > 0) {
+                        Long phash = ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(image));
+                        String sql = "UPDATE foods SET food_name=?, calories=?, protein=?, carbs=?, fat=?, food_image=?, food_phash=? WHERE id=?";
+                        PreparedStatement ps = conn.prepareStatement(sql);
+                        ps.setString(1, name);
+                        ps.setInt(2, calories);
+                        ps.setDouble(3, protein);
+                        ps.setDouble(4, carbs);
+                        ps.setDouble(5, fat);
+                        ps.setBytes(6, image);
+                        ps.setObject(7, phash);
+                        ps.setInt(8, id);
+                        return ps.executeUpdate() > 0;
+                    }
+                    // 无新图：保留原图与 phash，仅更新文本字段
+                    String sql = "UPDATE foods SET food_name=?, calories=?, protein=?, carbs=?, fat=? WHERE id=?";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, name);
+                    ps.setInt(2, calories);
+                    ps.setDouble(3, protein);
+                    ps.setDouble(4, carbs);
+                    ps.setDouble(5, fat);
+                    ps.setInt(6, id);
+                    return ps.executeUpdate() > 0;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 命中但库图为空时，用上传图补充（"相似则加上"）。 */
+        public static boolean updateFoodImage(int id, byte[] image) {
+            ensureFoodColumns();
+            if (image == null || image.length == 0) return false;
+            try (Connection conn = getConnection()) {
+                Long phash = ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(image));
+                String sql = "UPDATE foods SET food_image=?, food_phash=? WHERE id=?";
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ps.setBytes(1, image);
+                ps.setObject(2, phash);
+                ps.setInt(3, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** AI 识图无匹配时，建一条「待确认」草稿（带图+phash），返回新 id。 */
+        public static int saveDraftFood(String name, int cal, double p, double c, double f, byte[] image) {
+            ensureFoodColumns();
+            try (Connection conn = getConnection()) {
+                Long phash = (image != null && image.length > 0)
+                        ? ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(image)) : null;
+                String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat, food_image, food_phash, status) "
+                        + "VALUES (?,?,?,?,?,?,?,'待确认') RETURNING id";
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ps.setString(1, name);
+                ps.setInt(2, cal);
+                ps.setDouble(3, p);
+                ps.setDouble(4, c);
+                ps.setDouble(5, f);
+                if (image != null && image.length > 0) {
+                    ps.setBytes(6, image);
+                    ps.setObject(7, phash);
+                } else {
+                    ps.setNull(6, Types.BINARY);
+                    ps.setNull(7, Types.BIGINT);
+                }
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) return rs.getInt(1);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return -1;
+        }
+
+        /** 审核通过草稿 → 转为已发布。 */
+        public static boolean approveFood(int id) {
+            ensureFoodColumns();
+            String sql = "UPDATE foods SET status='已发布' WHERE id=?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 拒绝草稿 → 删除。 */
+        public static boolean rejectFood(int id) {
+            return deleteFood(id);
         }
 
         private static int parseIntSafe(String s) {

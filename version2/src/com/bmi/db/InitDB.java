@@ -201,6 +201,13 @@ public class InitDB {
                 ")");
             System.out.println("  [OK] foods 表");
 
+            // 兼容已存在库：补 图片 / 感知哈希 / 状态(草稿) 列
+            try { execUpdate(conn, "ALTER TABLE foods ADD COLUMN IF NOT EXISTS food_image BYTEA"); } catch (SQLException ignore) {}
+            try { execUpdate(conn, "ALTER TABLE foods ADD COLUMN IF NOT EXISTS food_phash BIGINT"); } catch (SQLException ignore) {}
+            try { execUpdate(conn, "ALTER TABLE foods ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '已发布'"); } catch (SQLException ignore) {}
+            try { execUpdate(conn, "UPDATE foods SET status='已发布' WHERE status IS NULL"); } catch (SQLException ignore) {}
+            System.out.println("  [OK] foods 图片/哈希/状态列");
+
             // 饮水记录表
             execUpdate(conn,
                 "CREATE TABLE IF NOT EXISTS water_records (" +
