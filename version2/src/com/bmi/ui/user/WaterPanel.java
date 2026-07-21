@@ -134,18 +134,19 @@ public class WaterPanel extends VBox {
         return box;
     }
 
-    /** 右侧刻度：1/4, 1/2, 3/4, 满 */
+    /** 右侧刻度：满 / 3/4 / 1/2 / 1/4（每个刻度高度 = 杯高/4，与水位对齐） */
     private VBox createScale() {
         VBox scale = new VBox(0);
-        scale.setAlignment(Pos.CENTER_RIGHT);
+        scale.setAlignment(Pos.TOP_RIGHT);
         scale.setPrefWidth(60);
+        scale.setPrefHeight(320);
         String[] labels = {"满", "3/4", "1/2", "1/4"};
         for (String lab : labels) {
             Label l = new Label(lab);
-            l.setPrefHeight(70);
-            l.setAlignment(Pos.CENTER_RIGHT);
+            l.setPrefHeight(80);                 // 与水杯每 1/4 段等高，刻度才能对准水位
+            l.setAlignment(Pos.TOP_RIGHT);
             l.setStyle("-fx-text-fill: #7C9EAF; -fx-font-size: 12px;");
-            l.setPadding(new Insets(0, 6, 0, 0));
+            l.setPadding(new Insets(2, 6, 0, 0));
             scale.getChildren().add(l);
         }
         return scale;
@@ -157,8 +158,13 @@ public class WaterPanel extends VBox {
         double ratio = goalMl > 0 ? Math.min(1.0, (double) todayMl / goalMl) : 0.0;
 
         lblToday.setText(todayMl + "ml");
-        lblGoal.setText("目标 " + goalMl + "ml");
-        lblHint.setText(todayMl >= goalMl ? "今日饮水已达标" : "请选择杯型");
+        lblGoal.setText(goalMl + "ml");
+        if (todayMl >= goalMl) {
+            int exceed = todayMl - goalMl;
+            lblHint.setText(exceed > 0 ? "今日饮水已达标 (超出 " + exceed + "ml)" : "今日饮水已达标");
+        } else {
+            lblHint.setText("请选择杯型");
+        }
         glass.setFillRatio(ratio);
     }
 
