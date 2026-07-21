@@ -574,7 +574,7 @@ public class DBUtil {
         public static List<String[]> getAllFoods() {
             ensureFoodColumns();
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT food_name, calories_per_100g, protein, carbs, fat FROM foods WHERE COALESCE(status,'已发布')<>'待确认' ORDER BY id";
+            String sql = "SELECT food_name, calories_per_100g, protein, carbs, fat, default_grams FROM foods WHERE COALESCE(status,'已发布')<>'待确认' ORDER BY id";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -584,7 +584,8 @@ public class DBUtil {
                         rs.getInt("calories_per_100g") + "",
                         df2.format(rs.getDouble("protein")),
                         df2.format(rs.getDouble("carbs")),
-                        df2.format(rs.getDouble("fat"))
+                        df2.format(rs.getDouble("fat")),
+                        String.valueOf(rs.getInt("default_grams"))
                     });
                 }
             } catch (SQLException e) {
@@ -1517,6 +1518,7 @@ public class DBUtil {
                 try { stmt.executeUpdate("ALTER TABLE foods ADD COLUMN IF NOT EXISTS food_image BYTEA"); } catch (SQLException ignore) {}
                 try { stmt.executeUpdate("ALTER TABLE foods ADD COLUMN IF NOT EXISTS food_phash BIGINT"); } catch (SQLException ignore) {}
                 try { stmt.executeUpdate("ALTER TABLE foods ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '已发布'"); } catch (SQLException ignore) {}
+                try { stmt.executeUpdate("ALTER TABLE foods ADD COLUMN IF NOT EXISTS default_grams INT DEFAULT 100"); } catch (SQLException ignore) {}
                 try { stmt.executeUpdate("UPDATE foods SET status='已发布' WHERE status IS NULL"); } catch (SQLException ignore) {}
                 // 食物热量语义显式化：calories(含糊) -> calories_per_100g（数据本就是每100g）
                 try { stmt.executeUpdate("DO $$ BEGIN IF EXISTS ("
@@ -1529,9 +1531,9 @@ public class DBUtil {
             }
         }
 
-        /** 带图食物行（含感知哈希与状态）。图片为 BYTEA 原始字节。 */
+        /** 带图食物行（含感知哈希与状态、标准份量克数）。图片为 BYTEA 原始字节。 */
         public record FoodRow(int id, String name, int cal, double protein, double carbs, double fat,
-                              byte[] image, Long phash, String status) {}
+                              byte[] image, Long phash, String status, int defaultGrams) {}
 
         private static FoodRow foodRowFromRs(ResultSet rs) throws SQLException {
             return new FoodRow(
@@ -1543,11 +1545,12 @@ public class DBUtil {
                     rs.getDouble("fat"),
                     rs.getBytes("food_image"),
                     (Long) rs.getObject("food_phash"),
-                    rs.getString("status"));
+                    rs.getString("status"),
+                    rs.getInt("default_grams"));
         }
 
         private static final String FOOD_SELECT =
-                "SELECT id, food_name, calories_per_100g, protein, carbs, fat, food_image, food_phash, COALESCE(status,'已发布') AS status FROM foods ";
+                "SELECT id, food_name, calories_per_100g, protein, carbs, fat, food_image, food_phash, COALESCE(status,'已发布') AS status, default_grams FROM foods ";
 
         /** 已发布食物（含图/phash），供管理面板与识图匹配（排除草稿）。 */
         public static List<FoodRow> getFoodsWithImage() {

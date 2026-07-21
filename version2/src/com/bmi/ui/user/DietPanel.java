@@ -64,6 +64,14 @@ public class DietPanel extends VBox {
         cbMealType.setValue("早餐");
         tfGrams.setPrefWidth(80);
 
+        // 选菜时克数自动同步为该食物的标准份量，不必每次手改
+        cbFood.valueProperty().addListener((o, ov, nv) -> {
+            if (nv != null) {
+                String[] f = foodData.get(nv);
+                if (f != null && f.length > 5 && !f[5].isEmpty()) tfGrams.setText(f[5]);
+            }
+        });
+
         HBox input = new HBox(10);
         input.setAlignment(Pos.CENTER_LEFT);
         Label l1 = new Label("餐次:"); l1.getStyleClass().add("sub-title");
@@ -234,16 +242,10 @@ public class DietPanel extends VBox {
         return card;
     }
 
-    /** 从图库一键加入今日饮食：用量取当前录入区的餐次与克数。 */
+    /** 从图库一键加入今日饮食：用量取该食物的标准份量（克）。 */
     private void addFoodFromGallery(DBUtil.FoodRow fr) {
         String mealType = cbMealType.getValue();
-        double grams;
-        try {
-            grams = Double.parseDouble(tfGrams.getText().trim());
-        } catch (Exception ex) {
-            grams = 100;
-        }
-        if (grams <= 0 || grams > 5000) grams = 100;
+        double grams = (fr.defaultGrams() > 0) ? fr.defaultGrams() : 100;
         double ratio = grams / 100.0;
         int calories = (int) (fr.cal() * ratio);
         if (DBUtil.saveDietRecord(mealType, fr.name() + "(" + f0(grams) + "g)",

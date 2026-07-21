@@ -197,7 +197,8 @@ public class InitDB {
                 "  calories_per_100g INT," +
                 "  protein DECIMAL(5,2)," +
                 "  carbs DECIMAL(5,2)," +
-                "  fat DECIMAL(5,2)" +
+                "  fat DECIMAL(5,2)," +
+                "  default_grams INT DEFAULT 100" +
                 ")");
             System.out.println("  [OK] foods 表");
 
@@ -527,8 +528,52 @@ public class InitDB {
         }
     }
 
+    /** 每种食物的「标准一份」克数（用户选菜时克数自动带出，不必每次手改） */
+    private static final java.util.Map<String, Integer> STD_PORTION_GRAMS = java.util.Map.ofEntries(
+            java.util.Map.entry("米饭", 150), java.util.Map.entry("面条", 200),
+            java.util.Map.entry("馒头", 100), java.util.Map.entry("包子", 100),
+            java.util.Map.entry("饺子", 100), java.util.Map.entry("油条", 50),
+            java.util.Map.entry("豆浆", 250), java.util.Map.entry("牛奶", 250),
+            java.util.Map.entry("鸡蛋", 50), java.util.Map.entry("鸡胸肉", 100),
+            java.util.Map.entry("鸡腿肉", 100), java.util.Map.entry("猪肉瘦", 100),
+            java.util.Map.entry("猪肉肥", 50), java.util.Map.entry("牛肉瘦", 100),
+            java.util.Map.entry("牛肉肥", 100), java.util.Map.entry("羊肉", 100),
+            java.util.Map.entry("鱼肉", 100), java.util.Map.entry("虾肉", 100),
+            java.util.Map.entry("豆腐", 100), java.util.Map.entry("豆腐干", 50),
+            java.util.Map.entry("豆浆粉", 30), java.util.Map.entry("白菜", 100),
+            java.util.Map.entry("菠菜", 100), java.util.Map.entry("西兰花", 100),
+            java.util.Map.entry("菜花", 100), java.util.Map.entry("黄瓜", 100),
+            java.util.Map.entry("西红柿", 100), java.util.Map.entry("茄子", 100),
+            java.util.Map.entry("青椒", 100), java.util.Map.entry("土豆", 100),
+            java.util.Map.entry("红薯", 150), java.util.Map.entry("山药", 100),
+            java.util.Map.entry("南瓜", 100), java.util.Map.entry("冬瓜", 100),
+            java.util.Map.entry("萝卜", 100), java.util.Map.entry("胡萝卜", 100),
+            java.util.Map.entry("洋葱", 100), java.util.Map.entry("大蒜", 10),
+            java.util.Map.entry("姜", 10), java.util.Map.entry("苹果", 200),
+            java.util.Map.entry("香蕉", 100), java.util.Map.entry("橙子", 200),
+            java.util.Map.entry("西瓜", 200), java.util.Map.entry("哈密瓜", 200),
+            java.util.Map.entry("葡萄", 100), java.util.Map.entry("草莓", 100),
+            java.util.Map.entry("蓝莓", 100), java.util.Map.entry("桃子", 200),
+            java.util.Map.entry("梨", 200), java.util.Map.entry("李子", 100),
+            java.util.Map.entry("樱桃", 100), java.util.Map.entry("芒果", 200),
+            java.util.Map.entry("火龙果", 200), java.util.Map.entry("猕猴桃", 100),
+            java.util.Map.entry("柠檬", 50), java.util.Map.entry("核桃", 30),
+            java.util.Map.entry("花生", 30), java.util.Map.entry("瓜子", 30),
+            java.util.Map.entry("黑芝麻", 20), java.util.Map.entry("小米", 50),
+            java.util.Map.entry("玉米", 150), java.util.Map.entry("燕麦", 40),
+            java.util.Map.entry("荞麦", 50), java.util.Map.entry("意面", 200),
+            java.util.Map.entry("蛋糕", 100), java.util.Map.entry("面包", 100),
+            java.util.Map.entry("饼干", 30), java.util.Map.entry("巧克力", 30),
+            java.util.Map.entry("冰淇淋", 100), java.util.Map.entry("酸奶", 200),
+            java.util.Map.entry("奶酪", 30), java.util.Map.entry("黄油", 20),
+            java.util.Map.entry("植物油", 10), java.util.Map.entry("酱油", 15),
+            java.util.Map.entry("醋", 15), java.util.Map.entry("蜂蜜", 20),
+            java.util.Map.entry("白糖", 10), java.util.Map.entry("红糖", 10),
+            java.util.Map.entry("盐", 5), java.util.Map.entry("茶叶", 5),
+            java.util.Map.entry("咖啡", 200));
+
     private static void insertFoods(Connection conn) throws SQLException {
-        String sql = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat, default_grams) VALUES (?, ?, ?, ?, ?, ?)";
         String[][] foods = {
             {"米饭","116","2.6","25.9","0.3"}, {"面条","137","4.5","28.5","0.5"},
             {"馒头","221","7.0","47.0","1.0"}, {"包子","220","7.5","38.0","4.0"},
@@ -580,6 +625,7 @@ public class InitDB {
                 pstmt.setDouble(3, Double.parseDouble(food[2]));
                 pstmt.setDouble(4, Double.parseDouble(food[3]));
                 pstmt.setDouble(5, Double.parseDouble(food[4]));
+                pstmt.setInt(6, STD_PORTION_GRAMS.getOrDefault(food[0], 100));
                 pstmt.addBatch();
             }
             pstmt.executeBatch();
