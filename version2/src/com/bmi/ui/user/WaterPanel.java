@@ -3,7 +3,9 @@ package com.bmi.ui.user;
 import com.bmi.db.DBUtil;
 import com.bmi.util.HealthCalculator;
 
+import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
 import javafx.geometry.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -13,6 +15,9 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 饮水记录面板 — 参考移动端「今日饮水」App 风格：
@@ -234,12 +239,22 @@ public class WaterPanel extends VBox {
         new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK).showAndWait();
     }
 
-    // ==================== 可视化水杯组件 ====================
+    // ==================== 可视化水杯组件（双正弦波 + 上浮气泡的物理化流动） ====================
     private static class WaterGlass extends Pane {
         private final double w, h;
         private final DoubleProperty ratio = new SimpleDoubleProperty(0);
-        private final Rectangle water;
-        private final Rectangle glass;
+        private double phase = 0;
+        private final Rectangle clip;            // 圆角裁剪，保证水/波不溢出杯壁
+        private final Rectangle glassBody;       // 玻璃杯身
+        private final Rectangle highlight;       // 玻璃高光反射
+        private final Path backWave;             // 后层波（浅、慢）
+        private final Path frontWave;            // 前层波（深、快）
+        private final Path crest;                // 波峰亮线
+        private final List<Circle> bubbles = new ArrayList<>();
+        private final List<Double> bubbleX = new ArrayList<>();
+        private final List<Double> bubbleSpeed = new ArrayList<>();
+        private long last = 0;
+        private final AnimationTimer timer;
 
         WaterGlass(double width, double height) {
             this.w = width;
@@ -247,46 +262,129 @@ public class WaterPanel extends VBox {
             setPrefSize(width, height);
             setMaxSize(width, height);
 
-            // 水杯外轮廓（圆角透明杯身）
-            glass = new Rectangle(0, 0, width, height);
-            glass.setArcWidth(32);
-            glass.setArcHeight(32);
-            glass.setFill(Color.color(1, 1, 1, 0.45));
-            glass.setStroke(Color.color(1, 1, 1, 0.75));
-            glass.setStrokeWidth(2.5);
+            clip = new Rectangle(0, 0, width, height);
+            clip.setArcWidth(40);
+            clip.setArcHeight(40);
 
-            // 水面
-            water = new Rectangle(0, 0, width, 0);
-            water.setArcWidth(32);
-            water.setArcHeight(32);
-            LinearGradient grad = new LinearGradient(
-                    0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
-                    new Stop(0, Color.color(0.45, 0.78, 0.96, 0.95)),
-                    new Stop(1, Color.color(0.25, 0.58, 0.90, 0.95)));
-            water.setFill(grad);
+            // 杯身：浅色半透明，渐变描边更有质感
+            glassBody = new Rectangle(0, 0, width, height);
+            glassBody.setArcWidth(40);
+            glassBody.setArcHeight(40);
+            glassBody.setFill(Color.color(1, 1, 1, 0.22));
+            LinearGradient stroke = new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.color(1, 1, 1, 0.95)),
+                    new Stop(0.5, Color.color(0.75, 0.88, 0.98, 0.6)),
+                    new Stop(1, Color.color(1, 1, 1, 0.95)));
+            glassBody.setStroke(stroke);
+            glassBody.setStrokeWidth(3);
 
-            // 用和玻璃相同的圆角矩形裁剪，让水位看起来在杯子里
-            Rectangle clip = new Rectangle(0, 0, width, height);
-            clip.setArcWidth(32);
-            clip.setArcHeight(32);
-            water.setClip(clip);
+            // 左侧竖向高光，模拟玻璃反光
+            highlight = new Rectangle(width * 0.14, height * 0.08, width * 0.09, height * 0.80);
+            highlight.setArcWidth(12);
+            highlight.setArcHeight(12);
+            highlight.setFill(Color.color(1, 1, 1, 0.5));
 
-            getChildren().addAll(water, glass);
+            backWave = new Path();
+            backWave.setClip(clip);
+            backWave.setFill(Color.color(0.55, 0.82, 0.96, 0.5));
 
-            ratio.addListener((obs, o, n) -> updateWater());
-            Platform.runLater(this::updateWater);
+            frontWave = new Path();
+            frontWave.setClip(clip);
+            LinearGradient water = new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.color(0.45, 0.80, 0.97, 0.92)),
+                    new Stop(1, Color.color(0.18, 0.54, 0.90, 0.95)));
+            frontWave.setFill(water);
+
+            crest = new Path();
+            crest.setClip(clip);
+            crest.setFill(null);
+            crest.setStroke(Color.color(0.88, 0.96, 1.0, 0.75));
+            crest.setStrokeWidth(2);
+
+            // 上浮气泡：受“浮力”持续上升，到水面则回到底部
+            for (int i = 0; i < 6; i++) {
+                Circle b = new Circle(1.6 + Math.random() * 2.2);
+                b.setFill(Color.color(1, 1, 1, 0.55));
+                double bx = Math.random() * width;
+                double by = Math.random() * height;
+                b.setLayoutX(bx);
+                b.setLayoutY(by);
+                bubbles.add(b);
+                bubbleX.add(bx);
+                bubbleSpeed.add(18 + Math.random() * 34);
+            }
+
+            getChildren().addAll(backWave, frontWave, crest);
+            getChildren().addAll(bubbles);
+            getChildren().addAll(glassBody, highlight);
+
+            ratio.addListener((obs, o, n) -> drawWaves());
+            drawWaves();
+
+            timer = new AnimationTimer() {
+                @Override
+                public void handle(long now) {
+                    if (last == 0) last = now;
+                    double dt = (now - last) / 1e9;
+                    last = now;
+                    phase += dt * 2.2;                         // 波相位推进
+                    double level = currentLevel();
+                    for (int i = 0; i < bubbles.size(); i++) {
+                        Circle b = bubbles.get(i);
+                        double y = b.getLayoutY() - bubbleSpeed.get(i) * dt;
+                        if (y < level + 2) {                    // 到达水面 -> 回到底部（循环）
+                            y = h - 6;
+                            bubbleX.set(i, Math.random() * w);
+                        }
+                        b.setLayoutX(bubbleX.get(i));
+                        b.setLayoutY(y);
+                        b.setVisible(ratio.get() > 0.01 && bubbleX.get(i) < w);
+                    }
+                    drawWaves();
+                }
+            };
+            sceneProperty().addListener((obs, oldS, newS) -> {
+                if (newS != null) timer.start();
+                else { timer.stop(); last = 0; }
+            });
         }
 
         void setFillRatio(double r) {
             ratio.set(Math.max(0, Math.min(1, r)));
         }
 
-        private void updateWater() {
-            double r = ratio.get();
-            double wh = h * r;
-            water.setHeight(wh);
-            water.setY(h - wh);
-            water.setVisible(wh > 1);
+        private double currentLevel() {
+            return h - h * ratio.get();
+        }
+
+        /** 用双正弦波（前后两层不同相位/幅度）绘制流动水面 */
+        private void drawWaves() {
+            if (ratio.get() <= 0.01) {
+                frontWave.getElements().clear();
+                backWave.getElements().clear();
+                crest.getElements().clear();
+                return;
+            }
+            double level = currentLevel();
+            double amp = 5.0;
+            double freq = 0.045;
+            setWave(frontWave, level, amp, freq, phase, true);
+            setWave(backWave, level, amp * 1.4, freq * 0.8, phase * 0.7 + 1.6, true);
+            setWave(crest, level, amp, freq, phase, false);
+        }
+
+        private void setWave(Path path, double level, double amp, double freq, double ph, boolean closeBottom) {
+            List<PathElement> els = new ArrayList<>();
+            els.add(new MoveTo(0, level + amp * Math.sin(0 * freq + ph)));
+            for (double x = 6; x <= w; x += 6) {
+                els.add(new LineTo(x, level + amp * Math.sin(x * freq + ph)));
+            }
+            if (closeBottom) {
+                els.add(new LineTo(w, h));
+                els.add(new LineTo(0, h));
+                els.add(new ClosePath());
+            }
+            path.getElements().setAll(FXCollections.observableArrayList(els));
         }
     }
 }
