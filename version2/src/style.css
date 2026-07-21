@@ -301,6 +301,28 @@
 }
 .sidebar-btn-active .sidebar-icon { -fx-text-fill: #FFFFFF; }
 
+/* 饮水页按钮样式 */
+.water-text-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #4A7C9B;
+    -fx-font-size: 13px;
+    -fx-cursor: hand;
+    -fx-padding: 6 12;
+}
+.water-fab {
+    -fx-background-color: #4A9FE7;
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-padding: 14 28;
+    -fx-background-radius: 28;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(74,159,231,0.40), 10, 0.25, 0, 4);
+}
+.water-fab:hover {
+    -fx-background-color: #3A8FD7;
+}
+
 /* ===== 顶栏 header ===== */
 .top-bar {
     -fx-background-color: linear-gradient(to right, #1E6478, #2D8CA0 60%, #1E6478);
