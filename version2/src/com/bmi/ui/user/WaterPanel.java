@@ -244,7 +244,6 @@ public class WaterPanel extends VBox {
         private final double w, h;
         private final DoubleProperty ratio = new SimpleDoubleProperty(0);
         private double phase = 0;
-        private final Rectangle clip;            // 圆角裁剪，保证水/波不溢出杯壁
         private final Rectangle glassBody;       // 玻璃杯身
         private final Rectangle highlight;       // 玻璃高光反射
         private final Path backWave;             // 后层波（浅、慢）
@@ -256,15 +255,18 @@ public class WaterPanel extends VBox {
         private long last = 0;
         private final AnimationTimer timer;
 
+        private Rectangle makeClip() {
+            Rectangle r = new Rectangle(0, 0, w, h);
+            r.setArcWidth(40);
+            r.setArcHeight(40);
+            return r;
+        }
+
         WaterGlass(double width, double height) {
             this.w = width;
             this.h = height;
             setPrefSize(width, height);
             setMaxSize(width, height);
-
-            clip = new Rectangle(0, 0, width, height);
-            clip.setArcWidth(40);
-            clip.setArcHeight(40);
 
             // 杯身：浅色半透明，渐变描边更有质感
             glassBody = new Rectangle(0, 0, width, height);
@@ -285,18 +287,18 @@ public class WaterPanel extends VBox {
             highlight.setFill(Color.color(1, 1, 1, 0.5));
 
             backWave = new Path();
-            backWave.setClip(clip);
+            backWave.setClip(makeClip());
             backWave.setFill(Color.color(0.55, 0.82, 0.96, 0.5));
 
             frontWave = new Path();
-            frontWave.setClip(clip);
+            frontWave.setClip(makeClip());
             LinearGradient water = new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
                     new Stop(0, Color.color(0.45, 0.80, 0.97, 0.92)),
                     new Stop(1, Color.color(0.18, 0.54, 0.90, 0.95)));
             frontWave.setFill(water);
 
             crest = new Path();
-            crest.setClip(clip);
+            crest.setClip(makeClip());
             crest.setFill(null);
             crest.setStroke(Color.color(0.88, 0.96, 1.0, 0.75));
             crest.setStrokeWidth(2);
