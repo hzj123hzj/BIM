@@ -44,14 +44,18 @@ public class FoodManagePanel extends VBox {
         Button btnAdd = new Button("新增");
         Button btnEdit = new Button("编辑");
         Button btnDel = new Button("删除");
+        Button btnBatchDel = new Button("批量删除");
         Button btnImport = new Button("批量导入");
         btnAdd.getStyleClass().add("button-primary");
         btnEdit.getStyleClass().add("button-primary");
         btnDel.getStyleClass().add("button-ghost");
+        btnBatchDel.getStyleClass().add("button-ghost");
         btnImport.getStyleClass().add("button-primary");
-        ctrl.getChildren().addAll(btnAdd, btnEdit, btnDel, btnImport);
+        ctrl.getChildren().addAll(btnAdd, btnEdit, btnDel, btnBatchDel, btnImport);
         card.getChildren().add(ctrl);
 
+        // 表格支持多选（Ctrl/Shift 多选），便于批量删除
+        table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         table.getColumns().addAll(
                 colStr("ID", fr -> String.valueOf(fr.id()), 60),
                 colStr("名称", DBUtil.FoodRow::name, 160),
@@ -99,6 +103,7 @@ public class FoodManagePanel extends VBox {
             else warn("请先选择一行");
         });
         btnDel.setOnAction(e -> deleteFood());
+        btnBatchDel.setOnAction(e -> deleteFoods());
         btnImport.setOnAction(e -> importFromExcel());
         btnApprove.setOnAction(e -> {
             DBUtil.FoodRow sel = draftTable.getSelectionModel().getSelectedItem();
@@ -264,6 +269,24 @@ public class FoodManagePanel extends VBox {
             DBUtil.logAction("ADMIN", DBUtil.currentUsername, "删除食物", "ID=" + sel.id());
             loadFoods();
         }
+    }
+
+    private void deleteFoods() {
+        List<DBUtil.FoodRow> sels = new ArrayList<>(table.getSelectionModel().getSelectedItems());
+        if (sels.isEmpty()) {
+            warn("请先选中要删除的食物（按住 Ctrl 逐个点选，或 Shift 连选）");
+            return;
+        }
+        if (!confirm("确认批量删除", "确定删除选中的 " + sels.size() + " 个食物吗？\n此操作不可恢复。")) return;
+        int ok = 0, fail = 0;
+        for (DBUtil.FoodRow fr : sels) {
+            if (DBUtil.deleteFood(fr.id())) ok++; else fail++;
+        }
+        DBUtil.logAction("ADMIN", DBUtil.currentUsername, "批量删除食物", "删除 " + ok + " 个");
+        loadFoods();
+        new Alert(Alert.AlertType.INFORMATION,
+                "已删除 " + ok + " 个食物" + (fail > 0 ? "，" + fail + " 个删除失败" : ""),
+                ButtonType.OK).showAndWait();
     }
 
     private boolean confirmDialog(String title, GridPane content) {
