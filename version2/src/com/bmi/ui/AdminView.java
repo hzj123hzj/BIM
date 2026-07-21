@@ -53,20 +53,25 @@ public class AdminView {
         });
 
         // 左侧导航 + 内容区（替代 TabPane，规避 JavaFX 左侧 Tab 文字旋转缺陷）
-        List<Tab> tabs = Arrays.asList(
-                tab("用户管理", new UserManagePanel()),
-                tab("食物数据库", new FoodManagePanel()),
-                tab("运动库", new ExerciseManagePanel()),
-                tab("健康文章", new ArticleManagePanel()),
-                tab("AI问答记录", new AIChatRecordPanel()),
-                tab("AI饮食记录", new AIDietRecordPanel()),
-                tab("AI菜谱记录", new AICookbookRecordPanel()),
-                tab("Prompt模板", new AITemplatePanel()),
-                tab("API配置", new ApiConfigPanel()),
-                tab("AI使用统计", new AIUsagePanel()),
-                tab("数据监控", new DataMonitorPanel())
+        // 按业务分组、可折叠：侧栏可见长度由「分组数」决定，新增功能只需归入某组
+        List<SideNav.NavSection> sections = Arrays.asList(
+                new SideNav.NavSection("用户与内容", Arrays.asList(
+                        tab("用户管理", new UserManagePanel()),
+                        tab("食物数据库", new FoodManagePanel()),
+                        tab("运动库", new ExerciseManagePanel()),
+                        tab("健康文章", new ArticleManagePanel()))),
+                new SideNav.NavSection("AI 记录", Arrays.asList(
+                        tab("AI问答记录", new AIChatRecordPanel()),
+                        tab("AI饮食记录", new AIDietRecordPanel()),
+                        tab("AI菜谱记录", new AICookbookRecordPanel()))),
+                new SideNav.NavSection("AI 配置", Arrays.asList(
+                        tab("Prompt模板", new AITemplatePanel()),
+                        tab("API配置", new ApiConfigPanel()),
+                        tab("AI使用统计", new AIUsagePanel()))),
+                new SideNav.NavSection("系统监控", Arrays.asList(
+                        tab("数据监控", new DataMonitorPanel())))
         );
-        SideNav nav = new SideNav("管理后台", tabs);
+        SideNav nav = new SideNav("管理后台", sections);
         root.setLeft(nav.getSidebar());
         root.setCenter(nav.getContent());
     }

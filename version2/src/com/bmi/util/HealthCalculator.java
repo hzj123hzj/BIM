@@ -21,6 +21,16 @@ public class HealthCalculator {
             return "肥胖";
         }
 
+        // ==================== 每日饮水量目标 ====================
+
+        /** 按体重估算每日饮水目标(ml): 体重(kg) × 35ml, 取整到 50, 范围 1200~3500; 无体重默认 2000 */
+        public static int calcDailyWaterGoal(double weightKg) {
+            int base = (weightKg > 0) ? (int) Math.round(weightKg * 35 / 50.0) * 50 : 2000;
+            if (base < 1200) base = 1200;
+            if (base > 3500) base = 3500;
+            return base;
+        }
+
         // ==================== BMR 计算 (三种公式) ====================
 
         /** Harris-Benedict 公式 (区分性别) */

@@ -425,6 +425,150 @@ public class DBUtil {
             return list;
         }
 
+        // ==================== 饮水记录相关操作 ====================
+
+        /** 饮水“太少”判定阈值比例（今日总量 < 目标 × 该比例 即提醒） */
+        public static final double WATER_LOW_RATIO = 0.5;
+
+        private static boolean waterTablesReady = false;
+
+        /** 自愈合建表：首次调用时创建 water_records / water_goals（不会破坏已有数据） */
+        public static void ensureWaterTables() {
+            if (waterTablesReady) return;
+            String sql1 = "CREATE TABLE IF NOT EXISTS water_records (" +
+                    "  id SERIAL PRIMARY KEY," +
+                    "  username VARCHAR(50) REFERENCES users(username)," +
+                    "  record_date DATE DEFAULT CURRENT_DATE," +
+                    "  amount_ml INT CHECK (amount_ml > 0 AND amount_ml <= 3000)," +
+                    "  note VARCHAR(100)," +
+                    "  created_at TIMESTAMP DEFAULT NOW()" +
+                    ")";
+            String sql2 = "CREATE TABLE IF NOT EXISTS water_goals (" +
+                    "  username VARCHAR(50) PRIMARY KEY REFERENCES users(username)," +
+                    "  goal_ml INT CHECK (goal_ml >= 500 AND goal_ml <= 6000)" +
+                    ")";
+            try (Connection conn = getConnection();
+                 Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate(sql1);
+                stmt.executeUpdate(sql2);
+                try { stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_water_username_date ON water_records(username, record_date)"); } catch (SQLException ignore) {}
+                waterTablesReady = true;
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+
+        /** 记录一次饮水 */
+        public static boolean saveWaterRecord(int amountMl, String note) {
+            ensureWaterTables();
+            if (amountMl <= 0 || amountMl > 3000) return false;
+            String sql = "INSERT INTO water_records (username, amount_ml, note) VALUES (?, ?, ?)";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, currentUsername);
+                ps.setInt(2, amountMl);
+                ps.setString(3, (note == null || note.trim().isEmpty()) ? null : note.trim());
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 今日饮水总量(ml) */
+        public static int getTodayWaterTotal() {
+            ensureWaterTables();
+            String sql = "SELECT COALESCE(SUM(amount_ml),0) FROM water_records " +
+                    "WHERE username = ? AND record_date = CURRENT_DATE";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, currentUsername);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) return rs.getInt(1);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return 0;
+        }
+
+        /** 今日饮水记录明细: {时间, 水量ml, 备注} 按时间倒序 */
+        public static List<String[]> getTodayWaterRecords() {
+            ensureWaterTables();
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT TO_CHAR(created_at, 'HH24:MI'), amount_ml, note " +
+                    "FROM water_records WHERE username = ? AND record_date = CURRENT_DATE " +
+                    "ORDER BY created_at DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, currentUsername);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    list.add(new String[]{
+                            rs.getString(1),
+                            String.valueOf(rs.getInt(2)),
+                            rs.getString(3) == null ? "" : rs.getString(3)
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 每日饮水目标(ml): 优先用户自定义设定, 否则按体重估算, 再否则默认 2000 */
+        public static int getDailyWaterGoal() {
+            ensureWaterTables();
+            String sql = "SELECT goal_ml FROM water_goals WHERE username = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, currentUsername);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) return rs.getInt("goal_ml");
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return HealthCalculator.calcDailyWaterGoal(currentWeight);
+        }
+
+        /** 保存用户自定义每日饮水目标(ml) */
+        public static boolean saveWaterGoal(int goalMl) {
+            ensureWaterTables();
+            if (goalMl < 500 || goalMl > 6000) return false;
+            String sql = "INSERT INTO water_goals (username, goal_ml) VALUES (?, ?) " +
+                    "ON CONFLICT (username) DO UPDATE SET goal_ml = EXCLUDED.goal_ml";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, currentUsername);
+                ps.setInt(2, goalMl);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 今日摄水量是否“太少”（低于目标 × WATER_LOW_RATIO） */
+        public static boolean isWaterIntakeLow() {
+            int goal = getDailyWaterGoal();
+            if (goal <= 0) return false;
+            return getTodayWaterTotal() < goal * WATER_LOW_RATIO;
+        }
+
+        /** 今日是否已有“喝水提醒”通知（按天去重，避免消息中心重复刷屏） */
+        public static boolean hasWaterReminderToday() {
+            String sql = "SELECT COUNT(*) FROM notifications WHERE receiver = ? AND title = '喝水提醒' " +
+                    "AND created_at::date = CURRENT_DATE";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, currentUsername);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) return rs.getInt(1) > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return false;
+        }
+
         /** 获取食物列表 */
         public static List<String[]> getAllFoods() {
             List<String[]> list = new ArrayList<>();

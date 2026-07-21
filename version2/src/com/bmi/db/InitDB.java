@@ -201,6 +201,27 @@ public class InitDB {
                 ")");
             System.out.println("  [OK] foods 表");
 
+            // 饮水记录表
+            execUpdate(conn,
+                "CREATE TABLE IF NOT EXISTS water_records (" +
+                "  id SERIAL PRIMARY KEY," +
+                "  username VARCHAR(50) REFERENCES users(username)," +
+                "  record_date DATE DEFAULT CURRENT_DATE," +
+                "  amount_ml INT CHECK (amount_ml > 0 AND amount_ml <= 3000)," +
+                "  note VARCHAR(100)," +
+                "  created_at TIMESTAMP DEFAULT NOW()" +
+                ")");
+            execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_water_username_date ON water_records(username, record_date)");
+            System.out.println("  [OK] water_records 表");
+
+            // 每日饮水目标表（用户自定义目标，覆盖按体重估算值）
+            execUpdate(conn,
+                "CREATE TABLE IF NOT EXISTS water_goals (" +
+                "  username VARCHAR(50) PRIMARY KEY REFERENCES users(username)," +
+                "  goal_ml INT CHECK (goal_ml >= 500 AND goal_ml <= 6000)" +
+                ")");
+            System.out.println("  [OK] water_goals 表");
+
             // 创建索引
             execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_hr_username_date ON health_records(username, record_date)");
             execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_dr_username_date ON diet_records(username, record_date)");

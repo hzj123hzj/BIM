@@ -249,13 +249,33 @@
 .sidebar-scroll .viewport { -fx-background-color: transparent; }
 .sidebar-scroll .scroll-bar { -fx-background-color: transparent; }
 .sidebar-scroll .scroll-bar .thumb { -fx-background-color: #B7C6CE; -fx-background-radius: 6; }
-.sidebar-nav { -fx-padding: 10 10; }
+
+/* 分组可折叠导航 */
+.sidebar-groups { -fx-padding: 6 0; }
+.sidebar-group-header {
+    -fx-padding: 9 14;
+    -fx-cursor: hand;
+    -fx-background-color: transparent;
+}
+.sidebar-group-header:hover { -fx-background-color: #EAF3F6; }
+.sidebar-group-title {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #7A8B95;
+}
+.sidebar-chevron {
+    -fx-text-fill: #9BB0BA;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+
+.sidebar-nav { -fx-padding: 2 10 8 10; }
 .sidebar-btn {
     -fx-background-color: transparent;
     -fx-text-fill: #3C4A55;
     -fx-font-size: 13px;
     -fx-alignment: CENTER-LEFT;
-    -fx-padding: 12 16;
+    -fx-padding: 10 16;
     -fx-background-radius: 9;
     -fx-cursor: hand;
     -fx-border-width: 0;
