@@ -135,23 +135,26 @@ public class WaterPanel extends VBox {
         return box;
     }
 
-    /** 右侧刻度：满 / 3/4 / 1/2 / 1/4（每个刻度高度 = 杯高/4，与水位对齐） */
-    private VBox createScale() {
-        VBox scale = new VBox(0);
-        scale.setAlignment(Pos.TOP_RIGHT);
-        scale.setPrefWidth(60);
-        scale.setPrefHeight(320);
-        String[] labels = {"满", "3/4", "1/2", "1/4"};
-        for (String lab : labels) {
-            Label l = new Label(lab);
-            l.setPrefHeight(80);                 // 与水杯每 1/4 段等高，刻度才能对准水位
-            l.setAlignment(Pos.TOP_RIGHT);
-            l.setStyle("-fx-text-fill: #7C9EAF; -fx-font-size: 12px;");
-            l.setPadding(new Insets(2, 6, 0, 0));
-            scale.getChildren().add(l);
+        /** 右侧刻度：满 / 3/4 / 1/2 / 1/4（按圆台体积比例定位，与真实水位对齐） */
+        private VBox createScale() {
+            VBox scale = new VBox(0);
+            scale.setAlignment(Pos.TOP_RIGHT);
+            scale.setPrefWidth(60);
+            scale.setPrefHeight(320);
+            String[] labels = {"满", "3/4", "1/2", "1/4"};
+            double[] fracs = {1.0, 0.75, 0.5, 0.25};
+            for (int i = 0; i < labels.length; i++) {
+                double topY = glass.levelYForRatio(fracs[i]);
+                double botY = glass.levelYForRatio(i < fracs.length - 1 ? fracs[i + 1] : 0.0);
+                Label l = new Label(labels[i]);
+                l.setPrefHeight(Math.max(1, botY - topY));   // 体积越大段越高（杯身上宽），刻度对准水位
+                l.setAlignment(Pos.TOP_RIGHT);
+                l.setStyle("-fx-text-fill: #7C9EAF; -fx-font-size: 12px;");
+                l.setPadding(new Insets(2, 6, 0, 0));
+                scale.getChildren().add(l);
+            }
+            return scale;
         }
-        return scale;
-    }
 
     private void refresh() {
         todayMl = DBUtil.getTodayWaterTotal();
@@ -248,10 +251,10 @@ public class WaterPanel extends VBox {
 
     // ==================== 可视化水杯组件（双正弦波 + 上浮气泡的物理化流动） ====================
     private static class WaterGlass extends Pane {
-        private final double w, h;
+        private final double w, h, botW;
         private final DoubleProperty ratio = new SimpleDoubleProperty(0);
         private double phase = 0;
-        private final Rectangle glassBody;       // 玻璃杯身
+        private final Path glassBody;            // 玻璃杯身（上宽下窄圆台）
         private final Rectangle highlight;       // 玻璃高光反射
         private final Path backWave;             // 后层波（浅、慢）
         private final Path frontWave;            // 前层波（深、快）
@@ -262,11 +265,19 @@ public class WaterPanel extends VBox {
         private long last = 0;
         private final AnimationTimer timer;
 
-        private Rectangle makeClip() {
-            Rectangle r = new Rectangle(0, 0, w, h);
-            r.setArcWidth(40);
-            r.setArcHeight(40);
-            return r;
+        /** 上宽下窄圆台轮廓（顶宽=w，底宽=botW），圆角线连接更柔和 */
+        private Path buildGlassPath() {
+            Path p = new Path();
+            double topL = 0, topR = w;
+            double botL = (w - botW) / 2.0, botR = (w + botW) / 2.0;
+            p.getElements().addAll(
+                    new MoveTo(topL, 0),
+                    new LineTo(topR, 0),
+                    new LineTo(botR, h),
+                    new LineTo(botL, h),
+                    new ClosePath());
+            p.setStrokeLineJoin(StrokeLineJoin.ROUND);
+            return p;
         }
 
         WaterGlass(double width, double height) {
@@ -274,11 +285,10 @@ public class WaterPanel extends VBox {
             this.h = height;
             setPrefSize(width, height);
             setMaxSize(width, height);
+            this.botW = width * 0.8;            // 底部收窄为顶宽的 80%，呈圆台
 
             // 杯身：浅色半透明，渐变描边更有质感
-            glassBody = new Rectangle(0, 0, width, height);
-            glassBody.setArcWidth(40);
-            glassBody.setArcHeight(40);
+            glassBody = buildGlassPath();
             glassBody.setFill(Color.color(1, 1, 1, 0.22));
             LinearGradient stroke = new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
                     new Stop(0, Color.color(1, 1, 1, 0.95)),
@@ -286,6 +296,7 @@ public class WaterPanel extends VBox {
                     new Stop(1, Color.color(1, 1, 1, 0.95)));
             glassBody.setStroke(stroke);
             glassBody.setStrokeWidth(3);
+            glassBody.setStrokeLineJoin(StrokeLineJoin.ROUND);
 
             // 左侧竖向高光，模拟玻璃反光
             highlight = new Rectangle(width * 0.14, height * 0.08, width * 0.09, height * 0.80);
@@ -294,18 +305,18 @@ public class WaterPanel extends VBox {
             highlight.setFill(Color.color(1, 1, 1, 0.5));
 
             backWave = new Path();
-            backWave.setClip(makeClip());
+            backWave.setClip(buildGlassPath());
             backWave.setFill(Color.color(0.55, 0.82, 0.96, 0.5));
 
             frontWave = new Path();
-            frontWave.setClip(makeClip());
+            frontWave.setClip(buildGlassPath());
             LinearGradient water = new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
                     new Stop(0, Color.color(0.45, 0.80, 0.97, 0.92)),
                     new Stop(1, Color.color(0.18, 0.54, 0.90, 0.95)));
             frontWave.setFill(water);
 
             crest = new Path();
-            crest.setClip(makeClip());
+            crest.setClip(buildGlassPath());
             crest.setFill(null);
             crest.setStroke(Color.color(0.88, 0.96, 1.0, 0.75));
             crest.setStrokeWidth(2);
@@ -314,7 +325,8 @@ public class WaterPanel extends VBox {
             for (int i = 0; i < 6; i++) {
                 Circle b = new Circle(1.6 + Math.random() * 2.2);
                 b.setFill(Color.color(1, 1, 1, 0.55));
-                double bx = Math.random() * width;
+                // 在底部（最窄处）范围内生成，上升过程中杯身变宽，气泡始终在杯内
+                double bx = w / 2 + (Math.random() * 2 - 1) * (botW / 2 - 4);
                 double by = Math.random() * height;
                 b.setLayoutX(bx);
                 b.setLayoutY(by);
@@ -343,11 +355,11 @@ public class WaterPanel extends VBox {
                         double y = b.getLayoutY() - bubbleSpeed.get(i) * dt;
                         if (y < level + 2) {                    // 到达水面 -> 回到底部（循环）
                             y = h - 6;
-                            bubbleX.set(i, Math.random() * w);
+                            bubbleX.set(i, w / 2 + (Math.random() * 2 - 1) * (botW / 2 - 4));
                         }
                         b.setLayoutX(bubbleX.get(i));
                         b.setLayoutY(y);
-                        b.setVisible(ratio.get() > 0.01 && bubbleX.get(i) < w);
+                        b.setVisible(ratio.get() > 0.01 && Math.abs(bubbleX.get(i) - w / 2) < w / 2);
                     }
                     drawWaves();
                 }
@@ -363,7 +375,32 @@ public class WaterPanel extends VBox {
         }
 
         private double currentLevel() {
-            return h - h * ratio.get();
+            return h - heightForRatio(ratio.get());
+        }
+
+        /** 由底部起算、填充比例为 ratio 时的水面高度（圆台体积积分反解，二分） */
+        private double heightForRatio(double ratio) {
+            if (ratio <= 0) return 0;
+            if (ratio >= 1) return h;
+            double lo = 0, hi = h;
+            for (int i = 0; i < 42; i++) {
+                double mid = (lo + hi) / 2;
+                if (volumeFraction(mid) < ratio) lo = mid; else hi = mid;
+            }
+            return (lo + hi) / 2;
+        }
+
+        /** 从底部到高度 y 的累积体积占满杯体积的比例（圆台：V=π∫halfW²） */
+        private double volumeFraction(double y) {
+            double rb = botW / 2.0, rt = w / 2.0, k = (rt - rb) / h;
+            double vY = rb * rb * y + rb * k * y * y + (k * k / 3.0) * y * y * y;
+            double vH = rb * rb * h + rb * k * h * h + (k * k / 3.0) * h * h * h;
+            return vH > 0 ? vY / vH : 0;
+        }
+
+        /** 供右侧刻度对齐：填充比例对应的水面 y 像素（自顶部起算） */
+        public double levelYForRatio(double ratio) {
+            return h - heightForRatio(ratio);
         }
 
         /** 用双正弦波（前后两层不同相位/幅度）绘制流动水面 */
