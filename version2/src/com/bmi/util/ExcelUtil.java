@@ -146,14 +146,55 @@ public final class ExcelUtil {
         double p = toDouble(pS), c = toDouble(cS), f = toDouble(fS);
 
         int defG = portion > 0 ? portion : 100;
-        int c100 = cal100 > 0 ? cal100
-                : (calServ > 0 && portion > 0 ? (int) Math.round(calServ * 100.0 / portion)
-                : (calServ > 0 ? calServ : 0));
-        double p100 = p > 0 && portion > 0 ? p * 100.0 / portion : p;
-        double c100v = c > 0 && portion > 0 ? c * 100.0 / portion : c;
-        double f100v = f > 0 && portion > 0 ? f * 100.0 / portion : f;
+        int c100;
+        if (calServ > 0 && portion > 0) {
+            int conv = (int) Math.round(calServ * 100.0 / portion);
+            if (cal100 > 0 && cal100 <= 1000) {
+                c100 = cal100;                       // 每100g热量 合理，直接采用
+            } else if (conv <= 1000) {
+                c100 = conv;                         // 否则用按份折算（修正模板 每100g热量 多写一位的 typo）
+            } else {
+                c100 = calServ;                      // 折算也离谱，退化为每份热量原值
+            }
+        } else if (cal100 > 0) {
+            c100 = cal100 <= 1000 ? cal100 : 0;
+        } else {
+            c100 = calServ;
+        }
+
+        // 判断宏量是「每份」还是「每100g」：用热量列交叉验证。
+        // 若 每份热量×100/份量 ≈ 每100g热量，说明热量是按份给的，宏量同理需折算；
+        // 否则（如本文件热量已按100g、或数据不一致）宏量视为已是每100g，不再折算。
+        boolean perServing = isPerServing(calServ, portion, cal100);
+        double p100 = perServing ? (portion > 0 ? p * 100.0 / portion : p) : p;
+        double c100v = perServing ? (portion > 0 ? c * 100.0 / portion : c) : c;
+        double f100v = perServing ? (portion > 0 ? f * 100.0 / portion : f) : f;
+
+        // 物理边界：每100g 食物中任一宏量不可能超过 100g，钳制以防 DECIMAL(5,2) 溢出
+        p100 = clampMacro(p100);
+        c100v = clampMacro(c100v);
+        f100v = clampMacro(f100v);
 
         return new FoodImportRow(name.trim(), defG, c100, p100, c100v, f100v);
+    }
+
+    /** 用热量列判断宏量是否按「每份」给（需折算成每100g）。 */
+    private static boolean isPerServing(int calServ, int portion, int cal100) {
+        if (calServ <= 0 || portion <= 0 || cal100 <= 0) {
+            // 无足够热量信息判断：有份量则按「每份」折算（兼容旧模板），否则保持原值
+            return portion > 0;
+        }
+        double expected = calServ * 100.0 / portion;
+        double diff = Math.abs(expected - cal100);
+        double tol = Math.max(5.0, 0.2 * cal100);
+        return diff <= tol;
+    }
+
+    /** 每100g 食物中任一宏量不可能超过 100g，钳制到 [0,100] 以防 DECIMAL 溢出。 */
+    private static double clampMacro(double v) {
+        if (v < 0) return 0.0;
+        if (v > 100.0) return 100.0;
+        return v;
     }
 
     /** 提取 Sheet 内所有嵌入图片，按锚定的 Excel 行号(1-based) 映射到字节 */
