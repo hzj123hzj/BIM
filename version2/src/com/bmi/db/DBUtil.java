@@ -574,14 +574,14 @@ public class DBUtil {
         public static List<String[]> getAllFoods() {
             ensureFoodColumns();
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT food_name, calories, protein, carbs, fat FROM foods WHERE COALESCE(status,'已发布')<>'待确认' ORDER BY id";
+            String sql = "SELECT food_name, calories_per_100g, protein, carbs, fat FROM foods WHERE COALESCE(status,'已发布')<>'待确认' ORDER BY id";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
                     list.add(new String[]{
                         rs.getString("food_name"),
-                        rs.getInt("calories") + "",
+                        rs.getInt("calories_per_100g") + "",
                         df2.format(rs.getDouble("protein")),
                         df2.format(rs.getDouble("carbs")),
                         df2.format(rs.getDouble("fat"))
@@ -1393,7 +1393,7 @@ public class DBUtil {
         public static List<String[]> getFoods() {
             ensureFoodColumns();
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, food_name, calories, protein, carbs, fat FROM foods WHERE COALESCE(status,'已发布')<>'待确认' ORDER BY id";
+            String sql = "SELECT id, food_name, calories_per_100g, protein, carbs, fat FROM foods WHERE COALESCE(status,'已发布')<>'待确认' ORDER BY id";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
@@ -1401,7 +1401,7 @@ public class DBUtil {
                     list.add(new String[]{
                             String.valueOf(rs.getInt("id")),
                             rs.getString("food_name"),
-                            String.valueOf(rs.getInt("calories")),
+                            String.valueOf(rs.getInt("calories_per_100g")),
                             df2.format(rs.getDouble("protein")),
                             df2.format(rs.getDouble("carbs")),
                             df2.format(rs.getDouble("fat"))
@@ -1417,7 +1417,7 @@ public class DBUtil {
         public static boolean saveFood(int id, String name, int calories, double protein, double carbs, double fat) {
             try (Connection conn = getConnection()) {
                 if (id <= 0) {
-                    String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
+                    String sql = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
                     PreparedStatement ps = conn.prepareStatement(sql);
                     ps.setString(1, name);
                     ps.setInt(2, calories);
@@ -1426,7 +1426,7 @@ public class DBUtil {
                     ps.setDouble(5, fat);
                     return ps.executeUpdate() > 0;
                 } else {
-                    String sql = "UPDATE foods SET food_name = ?, calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?";
+                    String sql = "UPDATE foods SET food_name = ?, calories_per_100g = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?";
                     PreparedStatement ps = conn.prepareStatement(sql);
                     ps.setString(1, name);
                     ps.setInt(2, calories);
@@ -1465,8 +1465,8 @@ public class DBUtil {
             try (Connection conn = getConnection()) {
                 conn.setAutoCommit(false);
                 String sel = "SELECT id FROM foods WHERE food_name = ?";
-                String ins = "INSERT INTO foods (food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
-                String upd = "UPDATE foods SET calories = ?, protein = ?, carbs = ?, fat = ? WHERE food_name = ?";
+                String ins = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
+                String upd = "UPDATE foods SET calories_per_100g = ?, protein = ?, carbs = ?, fat = ? WHERE food_name = ?";
                 try (PreparedStatement psSel = conn.prepareStatement(sel);
                      PreparedStatement psIns = conn.prepareStatement(ins);
                      PreparedStatement psUpd = conn.prepareStatement(upd)) {
@@ -1509,7 +1509,7 @@ public class DBUtil {
 
         private static boolean foodColumnsReady = false;
 
-        /** 自愈合：首次调用时为 foods 表补 图片/phash/status 列（兼容老库，不破坏已有数据） */
+        /** 自愈合：首次调用时为 foods 表补 图片/phash/status 列，并把含糊的 calories 重命名为 calories_per_100g（兼容老库，不破坏已有数据） */
         public static void ensureFoodColumns() {
             if (foodColumnsReady) return;
             try (Connection conn = getConnection();
@@ -1518,6 +1518,11 @@ public class DBUtil {
                 try { stmt.executeUpdate("ALTER TABLE foods ADD COLUMN IF NOT EXISTS food_phash BIGINT"); } catch (SQLException ignore) {}
                 try { stmt.executeUpdate("ALTER TABLE foods ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT '已发布'"); } catch (SQLException ignore) {}
                 try { stmt.executeUpdate("UPDATE foods SET status='已发布' WHERE status IS NULL"); } catch (SQLException ignore) {}
+                // 食物热量语义显式化：calories(含糊) -> calories_per_100g（数据本就是每100g）
+                try { stmt.executeUpdate("DO $$ BEGIN IF EXISTS ("
+                        + "SELECT 1 FROM information_schema.columns "
+                        + "WHERE table_name='foods' AND column_name='calories') "
+                        + "THEN ALTER TABLE foods RENAME COLUMN calories TO calories_per_100g; END IF; END $$"); } catch (SQLException ignore) {}
                 foodColumnsReady = true;
             } catch (SQLException e) {
                 e.printStackTrace();
@@ -1532,7 +1537,7 @@ public class DBUtil {
             return new FoodRow(
                     rs.getInt("id"),
                     rs.getString("food_name"),
-                    rs.getInt("calories"),
+                    rs.getInt("calories_per_100g"),
                     rs.getDouble("protein"),
                     rs.getDouble("carbs"),
                     rs.getDouble("fat"),
@@ -1542,7 +1547,7 @@ public class DBUtil {
         }
 
         private static final String FOOD_SELECT =
-                "SELECT id, food_name, calories, protein, carbs, fat, food_image, food_phash, COALESCE(status,'已发布') AS status FROM foods ";
+                "SELECT id, food_name, calories_per_100g, protein, carbs, fat, food_image, food_phash, COALESCE(status,'已发布') AS status FROM foods ";
 
         /** 已发布食物（含图/phash），供管理面板与识图匹配（排除草稿）。 */
         public static List<FoodRow> getFoodsWithImage() {
@@ -1627,7 +1632,7 @@ public class DBUtil {
                 if (id <= 0) {
                     Long phash = (image != null && image.length > 0)
                             ? ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(image)) : null;
-                    String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat, food_image, food_phash, status) "
+                    String sql = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat, food_image, food_phash, status) "
                             + "VALUES (?,?,?,?,?,?,?,'已发布')";
                     PreparedStatement ps = conn.prepareStatement(sql);
                     ps.setString(1, name);
@@ -1646,7 +1651,7 @@ public class DBUtil {
                 } else {
                     if (image != null && image.length > 0) {
                         Long phash = ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(image));
-                        String sql = "UPDATE foods SET food_name=?, calories=?, protein=?, carbs=?, fat=?, food_image=?, food_phash=? WHERE id=?";
+                        String sql = "UPDATE foods SET food_name=?, calories_per_100g=?, protein=?, carbs=?, fat=?, food_image=?, food_phash=? WHERE id=?";
                         PreparedStatement ps = conn.prepareStatement(sql);
                         ps.setString(1, name);
                         ps.setInt(2, calories);
@@ -1659,7 +1664,7 @@ public class DBUtil {
                         return ps.executeUpdate() > 0;
                     }
                     // 无新图：保留原图与 phash，仅更新文本字段
-                    String sql = "UPDATE foods SET food_name=?, calories=?, protein=?, carbs=?, fat=? WHERE id=?";
+                    String sql = "UPDATE foods SET food_name=?, calories_per_100g=?, protein=?, carbs=?, fat=? WHERE id=?";
                     PreparedStatement ps = conn.prepareStatement(sql);
                     ps.setString(1, name);
                     ps.setInt(2, calories);
@@ -1699,8 +1704,8 @@ public class DBUtil {
             try (Connection conn = getConnection()) {
                 Long phash = (image != null && image.length > 0)
                         ? ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(image)) : null;
-                String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat, food_image, food_phash, status) "
-                        + "VALUES (?,?,?,?,?,?,?,'待确认') RETURNING id";
+                String sql = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat, food_image, food_phash, status) "
+                            + "VALUES (?,?,?,?,?,?,?,'待确认') RETURNING id";
                 PreparedStatement ps = conn.prepareStatement(sql);
                 ps.setString(1, name);
                 ps.setInt(2, cal);

@@ -194,7 +194,7 @@ public class InitDB {
                 "CREATE TABLE IF NOT EXISTS foods (" +
                 "  id SERIAL PRIMARY KEY," +
                 "  food_name VARCHAR(100)," +
-                "  calories INT," +
+                "  calories_per_100g INT," +
                 "  protein DECIMAL(5,2)," +
                 "  carbs DECIMAL(5,2)," +
                 "  fat DECIMAL(5,2)" +
@@ -528,7 +528,7 @@ public class InitDB {
     }
 
     private static void insertFoods(Connection conn) throws SQLException {
-        String sql = "INSERT INTO foods (food_name, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
         String[][] foods = {
             {"米饭","116","2.6","25.9","0.3"}, {"面条","137","4.5","28.5","0.5"},
             {"馒头","221","7.0","47.0","1.0"}, {"包子","220","7.5","38.0","4.0"},

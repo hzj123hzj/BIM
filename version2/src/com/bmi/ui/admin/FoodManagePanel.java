@@ -55,7 +55,7 @@ public class FoodManagePanel extends VBox {
         table.getColumns().addAll(
                 colStr("ID", fr -> String.valueOf(fr.id()), 60),
                 colStr("名称", DBUtil.FoodRow::name, 160),
-                colStr("热量", fr -> String.valueOf(fr.cal()), 90),
+                colStr("热量(每100g)", fr -> String.valueOf(fr.cal()), 90),
                 colStr("蛋白质", fr -> DBUtil.df2.format(fr.protein()), 90),
                 colStr("碳水", fr -> DBUtil.df2.format(fr.carbs()), 90),
                 colStr("脂肪", fr -> DBUtil.df2.format(fr.fat()), 90),
@@ -75,7 +75,7 @@ public class FoodManagePanel extends VBox {
         draftTable.getColumns().addAll(
                 colStr("ID", fr -> String.valueOf(fr.id()), 60),
                 colStr("名称", DBUtil.FoodRow::name, 160),
-                colStr("热量", fr -> String.valueOf(fr.cal()), 90),
+                colStr("热量(每100g)", fr -> String.valueOf(fr.cal()), 90),
                 colImage()
         );
         draftTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
@@ -226,7 +226,7 @@ public class FoodManagePanel extends VBox {
         g.setHgap(10);
         g.setVgap(8);
         g.addRow(0, new Label("名称"), tfName);
-        g.addRow(1, new Label("热量"), tfCal);
+        g.addRow(1, new Label("热量(每100g)"), tfCal);
         g.addRow(2, new Label("蛋白质"), tfP);
         g.addRow(3, new Label("碳水"), tfC);
         g.addRow(4, new Label("脂肪"), tfF);

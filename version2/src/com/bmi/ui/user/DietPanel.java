@@ -224,7 +224,7 @@ public class DietPanel extends VBox {
         name.setWrapText(true);
         name.setAlignment(Pos.CENTER);
         name.setPrefWidth(110);
-        Label cal = new Label(fr.cal() + " kcal");
+        Label cal = new Label(fr.cal() + " kcal/100g");
         cal.getStyleClass().add("text-muted");
         Button add = new Button("加入");
         add.getStyleClass().add("button-primary");
@@ -301,7 +301,7 @@ public class DietPanel extends VBox {
         TextField gramsTf = new TextField(String.valueOf(it.grams));
         gramsTf.setPrefWidth(56);
         it.gramsField = gramsTf;
-        Label cal = new Label(it.cal + " kcal");
+        Label cal = new Label(it.cal + " kcal（约" + it.grams + "g）");
         Label macro = new Label(String.format("P%.0f C%.0f F%.0f", it.protein, it.carbs, it.fat));
         macro.getStyleClass().add("text-muted");
         ComboBox<String> meal = new ComboBox<>();
