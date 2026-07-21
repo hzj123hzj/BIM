@@ -463,8 +463,8 @@ public class DietPanel extends VBox {
                             DBUtil.updateFoodImage(matched.id(), imageBytes);
                         }
                     } else {
-                        // 库里没有 → 建草稿待确认
-                        it.draftId = DBUtil.saveDraftFood(it.name, it.cal, it.protein, it.carbs, it.fat, imageBytes);
+                        // 库里没有 → 建草稿待确认（按 AI 每份克数折算成每100g，口径与食物库一致）
+                        it.draftId = DBUtil.saveDraftFood(it.name, it.grams, it.cal, it.protein, it.carbs, it.fat, imageBytes);
                     }
                 }
                 lastUploadedImage = imageBytes;

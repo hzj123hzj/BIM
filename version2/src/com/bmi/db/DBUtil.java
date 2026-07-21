@@ -1762,26 +1762,35 @@ public class DBUtil {
             }
         }
 
-        /** AI 识图无匹配时，建一条「待确认」草稿（带图+phash），返回新 id。 */
-        public static int saveDraftFood(String name, int cal, double p, double c, double f, byte[] image) {
+        /** AI 识图无匹配时，建一条「待确认」草稿（带图+phash），返回新 id。
+         *  AI 返回的是「每份」数值，这里统一折算成每100g（与食物库模型一致），
+         *  并把 AI 的每份克数存入 default_grams 作为标准份量；approveFood 仅需翻转状态即可。 */
+        public static int saveDraftFood(String name, int grams, int cal, double p, double c, double f, byte[] image) {
             ensureFoodColumns();
             try (Connection conn = getConnection()) {
                 Long phash = (image != null && image.length > 0)
                         ? ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(image)) : null;
-                String sql = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat, food_image, food_phash, status) "
-                            + "VALUES (?,?,?,?,?,?,?,'待确认') RETURNING id";
+                // 每份 → 每100g 折算（无份量信息时退化为原值，default_grams 取 100）
+                int defG = grams > 0 ? grams : 100;
+                int cal100 = (cal > 0 && grams > 0) ? (int) Math.round(cal * 100.0 / grams) : cal;
+                double p100 = (p > 0 && grams > 0) ? p * 100.0 / grams : p;
+                double c100 = (c > 0 && grams > 0) ? c * 100.0 / grams : c;
+                double f100 = (f > 0 && grams > 0) ? f * 100.0 / grams : f;
+                String sql = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat, default_grams, food_image, food_phash, status) "
+                            + "VALUES (?,?,?,?,?,?,?,?,'待确认') RETURNING id";
                 PreparedStatement ps = conn.prepareStatement(sql);
                 ps.setString(1, name);
-                ps.setInt(2, cal);
-                ps.setDouble(3, p);
-                ps.setDouble(4, c);
-                ps.setDouble(5, f);
+                ps.setInt(2, cal100);
+                ps.setDouble(3, p100);
+                ps.setDouble(4, c100);
+                ps.setDouble(5, f100);
+                ps.setInt(6, defG);
                 if (image != null && image.length > 0) {
-                    ps.setBytes(6, image);
-                    ps.setObject(7, phash);
+                    ps.setBytes(7, image);
+                    ps.setObject(8, phash);
                 } else {
-                    ps.setNull(6, Types.BINARY);
-                    ps.setNull(7, Types.BIGINT);
+                    ps.setNull(7, Types.BINARY);
+                    ps.setNull(8, Types.BIGINT);
                 }
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) return rs.getInt(1);
