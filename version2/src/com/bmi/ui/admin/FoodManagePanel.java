@@ -297,12 +297,12 @@ public class FoodManagePanel extends VBox {
         List<File> files = fc.showOpenMultipleDialog(owner);
         if (files == null || files.isEmpty()) return;
 
-        List<String[]> rows = new ArrayList<>();
+        List<ExcelUtil.FoodImportRow> rows = new ArrayList<>();
         StringBuilder failed = new StringBuilder();
         int okFiles = 0;
         for (File f : files) {
             try {
-                List<String[]> r = ExcelUtil.readFoods(f);
+                List<ExcelUtil.FoodImportRow> r = ExcelUtil.readFoods(f);
                 if (!r.isEmpty()) {
                     rows.addAll(r);
                     okFiles++;
@@ -316,7 +316,7 @@ public class FoodManagePanel extends VBox {
             }
         }
         if (rows.isEmpty()) {
-            warn("所选文件中没有可导入的数据（请检查列：名称、热量、蛋白质、碳水、脂肪）"
+            warn("所选文件中没有可导入的数据（请检查列：名称、每份量、每100g热量、蛋白质、碳水、脂肪；图片可嵌入在「图片」列）"
                     + (failed.length() > 0 ? "\n\n以下文件读取失败：" + failed : ""));
             return;
         }
@@ -332,20 +332,23 @@ public class FoodManagePanel extends VBox {
         return c;
     }
 
-    private void showImportPreview(List<String[]> rows, String fileName) {
-        TableView<String[]> preview = new TableView<>();
+    private void showImportPreview(List<ExcelUtil.FoodImportRow> rows, String fileName) {
+        TableView<ExcelUtil.FoodImportRow> preview = new TableView<>();
         preview.getColumns().addAll(
-                colA("名称", 0, 160),
-                colA("热量", 1, 90),
-                colA("蛋白质", 2, 90),
-                colA("碳水", 3, 90),
-                colA("脂肪", 4, 90)
+                colF("名称", r -> r.name, 180),
+                colF("标准份量(g)", r -> String.valueOf(r.portionG), 90),
+                colF("热量(每100g)", r -> String.valueOf(r.cal100), 100),
+                colF("蛋白质(每100g)", r -> String.valueOf(r.protein), 110),
+                colF("碳水(每100g)", r -> String.valueOf(r.carbs), 110),
+                colF("脂肪(每100g)", r -> String.valueOf(r.fat), 100),
+                colF("图片", r -> (r.image != null && r.image.length > 0) ? "有" : "无", 60)
         );
         preview.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         preview.setPrefHeight(360);
         preview.getItems().addAll(rows);
 
-        Label info = new Label("来源: " + fileName + "    共 " + rows.size() + " 行（按名称同步：已存在则更新，不存在则新增）");
+        Label info = new Label("来源: " + fileName + "    共 " + rows.size() + " 行（营养值按每100g 记录，选菜时按克数×系数计算；图片随行入库）"
+                + "\n按名称同步：已存在则更新（含图片/标准份量），不存在则新增。");
         info.setWrapText(true);
 
         VBox box = new VBox(10, info, preview);
@@ -367,10 +370,10 @@ public class FoodManagePanel extends VBox {
         }
     }
 
-    /** String[] 预览表的文本列（仅批量导入预览用）。 */
-    private TableColumn<String[], String> colA(String name, int idx, double w) {
-        TableColumn<String[], String> c = new TableColumn<>(name);
-        c.setCellValueFactory(data -> new ReadOnlyObjectWrapper<>(data.getValue()[idx]));
+    /** 食物导入预览表的文本列（从 FoodImportRow 取字段，仅批量导入预览用）。 */
+    private TableColumn<ExcelUtil.FoodImportRow, String> colF(String name, java.util.function.Function<ExcelUtil.FoodImportRow, String> f, double w) {
+        TableColumn<ExcelUtil.FoodImportRow, String> c = new TableColumn<>(name);
+        c.setCellValueFactory(data -> new ReadOnlyObjectWrapper<>(f.apply(data.getValue())));
         c.setPrefWidth(w);
         return c;
     }

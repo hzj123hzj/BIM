@@ -1,5 +1,6 @@
 package com.bmi.db;
 
+import com.bmi.util.ExcelUtil;
 import com.bmi.util.HealthCalculator;
 import com.bmi.util.ImageUtil;
 import com.bmi.util.PasswordUtil;
@@ -10,6 +11,7 @@ import java.util.Date;
 import java.text.*;
 import java.net.*;
 import java.io.*;
+import java.awt.image.BufferedImage;
 
 public class DBUtil {
     public static String currentUsername = "";
@@ -1458,35 +1460,60 @@ public class DBUtil {
 
         /**
          * 批量导入食物（按名称 upsert：存在则更新，不存在则新增）。
-         * @param rows 每行 {名称, 热量, 蛋白质, 碳水, 脂肪}
+         * 行数据来自 ExcelUtil，营养值已是「每100g」口径，并携带标准份量 default_grams 与图片字节。
+         * 计算实际摄入时由 DietPanel 按 克数/100 缩放，因此此处的 per-100g 值即可直接使用。
+         * @param rows ExcelUtil.FoodImportRow 列表
          * @return 结果描述字符串
          */
-        public static String importFoods(List<String[]> rows) throws SQLException {
+        public static String importFoods(List<ExcelUtil.FoodImportRow> rows) throws SQLException {
             int inserted = 0, updated = 0, skipped = 0;
             try (Connection conn = getConnection()) {
                 conn.setAutoCommit(false);
                 String sel = "SELECT id FROM foods WHERE food_name = ?";
-                String ins = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat) VALUES (?, ?, ?, ?, ?)";
-                String upd = "UPDATE foods SET calories_per_100g = ?, protein = ?, carbs = ?, fat = ? WHERE food_name = ?";
+                String ins = "INSERT INTO foods (food_name, calories_per_100g, protein, carbs, fat, default_grams, food_image, food_phash) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                String updNoImg = "UPDATE foods SET calories_per_100g = ?, protein = ?, carbs = ?, fat = ?, default_grams = ? WHERE food_name = ?";
+                String updWithImg = "UPDATE foods SET calories_per_100g = ?, protein = ?, carbs = ?, fat = ?, default_grams = ?, food_image = ?, food_phash = ? WHERE food_name = ?";
                 try (PreparedStatement psSel = conn.prepareStatement(sel);
                      PreparedStatement psIns = conn.prepareStatement(ins);
-                     PreparedStatement psUpd = conn.prepareStatement(upd)) {
-                    for (String[] r : rows) {
-                        String name = (r[0] == null) ? "" : r[0].trim();
+                     PreparedStatement psUpd = conn.prepareStatement(updNoImg);
+                     PreparedStatement psUpdImg = conn.prepareStatement(updWithImg)) {
+                    for (ExcelUtil.FoodImportRow r : rows) {
+                        String name = (r.name == null) ? "" : r.name.trim();
                         if (name.isEmpty()) { skipped++; continue; }
-                        int cal = parseIntSafe(r[1]);
-                        double p = parseDblSafe(r[2]);
-                        double c = parseDblSafe(r[3]);
-                        double f = parseDblSafe(r[4]);
+                        int cal = r.cal100;
+                        double p = r.protein, c = r.carbs, f = r.fat;
+                        int defG = r.portionG > 0 ? r.portionG : 100;
+                        byte[] img = (r.image != null && r.image.length > 0) ? r.image : null;
+                        Long phash = null;
+                        if (img != null) {
+                            try {
+                                BufferedImage bi = ImageUtil.bufferedImageFromBytes(img);
+                                phash = (bi == null) ? null : ImageUtil.perceptualHash(bi);
+                            } catch (Exception ignore) { phash = null; }
+                        }
                         psSel.setString(1, name);
                         try (ResultSet rs = psSel.executeQuery()) {
                             if (rs.next()) {
-                                psUpd.setInt(1, cal);
-                                psUpd.setDouble(2, p);
-                                psUpd.setDouble(3, c);
-                                psUpd.setDouble(4, f);
-                                psUpd.setString(5, name);
-                                psUpd.executeUpdate();
+                                if (img != null) {
+                                    psUpdImg.setInt(1, cal);
+                                    psUpdImg.setDouble(2, p);
+                                    psUpdImg.setDouble(3, c);
+                                    psUpdImg.setDouble(4, f);
+                                    psUpdImg.setInt(5, defG);
+                                    psUpdImg.setBytes(6, img);
+                                    psUpdImg.setObject(7, phash);
+                                    psUpdImg.setString(8, name);
+                                    psUpdImg.executeUpdate();
+                                } else {
+                                    psUpd.setInt(1, cal);
+                                    psUpd.setDouble(2, p);
+                                    psUpd.setDouble(3, c);
+                                    psUpd.setDouble(4, f);
+                                    psUpd.setInt(5, defG);
+                                    psUpd.setString(6, name);
+                                    psUpd.executeUpdate();
+                                }
                                 updated++;
                             } else {
                                 psIns.setString(1, name);
@@ -1494,6 +1521,9 @@ public class DBUtil {
                                 psIns.setDouble(3, p);
                                 psIns.setDouble(4, c);
                                 psIns.setDouble(5, f);
+                                psIns.setInt(6, defG);
+                                psIns.setBytes(7, img);
+                                psIns.setObject(8, phash);
                                 psIns.executeUpdate();
                                 inserted++;
                             }
