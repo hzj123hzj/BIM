@@ -1633,21 +1633,43 @@ public class DBUtil {
         }
 
         /**
-         * 识图匹配：1) 精确名 → 2) 模糊候选 → 3) pHash 在候选间消歧。
+         * 识图匹配：1) 精确名 → 2) 全局 pHash 最近邻（原图直接命中）→ 3) 模糊候选 → 4) pHash 在候选间消歧。
          * 命中返回食物行；无匹配返回 null（调用方应建草稿）。
+         *
+         * 关键修正：原实现仅在"名称模糊候选"内部用 pHash 消歧，导致即使上传了库里原图，
+         * 只要模型返回的名字没把正确食物带进候选集，原图就永远不被使用，从而误判成别的食物。
+         * 现把 pHash 提升为全局最近邻匹配——原图/高度相似图可直接命中，不再受模型命名影响。
          */
         public static FoodRow matchFood(String name, long uploadHash) {
             if (name == null || name.trim().isEmpty()) return null;
             String n = name.trim();
-            // 1. 精确匹配（忽略大小写/空格由模型命名决定，这里直接相等）
-            for (FoodRow fr : getFoodsWithImage()) {
+            List<FoodRow> all = getFoodsWithImage();
+            // 1. 精确名（最可靠身份）
+            for (FoodRow fr : all) {
                 if (fr.name() != null && fr.name().trim().equalsIgnoreCase(n)) return fr;
             }
-            // 2. 模糊候选
+            // 2. 全局 pHash 最近邻：上传图与库中原图高度相似时直接按图匹配
+            FoodRow bestImg = null;
+            int bestImgDist = Integer.MAX_VALUE;
+            for (FoodRow fr : all) {
+                if (fr.phash() == null) continue;
+                int d = ImageUtil.hamming(uploadHash, fr.phash());
+                if (d < bestImgDist) { bestImgDist = d; bestImg = fr; }
+            }
+            // 3. 模糊名候选
             List<FoodRow> cands = searchFoodsFuzzy(n);
-            if (cands.isEmpty()) return null;
-            if (cands.size() == 1) return cands.get(0); // 唯一候选可信
-            // 3. 多个候选 → pHash 消歧
+            if (cands.isEmpty()) {
+                // 名称无候选 → 看图片是否足够相似（原图命中）
+                return (bestImg != null && bestImgDist <= FOOD_PHASH_THRESHOLD) ? bestImg : null;
+            }
+            if (cands.size() == 1) {
+                // 名称唯一候选；若上传图与库中另一食物几乎完全一致（原图），以图为准
+                if (bestImg != null && bestImgDist <= FOOD_PHASH_THRESHOLD && bestImg.id() != cands.get(0).id()) {
+                    return bestImg;
+                }
+                return cands.get(0);
+            }
+            // 4. 多个候选 → pHash 在候选间消歧
             FoodRow best = null;
             int bestDist = Integer.MAX_VALUE;
             for (FoodRow fr : cands) {
@@ -1655,7 +1677,9 @@ public class DBUtil {
                 int d = ImageUtil.hamming(uploadHash, fr.phash());
                 if (d < bestDist) { bestDist = d; best = fr; }
             }
-            return (best != null && bestDist <= FOOD_PHASH_THRESHOLD) ? best : null;
+            if (best != null && bestDist <= FOOD_PHASH_THRESHOLD) return best;
+            // 候选内无法用图消歧，但全局已有强图匹配则采用
+            return (bestImg != null && bestImgDist <= FOOD_PHASH_THRESHOLD) ? bestImg : null;
         }
 
         /** 保存食物（带图）。有图时计算 pHash 一并写入；无图则写 NULL。 */
