@@ -1537,6 +1537,8 @@ public class DBUtil {
 
         /** 食物图片相似度哈希阈值：汉明距离 ≤ 该值视为同一/近似食物 */
         public static final int FOOD_PHASH_THRESHOLD = 10;
+        /** 用图片"覆盖"一个确信的名称匹配时所需更接近的阈值（近原图，避免相似图误覆盖正确命名） */
+        public static final int FOOD_PHASH_EXACT = 4;
 
         private static boolean foodColumnsReady = false;
 
@@ -1633,12 +1635,16 @@ public class DBUtil {
         }
 
         /**
-         * 识图匹配：1) 精确名 → 2) 全局 pHash 最近邻（原图直接命中）→ 3) 模糊候选 → 4) pHash 在候选间消歧。
+         * 识图匹配：1) 精确名 → 2) 全局 pHash 最近邻 → 3) 模糊候选 → 4) pHash 在候选间消歧。
          * 命中返回食物行；无匹配返回 null（调用方应建草稿）。
          *
          * 关键修正：原实现仅在"名称模糊候选"内部用 pHash 消歧，导致即使上传了库里原图，
          * 只要模型返回的名字没把正确食物带进候选集，原图就永远不被使用，从而误判成别的食物。
-         * 现把 pHash 提升为全局最近邻匹配——原图/高度相似图可直接命中，不再受模型命名影响。
+         * 现把 pHash 提升为全局最近邻匹配——原图/高度相似图在「名称无候选或模糊」时可直接命中。
+         *
+         * 防误判权衡：当模型给出"唯一且有把握"的名称匹配时，默认信任命名；仅当上传图与库中
+         * 另一食物近乎完全一致（汉明距离 ≤ FOOD_PHASH_EXACT，即近原图）才以图覆盖，
+         * 避免两张视觉相似的汉堡照被误判成对方（图优先的已知风险）。
          */
         public static FoodRow matchFood(String name, long uploadHash) {
             if (name == null || name.trim().isEmpty()) return null;
@@ -1663,8 +1669,9 @@ public class DBUtil {
                 return (bestImg != null && bestImgDist <= FOOD_PHASH_THRESHOLD) ? bestImg : null;
             }
             if (cands.size() == 1) {
-                // 名称唯一候选；若上传图与库中另一食物几乎完全一致（原图），以图为准
-                if (bestImg != null && bestImgDist <= FOOD_PHASH_THRESHOLD && bestImg.id() != cands.get(0).id()) {
+                // 名称唯一候选：默认信任模型命名。仅当上传图与库中"另一"食物近乎完全一致
+                // （近原图，汉明距离 ≤ FOOD_PHASH_EXACT）时才以图为准，避免视觉相似图误覆盖正确命名。
+                if (bestImg != null && bestImgDist <= FOOD_PHASH_EXACT && bestImg.id() != cands.get(0).id()) {
                     return bestImg;
                 }
                 return cands.get(0);
