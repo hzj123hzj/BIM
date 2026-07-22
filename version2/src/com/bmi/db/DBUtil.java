@@ -50,7 +50,40 @@ public class DBUtil {
             } catch (ClassNotFoundException e) {
                 throw new SQLException("PostgreSQL JDBC 驱动未找到, 请确认 postgresql-42.7.3.jar 在 classpath 中");
             }
+            migrateSchema(); // 首次连接时幂等补齐缺失列, 使库结构与代码对齐
             return DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+        }
+
+        private static boolean schemaMigrated = false;
+
+        /**
+         * 启动时幂等迁移: 补齐运行中数据库因旧版建库脚本缺失的列,
+         * 使库结构与代码 / 建表 SQL 对齐 (例如 goals.current_stage)。
+         * 仅首次成功执行后标记; 失败则记录日志并在下次 getConnection 时重试, 不阻断业务。
+         */
+        public static void migrateSchema() {
+            if (schemaMigrated) return;
+            try {
+                Class.forName("org.postgresql.Driver");
+            } catch (ClassNotFoundException e) {
+                return; // 驱动都没加载, 后续业务也会失败, 这里直接跳过
+            }
+            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS)) {
+                conn.setAutoCommit(true);
+                // goals: 目标分阶段进度列 (旧库建库脚本缺此列)
+                execDDL(conn, "ALTER TABLE goals ADD COLUMN IF NOT EXISTS current_stage INT DEFAULT 1");
+                // 后续若发现其它列漂移, 在此追加 ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... 即可
+                schemaMigrated = true;
+            } catch (SQLException e) {
+                logError("migrateSchema", e);
+                // 不抛异常, 不阻断业务; 下次 getConnection 时再尝试
+            }
+        }
+
+        private static void execDDL(Connection conn, String sql) throws SQLException {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate(sql);
+            }
         }
 
         /** 测试数据库连接 */

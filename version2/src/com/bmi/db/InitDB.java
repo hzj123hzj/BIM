@@ -153,6 +153,14 @@ public class InitDB {
                 ")");
             System.out.println("  [OK] goals 表");
 
+            // 兼容旧库: 补 current_stage (目标分阶段进度)
+            try {
+                execUpdate(conn, "ALTER TABLE goals ADD COLUMN IF NOT EXISTS current_stage INT DEFAULT 1");
+                System.out.println("  [OK] goals 表 current_stage 字段已确认");
+            } catch (SQLException e) {
+                System.out.println("  [INFO] goals 表 current_stage 字段检查: " + e.getMessage());
+            }
+
             // 饮食记录表
             execUpdate(conn,
                 "CREATE TABLE IF NOT EXISTS diet_records (" +

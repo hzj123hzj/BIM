@@ -1,5 +1,6 @@
 package com.bmi;
 
+import com.bmi.db.DBUtil;
 import com.bmi.ui.AdminView;
 import com.bmi.ui.LoginView;
 import com.bmi.ui.MainView;
@@ -17,6 +18,7 @@ public class App extends Application {
     @Override
     public void start(Stage s) {
         stage = s;
+        DBUtil.migrateSchema(); // 启动时尝试对齐库结构(幂等, 失败仅记录日志)
         s.setTitle("BMI 体质评估与预测系统 ");
         s.setMinWidth(1040);
         s.setMinHeight(700);
