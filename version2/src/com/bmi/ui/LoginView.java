@@ -212,52 +212,100 @@ public class LoginView {
         a.showAndWait();
     }
 
-    private GridPane createInstitutionPanel() {
-        GridPane p = new GridPane();
-        p.setHgap(10);
-        p.setVgap(10);
-        p.setPadding(new Insets(10, 4, 4, 4));
+    private VBox createInstitutionPanel() {
+        VBox box = new VBox(12);
+        box.setPadding(new Insets(10, 4, 4, 4));
+
+        // 分段切换: 登录 / 申请入驻
+        ToggleGroup tg = new ToggleGroup();
+        ToggleButton tbLogin = new ToggleButton("机构登录");
+        ToggleButton tbApply = new ToggleButton("申请入驻");
+        tbLogin.setToggleGroup(tg);
+        tbApply.setToggleGroup(tg);
+        tbLogin.setSelected(true);
+        tbLogin.getStyleClass().add("toggle-on");
+        tbApply.getStyleClass().add("toggle-off");
+        HBox switchBar = new HBox(0, tbLogin, tbApply);
+        switchBar.setMaxWidth(Double.MAX_VALUE);
+
+        VBox loginPane = buildInstitutionLoginPane();
+        VBox applyPane = buildInstitutionApplyPane();
+
+        tg.selectedToggleProperty().addListener((ob, o, n) -> {
+            boolean login = n == tbLogin;
+            loginPane.setVisible(login);
+            loginPane.setManaged(login);
+            applyPane.setVisible(!login);
+            applyPane.setManaged(!login);
+            tbLogin.getStyleClass().removeAll("toggle-on", "toggle-off");
+            tbApply.getStyleClass().removeAll("toggle-on", "toggle-off");
+            tbLogin.getStyleClass().add(login ? "toggle-on" : "toggle-off");
+            tbApply.getStyleClass().add(login ? "toggle-off" : "toggle-on");
+        });
+
+        box.getChildren().addAll(switchBar, loginPane, applyPane);
+        return box;
+    }
+
+    private VBox buildInstitutionLoginPane() {
+        VBox p = new VBox(10);
         TextField tfCode = new TextField();
-        tfCode.setPromptText("机构编码");
+        tfCode.setPromptText("机构编码 (如 ORG-1024)");
         PasswordField pfPass = new PasswordField();
         pfPass.setPromptText("密码");
-        Button btn = new Button("机构登录");
+        Button btn = new Button("登 录");
         btn.getStyleClass().add("button-primary");
         btn.setMaxWidth(Double.MAX_VALUE);
-        Label hint = new Label("医疗机构请使用机构编码登录");
-
-        // 机构注册(折叠)
-        TextField tfName = new TextField();
-        tfName.setPromptText("机构名称");
-        PasswordField pf1 = new PasswordField();
-        pf1.setPromptText("密码");
-        PasswordField pf2 = new PasswordField();
-        pf2.setPromptText("确认密码");
-        Button btnReg = new Button("注册机构");
-        btnReg.getStyleClass().add("button-accent");
-        btnReg.setMaxWidth(Double.MAX_VALUE);
-
-        p.add(hint, 0, 0, 2, 1);
-        p.add(new Label("机构编码:"), 0, 1);
-        p.add(tfCode, 1, 1);
-        p.add(new Label("密码:"), 0, 2);
-        p.add(pfPass, 1, 2);
-        p.add(btn, 0, 3, 2, 1);
-        p.add(new Label("机构名称:"), 0, 4);
-        p.add(tfName, 1, 4);
-        p.add(new Label("密码:"), 0, 5);
-        p.add(pf1, 1, 5);
-        p.add(new Label("确认密码:"), 0, 6);
-        p.add(pf2, 1, 6);
-        p.add(btnReg, 0, 7, 2, 1);
+        Label hint = new Label("医疗机构请使用管理员下发的机构编码登录");
+        hint.getStyleClass().add("hint");
 
         btn.setOnAction(e -> doInstitutionLogin(tfCode.getText(), pfPass.getText()));
         pfPass.setOnAction(e -> doInstitutionLogin(tfCode.getText(), pfPass.getText()));
-        btnReg.setOnAction(e -> doRegisterInstitution(tfName.getText(), tfCode.getText(), pf1.getText(), pf2.getText()));
+        p.getChildren().addAll(hint, labeled("机构编码:", tfCode), labeled("密码:", pfPass), btn);
         return p;
     }
 
+    private VBox buildInstitutionApplyPane() {
+        VBox p = new VBox(10);
+        TextField tfName = new TextField();
+        tfName.setPromptText("机构名称");
+        TextField tfContact = new TextField();
+        tfContact.setPromptText("联系人");
+        TextField tfPhone = new TextField();
+        tfPhone.setPromptText("联系电话");
+        TextArea taNote = new TextArea();
+        taNote.setPromptText("申请说明 (为何需要入驻, 如所属科室/用途)");
+        taNote.setPrefRowCount(2);
+        Button btn = new Button("提交申请");
+        btn.getStyleClass().add("button-accent");
+        btn.setMaxWidth(Double.MAX_VALUE);
+        Label hint = new Label("提交后由管理员审批, 通过后下发机构编码与初始密码");
+        hint.getStyleClass().add("hint");
+
+        btn.setOnAction(e -> doSubmitInstitutionRequest(
+                tfName.getText(), tfContact.getText(), tfPhone.getText(), taNote.getText()));
+        p.getChildren().addAll(hint, labeled("机构名称:", tfName),
+                labeled("联系人:", tfContact), labeled("联系电话:", tfPhone),
+                new Label("申请说明:"), taNote, btn);
+        return p;
+    }
+
+    private HBox labeled(String text, Control c) {
+        HBox h = new HBox(8);
+        h.setAlignment(Pos.CENTER_LEFT);
+        Label l = new Label(text);
+        l.setMinWidth(70);
+        HBox.setHgrow(c, Priority.ALWAYS);
+        c.setMaxWidth(Double.MAX_VALUE);
+        h.getChildren().addAll(l, c);
+        return h;
+    }
+
     private void doInstitutionLogin(String code, String pwd) {
+        if (code == null || code.trim().isEmpty() || pwd == null || pwd.isEmpty()) {
+            alert(Alert.AlertType.WARNING, "提示", "请输入机构编码和密码");
+            return;
+        }
         if (DBUtil.loginInstitution(code, pwd)) {
             App.currentRole = "institution";
             App.showInstitution();
@@ -266,19 +314,16 @@ public class LoginView {
         }
     }
 
-    private void doRegisterInstitution(String name, String code, String p1, String p2) {
-        if (name == null || name.trim().isEmpty() || code == null || code.trim().isEmpty()) {
-            alert(Alert.AlertType.WARNING, "提示", "机构名称和编码不能为空");
+    private void doSubmitInstitutionRequest(String name, String contact, String phone, String note) {
+        if (name == null || name.trim().isEmpty()) {
+            alert(Alert.AlertType.WARNING, "提示", "请填写机构名称");
             return;
         }
-        if (p1 == null || !p1.equals(p2)) {
-            alert(Alert.AlertType.WARNING, "提示", "两次密码不一致");
-            return;
-        }
-        if (DBUtil.registerInstitution(name, code, p1)) {
-            alert(Alert.AlertType.INFORMATION, "成功", "机构注册成功! 请登录");
+        if (DBUtil.submitInstitutionRequest(name, contact, phone, note)) {
+            alert(Alert.AlertType.INFORMATION, "已提交",
+                    "入驻申请已提交, 状态: 待审批。\n请等待管理员审核, 通过后将以线下方式向您下发机构编码与初始密码。");
         } else {
-            alert(Alert.AlertType.ERROR, "失败", "注册失败 (机构编码可能已存在)");
+            alert(Alert.AlertType.ERROR, "提交失败", "申请提交失败, 请稍后重试");
         }
     }
 

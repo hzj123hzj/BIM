@@ -616,3 +616,24 @@
 .food-chip-p { -fx-background-color: #E7F0F6; -fx-text-fill: #2D8CA0; }
 .food-chip-c { -fx-background-color: #F2EFE0; -fx-text-fill: #9A7B2E; }
 .food-chip-f { -fx-background-color: #FBE9DD; -fx-text-fill: #C76A26; }
+
+/* 分段切换 (机构登录 / 申请入驻) */
+.toggle-on, .toggle-off {
+    -fx-background-radius: 0;
+    -fx-border-color: #2D8CA0;
+    -fx-border-width: 1;
+    -fx-padding: 6 18;
+    -fx-font-size: 13px;
+    -fx-cursor: hand;
+}
+.toggle-on {
+    -fx-background-color: #2D8CA0;
+    -fx-text-fill: #FFFFFF;
+    -fx-font-weight: bold;
+}
+.toggle-off {
+    -fx-background-color: #FFFFFF;
+    -fx-text-fill: #2D8CA0;
+}
+.toggle-on:hover { -fx-background-color: #247688; }
+.toggle-off:hover { -fx-background-color: #EAF3F7; }

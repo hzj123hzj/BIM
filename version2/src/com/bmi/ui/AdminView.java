@@ -12,6 +12,7 @@ import com.bmi.ui.admin.ArticleManagePanel;
 import com.bmi.ui.admin.DataMonitorPanel;
 import com.bmi.ui.admin.ExerciseManagePanel;
 import com.bmi.ui.admin.FoodManagePanel;
+import com.bmi.ui.admin.InstitutionApprovalPanel;
 import com.bmi.ui.admin.UserManagePanel;
 
 import javafx.geometry.*;
@@ -69,7 +70,9 @@ public class AdminView {
                         tab("API配置", new ApiConfigPanel()),
                         tab("AI使用统计", new AIUsagePanel()))),
                 new SideNav.NavSection("系统监控", Arrays.asList(
-                        tab("数据监控", new DataMonitorPanel())))
+                        tab("数据监控", new DataMonitorPanel()))),
+                new SideNav.NavSection("机构管理", Arrays.asList(
+                        tab("入驻审批", new InstitutionApprovalPanel())))
         );
         SideNav nav = new SideNav("管理后台", sections);
         root.setLeft(nav.getSidebar());

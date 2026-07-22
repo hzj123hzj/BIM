@@ -1196,6 +1196,155 @@ public class DBUtil {
             return false;
         }
 
+        // ==================== 机构入驻申请 / 审批 ====================
+
+        /** 机构提交入驻申请 (状态 pending, 不写入 institutions 表) */
+        public static boolean submitInstitutionRequest(String orgName, String contact, String phone, String note) {
+            if (orgName == null || orgName.trim().isEmpty()) return false;
+            String sql = "INSERT INTO institution_requests (org_name, contact, phone, note, status) VALUES (?, ?, ?, ?, 'pending')";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, orgName.trim());
+                ps.setString(2, contact == null ? "" : contact.trim());
+                ps.setString(3, phone == null ? "" : phone.trim());
+                ps.setString(4, note == null ? "" : note.trim());
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 获取入驻申请列表; status 为 null 时返回全部 */
+        public static List<Map<String, Object>> getInstitutionRequests(String status) {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "SELECT * FROM institution_requests" + (status == null ? "" : " WHERE status = ?")
+                    + " ORDER BY created_at DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                if (status != null) ps.setString(1, status);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", rs.getInt("id"));
+                    m.put("org_name", rs.getString("org_name"));
+                    m.put("contact", rs.getString("contact"));
+                    m.put("phone", rs.getString("phone"));
+                    m.put("note", rs.getString("note"));
+                    m.put("status", rs.getString("status"));
+                    m.put("review_note", rs.getString("review_note"));
+                    m.put("created_at", rs.getTimestamp("created_at"));
+                    list.add(m);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 审批结果: 成功时返回 [org_code, password], 失败返回 null */
+        public static String[] approveInstitutionRequest(int id, String reviewer) {
+            // 1. 读取申请
+            String orgName = null, contact = "", phone = "";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(
+                         "SELECT org_name, contact, phone FROM institution_requests WHERE id = ? AND status = 'pending'")) {
+                ps.setInt(1, id);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    orgName = rs.getString("org_name");
+                    contact = rs.getString("contact");
+                    phone = rs.getString("phone");
+                }
+            } catch (SQLException e) { e.printStackTrace(); }
+            if (orgName == null) return null;
+
+            // 2. 生成唯一机构编码
+            String orgCode = generateUniqueOrgCode();
+            // 3. 生成初始密码并加盐哈希
+            String password = generateRandomPassword(8);
+            String salt = PasswordUtil.generateSalt();
+            String hash = PasswordUtil.hash(password, salt);
+
+            Connection conn = null;
+            try {
+                conn = getConnection();
+                conn.setAutoCommit(false);
+                // 写入机构
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO institutions (org_name, org_code, password, salt, contact) VALUES (?, ?, ?, ?, ?)")) {
+                    ps.setString(1, orgName);
+                    ps.setString(2, orgCode);
+                    ps.setString(3, hash);
+                    ps.setString(4, salt);
+                    ps.setString(5, contact);
+                    ps.executeUpdate();
+                }
+                // 更新申请状态
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE institution_requests SET status='approved', reviewer=?, reviewed_at=NOW() WHERE id=?")) {
+                    ps.setString(1, reviewer);
+                    ps.setInt(2, id);
+                    ps.executeUpdate();
+                }
+                conn.commit();
+                logAction("INSTITUTION", reviewer, "审批通过机构入驻", orgName + " -> " + orgCode);
+                return new String[]{orgCode, password};
+            } catch (SQLException e) {
+                e.printStackTrace();
+                if (conn != null) try { conn.rollback(); } catch (SQLException ignore) {}
+                return null;
+            } finally {
+                if (conn != null) try { conn.setAutoCommit(true); conn.close(); } catch (SQLException ignore) {}
+            }
+        }
+
+        /** 拒绝入驻申请 */
+        public static boolean rejectInstitutionRequest(int id, String reviewer, String note) {
+            String sql = "UPDATE institution_requests SET status='rejected', reviewer=?, review_note=?, reviewed_at=NOW() WHERE id=? AND status='pending'";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, reviewer);
+                ps.setString(2, note == null ? "" : note.trim());
+                ps.setInt(3, id);
+                int n = ps.executeUpdate();
+                if (n > 0) logAction("INSTITUTION", reviewer, "拒绝机构入驻", "request#" + id);
+                return n > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 生成唯一机构编码 (ORG- + 4 位数字, 库内唯一) */
+        private static String generateUniqueOrgCode() {
+            java.security.SecureRandom rnd = new java.security.SecureRandom();
+            String code;
+            for (int attempt = 0; attempt < 20; attempt++) {
+                code = "ORG-" + (1000 + rnd.nextInt(9000));
+                if (!orgCodeExists(code)) return code;
+            }
+            return "ORG-" + System.currentTimeMillis() % 10000;
+        }
+
+        private static boolean orgCodeExists(String code) {
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM institutions WHERE org_code = ?")) {
+                ps.setString(1, code);
+                return ps.executeQuery().next();
+            } catch (SQLException e) { e.printStackTrace(); }
+            return false;
+        }
+
+        /** 生成随机初始密码 (字母+数字) */
+        private static String generateRandomPassword(int len) {
+            final String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            java.security.SecureRandom rnd = new java.security.SecureRandom();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < len; i++) sb.append(chars.charAt(rnd.nextInt(chars.length())));
+            return sb.toString();
+        }
+
         /** 获取某机构的病人列表 (含最新一次健康记录摘要) */
         public static List<Map<String, Object>> getInstitutionPatients(int institutionId) {
             List<Map<String, Object>> list = new ArrayList<>();

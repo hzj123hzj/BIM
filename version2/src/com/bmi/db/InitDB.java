@@ -341,6 +341,22 @@ public class InitDB {
         execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_ip_username ON institution_patients(username)");
         System.out.println("  [OK] institution_patients 表");
 
+        // 机构入驻申请表 (待管理员审批)
+        execUpdate(conn,
+            "CREATE TABLE IF NOT EXISTS institution_requests (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  org_name VARCHAR(100) NOT NULL," +
+            "  contact VARCHAR(50)," +
+            "  phone VARCHAR(30)," +
+            "  note TEXT," +
+            "  status VARCHAR(20) NOT NULL DEFAULT 'pending'," +
+            "  reviewer VARCHAR(50)," +
+            "  review_note TEXT," +
+            "  created_at TIMESTAMP DEFAULT NOW()," +
+            "  reviewed_at TIMESTAMP" +
+            ")");
+        System.out.println("  [OK] institution_requests 表");
+
         // 系统配置表
         execUpdate(conn,
             "CREATE TABLE IF NOT EXISTS system_config (" +
