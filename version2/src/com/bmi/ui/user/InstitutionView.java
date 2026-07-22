@@ -6,9 +6,12 @@ import com.bmi.util.HealthCalculator;
 import com.bmi.util.Theme;
 
 import javafx.geometry.*;
+import javafx.scene.chart.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
+
+import java.text.SimpleDateFormat;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -146,36 +149,167 @@ public class InstitutionView extends VBox {
         Map<String, Object> rec = DBUtil.getLatestHealthRecord(username);
         if (rec == null) { alert("该病人暂无健康记录"); return; }
 
-        double bmi = HealthCalculator.calcBMI((double) rec.get("weight"), height);
-        StringBuilder sb = new StringBuilder();
-        sb.append("═══════ 病人分析: ").append(username).append(" ═══════\n\n");
-        sb.append("BMI: ").append(String.format("%.1f", bmi)).append(" (").append(HealthCalculator.classifyBMI(bmi)).append(")\n");
-        sb.append("体脂率: ").append(String.format("%.1f", (double) rec.get("body_fat"))).append("%\n");
-        sb.append("体质类型: ").append(rec.get("body_type")).append("\n\n");
+        List<Map<String, Object>> history = DBUtil.getHealthRecords(username, 200);
+        showAnalysisDialog(username, gender, age, height, rec, history);
+    }
+
+    private void showAnalysisDialog(String username, String gender, int age, double height,
+                                    Map<String, Object> rec, List<Map<String, Object>> history) {
+        double weight = ((Number) rec.get("weight")).doubleValue();
+        double bmi = HealthCalculator.calcBMI(weight, height);
+        double bodyFat = ((Number) rec.get("body_fat")).doubleValue();
+        int visceral = ((Number) rec.get("visceral_fat")).intValue();
+        double muscleRate = ((Number) rec.get("muscle_rate")).doubleValue();
+        double waterRate = ((Number) rec.get("water_rate")).doubleValue();
+        double waist = ((Number) rec.get("waist")).doubleValue();
+        double boneMuscle = ((Number) rec.get("bone_muscle")).doubleValue();
+
+        int healthScore = HealthCalculator.calcHealthScore(bmi, bodyFat, visceral, muscleRate, waterRate, gender);
+        String scoreLevel = HealthCalculator.scoreLevel(healthScore);
+
+        VBox root = new VBox(14);
+        root.setPadding(new Insets(14));
+        root.setStyle("-fx-background-color: transparent;");
+
+        // —— 顶部: 标题 + 综合评分 ——
+        HBox head = new HBox(12);
+        head.setAlignment(Pos.CENTER_LEFT);
+        Label t = new Label("病人分析 — " + username + "（" + gender + "，" + age + "岁）");
+        t.getStyleClass().add("card-title");
+        Region sp = new Region(); HBox.setHgrow(sp, Priority.ALWAYS);
+        Label score = new Label("健康评分 " + healthScore + " / 100  ·  " + scoreLevel);
+        score.getStyleClass().add("chip");
+        head.getChildren().addAll(t, sp, score);
+
+        // —— 关键指标网格 ——
+        GridPane grid = new GridPane();
+        grid.setHgap(10); grid.setVgap(8);
+        String[][] items = {
+                {"BMI", String.format("%.1f", bmi) + " (" + HealthCalculator.classifyBMI(bmi) + ")"},
+                {"体脂率", String.format("%.1f", bodyFat) + "%"},
+                {"内脏脂肪", visceral + " (" + HealthCalculator.assessVisceralFat(visceral) + ")"},
+                {"肌肉量评级", HealthCalculator.assessMuscle(boneMuscle, weight, gender)},
+                {"水分率", String.format("%.1f", waterRate) + "%"},
+                {"腰围", String.format("%.1f", waist) + " cm"},
+                {"腰高比", HealthCalculator.assessWHtR(waist, height)},
+                {"体质类型", String.valueOf(rec.get("body_type"))},
+        };
+        for (int i = 0; i < items.length; i++) {
+            Label k = new Label(items[i][0]); k.getStyleClass().add("muted");
+            Label v = new Label(items[i][1]); v.getStyleClass().add("metric");
+            grid.add(k, (i % 2) * 2, i / 2);
+            grid.add(v, (i % 2) * 2 + 1, i / 2);
+        }
+
+        // —— 风险标记 ——
+        List<String> risks = buildRiskFlags(gender, age, bmi, bodyFat, visceral, muscleRate, waist, height);
+
+        // —— 趋势图 ——
+        LineChart<String, Number> chart = buildTrendChart(history);
+
+        // —— 智能建议 + 趋势预测 ——
         Map<String, Object> rec2 = new HashMap<>(rec);
         rec2.put("username", username);
         Map<String, Object> rcm = HealthCalculator.recommendGoal(rec2, gender, age, height);
+
+        StringBuilder sb = new StringBuilder();
         sb.append("【智能建议】\n").append(rcm.get("reason")).append("\n");
-        sb.append("\n推荐目标: ").append(rcm.get("goalType")).append(" / ")
-                .append(String.format("%.1f", (double) rcm.get("targetWeight"))).append(" kg");
-        showText("病人分析 — " + username, sb.toString());
+        sb.append("推荐目标: ").append(rcm.get("goalType")).append(" / ")
+                .append(String.format("%.1f", (double) rcm.get("targetWeight"))).append(" kg\n\n");
+
+        if (history.size() >= 3) {
+            List<Date> dates = new ArrayList<>();
+            List<Double> weights = new ArrayList<>();
+            for (Map<String, Object> m : history) {
+                dates.add((Date) m.get("record_date"));
+                weights.add(((Number) m.get("weight")).doubleValue());
+            }
+            double predW = HealthCalculator.predictTrend(dates, weights, 30);
+            double predBMI = HealthCalculator.calcBMI(predW, height);
+            sb.append("【趋势预测】\n");
+            sb.append("体重趋势: ").append(HealthCalculator.trendDirection(dates, weights)).append("\n");
+            sb.append("30天后预测体重: ").append(Double.isNaN(predW) ? "数据不足" : String.format("%.1f", predW) + " kg")
+                    .append(" (预测BMI ").append(String.format("%.1f", predBMI)).append(")\n");
+            sb.append(HealthCalculator.assessRisk(predBMI)).append("\n");
+        } else {
+            sb.append("【趋势预测】\n记录不足3条, 暂无法预测趋势, 建议该病人持续打卡。\n");
+        }
+        if (!risks.isEmpty()) {
+            sb.append("\n【风险提示】\n");
+            for (String r : risks) sb.append("  ⚠ ").append(r).append("\n");
+        }
+
+        TextArea ta = new TextArea(sb.toString());
+        ta.setEditable(false); ta.setWrapText(true); ta.setPrefSize(560, 200);
+
+        root.getChildren().addAll(head, grid, chart, ta);
+
+        Dialog<Void> d = new Dialog<>();
+        d.setTitle("病人分析 — " + username);
+        d.setHeaderText(null);
+        d.getDialogPane().setContent(root);
+        d.getDialogPane().setPrefSize(620, 640);
+        d.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        d.showAndWait();
+    }
+
+    private List<String> buildRiskFlags(String gender, int age, double bmi, double bodyFat,
+                                        int visceral, double muscleRate, double waist, double height) {
+        List<String> risks = new ArrayList<>();
+        boolean male = "男".equals(gender);
+        if (bmi >= 28) risks.add("BMI 已达肥胖区间 (" + String.format("%.1f", bmi) + ")，心血管与代谢疾病风险升高");
+        else if (bmi >= 24) risks.add("BMI 超重 (" + String.format("%.1f", bmi) + ")，建议控制体重");
+        else if (bmi < 18.5) risks.add("BMI 偏瘦 (" + String.format("%.1f", bmi) + ")，需关注营养摄入");
+        double fatHigh = male ? 25 : 32;
+        double fatLow = male ? 12 : 20;
+        if (bodyFat > fatHigh) risks.add("体脂率过高 (" + String.format("%.1f", bodyFat) + "%)，建议减脂");
+        else if (bodyFat < fatLow) risks.add("体脂率偏低 (" + String.format("%.1f", bodyFat) + "%)");
+        if (visceral > 8) risks.add("内脏脂肪过高 (" + visceral + ")，中心性肥胖，代谢综合征风险");
+        double stdMuscle = male ? 40.0 : 35.0;
+        if (muscleRate > 0 && muscleRate < stdMuscle * 0.9) risks.add("肌肉量偏低 (" + String.format("%.1f", muscleRate) + "%)");
+        if (waist > 0) {
+            String whr = HealthCalculator.assessWHtR(waist, height);
+            if (whr.startsWith("偏高") || whr.startsWith("高")) risks.add("腰高比" + whr + "，腹部脂肪堆积");
+        }
+        int bodyAge = HealthCalculator.calcBodyAge(age, bodyFat, muscleRate, visceral, gender);
+        if (bodyAge - age >= 3) risks.add("身体年龄 " + bodyAge + " 岁，比实际年龄大 " + (bodyAge - age) + " 岁");
+        return risks;
+    }
+
+    private LineChart<String, Number> buildTrendChart(List<Map<String, Object>> history) {
+        CategoryAxis x = new CategoryAxis();
+        NumberAxis y = new NumberAxis();
+        x.setLabel("记录时间"); y.setLabel("数值");
+        LineChart<String, Number> chart = new LineChart<>(x, y);
+        chart.setTitle("健康指标趋势 (" + history.size() + " 条记录)");
+        chart.setPrefSize(580, 240);
+        chart.setLegendVisible(true);
+        chart.setCreateSymbols(true);
+
+        XYChart.Series<String, Number> sWeight = new XYChart.Series<>();
+        sWeight.setName("体重(kg)");
+        XYChart.Series<String, Number> sBmi = new XYChart.Series<>();
+        sBmi.setName("BMI");
+        XYChart.Series<String, Number> sFat = new XYChart.Series<>();
+        sFat.setName("体脂率(%)");
+
+        Set<String> seen = new HashSet<>();
+        SimpleDateFormat sdf = new SimpleDateFormat("MM-dd");
+        for (Map<String, Object> m : history) {
+            Date d = (Date) m.get("record_date");
+            String label = sdf.format(d);
+            while (seen.contains(label)) label += "*";
+            seen.add(label);
+            sWeight.getData().add(new XYChart.Data<>(label, ((Number) m.get("weight")).doubleValue()));
+            sBmi.getData().add(new XYChart.Data<>(label, ((Number) m.get("bmi")).doubleValue()));
+            sFat.getData().add(new XYChart.Data<>(label, ((Number) m.get("body_fat")).doubleValue()));
+        }
+        chart.getData().addAll(sWeight, sBmi, sFat);
+        return chart;
     }
 
     private void alert(String m) {
         new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK).showAndWait();
-    }
-
-    private void showText(String title, String content) {
-        Dialog<Void> d = new Dialog<>();
-        d.setTitle(title);
-        d.setHeaderText(null);
-        TextArea ta = new TextArea(content);
-        ta.setEditable(false); ta.setWrapText(true); ta.setPrefSize(560, 360);
-        VBox box = new VBox(ta); box.setPadding(new Insets(10));
-        d.getDialogPane().setContent(box);
-        d.getDialogPane().setPrefSize(580, 400);
-        d.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        d.showAndWait();
     }
 
     public VBox getRoot() { return this; }

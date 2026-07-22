@@ -440,6 +440,47 @@ public class DBUtil {
             return list;
         }
 
+        /**
+         * 获取指定用户的历史健康记录 (按时间正序, 用于趋势图)。与 getHealthRecords(int) 不同,
+         * 此方法接受任意用户名(供医疗机构端查看其归属病人), 不依赖 currentUsername。
+         */
+        public static List<Map<String, Object>> getHealthRecords(String username, int limit) {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "SELECT * FROM health_records WHERE username = ? ORDER BY record_date ASC, id ASC LIMIT ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                ps.setInt(2, limit);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("record_date", rs.getDate("record_date"));
+                    map.put("weight", rs.getDouble("weight"));
+                    map.put("body_fat", rs.getDouble("body_fat"));
+                    map.put("water_rate", rs.getDouble("water_rate"));
+                    map.put("muscle_rate", rs.getDouble("muscle_rate"));
+                    map.put("visceral_fat", rs.getInt("visceral_fat"));
+                    map.put("bone_muscle", rs.getDouble("bone_muscle"));
+                    map.put("bone_mass", rs.getDouble("bone_mass"));
+                    map.put("protein_rate", rs.getDouble("protein_rate"));
+                    map.put("bmr", rs.getDouble("bmr"));
+                    map.put("tdee", rs.getDouble("tdee"));
+                    map.put("bmi", rs.getDouble("bmi"));
+                    map.put("waist", rs.getDouble("waist"));
+                    map.put("body_age", rs.getInt("body_age"));
+                    try {
+                        map.put("body_type", rs.getString("body_type"));
+                    } catch (SQLException ex) {
+                        map.put("body_type", "--");
+                    }
+                    list.add(map);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
         /** 检查今天是否已打卡（有健康记录） */
         public static boolean isCheckedToday() {
             String sql = "SELECT 1 FROM health_records WHERE username = ? AND record_date = CURRENT_DATE";
