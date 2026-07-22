@@ -299,8 +299,16 @@ public class GoalPlanPanel extends VBox {
         double tdee = num(latest, "tdee");
         int exerciseCal = DBUtil.getTodayExerciseCalories();
         int[] diet = DBUtil.getTodayDietSummary();
-        double dailyDeficit = tdee + exerciseCal - diet[0];
-        int days = HealthCalculator.predictGoalDays(currentWeight, targetWeight, dailyDeficit, goalType);
+        boolean dietLogged = diet[0] > 0;
+        // 未记录饮食时不假设摄入=0, 改用目标对应的安全热量差估算
+        double dailyDeficit = HealthCalculator.estimateDailyDeficit(tdee, exerciseCal, diet[0], dietLogged, goalType);
+        // 预测前把热量差限制在安全区间, 避免极端值导致荒谬的达成日期
+        double effectiveDeficit = HealthCalculator.clampDeficitForPrediction(dailyDeficit, goalType, currentWeight, targetWeight);
+        boolean clamped = Math.abs(effectiveDeficit - dailyDeficit) > 0.5;
+        int days = HealthCalculator.predictGoalDays(currentWeight, targetWeight, effectiveDeficit, goalType);
+        if (!dietLogged) {
+            sb.append("  ℹ️ 今日饮食尚未记录, 以下按目标安全节奏估算, 仅供参考\n");
+        }
         if (days == -2) {
             sb.append("  ⚠️ 当前进度过慢, 建议调整计划\n");
             lblPredict.setText("进度过慢，建议调整");
@@ -315,7 +323,16 @@ public class GoalPlanPanel extends VBox {
             cal.add(Calendar.DAY_OF_MONTH, days);
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
             sb.append("  预测达成日期: ").append(sdf.format(cal.getTime())).append(" (约 ").append(days).append(" 天)\n");
-            sb.append("  每日热量差: ").append(f0(dailyDeficit)).append(" kcal\n");
+            if (dietLogged) {
+                sb.append("  今日热量差(实际): ").append(f0(dailyDeficit)).append(" kcal\n");
+                if (dailyDeficit > 1000)
+                    sb.append("  ⚠️ 当前热量差过大, 建议控制在 300~800 kcal 安全区间, 避免肌肉流失与营养不良\n");
+            } else {
+                sb.append("  建议每日热量差(估算): ").append(f0(dailyDeficit))
+                        .append(" kcal (记录饮食后显示实际值)\n");
+            }
+            if (clamped)
+                sb.append("  ⚠️ 实际热量差超出安全区间, 预测已按安全上限估算\n");
             lblPredict.setText("约 " + days + " 天后 (" + sdf.format(cal.getTime()) + ")");
         }
         sb.append("\n═══════════════════════════════════════════\n");

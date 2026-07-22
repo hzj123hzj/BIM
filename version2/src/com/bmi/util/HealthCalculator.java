@@ -506,6 +506,43 @@ public class HealthCalculator {
             }
         }
 
+        // ==================== 每日热量差 (安全估算) ====================
+
+        /**
+         * 估算每日热量差 (安全版)
+         * 关键: 今日未记录饮食时不能假设摄入=0 (否则算出极端热量差, 误以为在挨饿式减脂),
+         *       改用目标对应的安全热量差估算。
+         * @param dietLogged 今日是否已记录饮食
+         * @return 正=缺口(减脂/减重), 负=盈余(增肌), 0=维持
+         */
+        public static double estimateDailyDeficit(double tdee, int exerciseCal, int dietCal,
+                                                  boolean dietLogged, String goalType) {
+            if (dietLogged) return tdee + exerciseCal - dietCal;
+            if ("增肌".equals(goalType)) return -300;                       // 增肌: 约 300 kcal 盈余
+            if ("减脂".equals(goalType) || "减重".equals(goalType)) return 500; // 减脂/减重: 安全可持续 ~500
+            return 0;
+        }
+
+        /**
+         * 将热量差限制在安全区间, 用于达成日期预测, 避免极端值导致荒谬的达成日期。
+         * 安全上限: 减脂/减重缺口 ≤ 1000 kcal/天; 增肌盈余 ≤ 1000 kcal/天。
+         */
+        public static double clampDeficitForPrediction(double deficit, String goalType,
+                                                       double currentWeight, double targetWeight) {
+            if ("减脂".equals(goalType) || "减重".equals(goalType)) {
+                // 仅封顶上限, 负值(吃超)保留以触发"无法达成"
+                if (deficit > 1000) deficit = 1000;
+                return deficit;
+            } else if ("增肌".equals(goalType)) {
+                // 仅封底下限, 正值(摄入不足)保留
+                if (deficit < -1000) deficit = -1000;
+                return deficit;
+            } else { // 保持健康
+                if (Math.abs(currentWeight - targetWeight) < 0.5) return 0;
+                return (currentWeight > targetWeight) ? 300 : -300;
+            }
+        }
+
         /**
          * 健康风险评估
          */
