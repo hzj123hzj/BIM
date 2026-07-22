@@ -161,7 +161,8 @@ public class GoalPlanPanel extends VBox {
             alert("【智能推荐目标】\n" + rec.get("reason").toString()
                     + "\n\n已采纳并保存: " + goalType + " / " + f1(target) + " kg");
         } else {
-            alert("【智能推荐目标】\n" + rec.get("reason").toString()
+            showCopyableDialog("目标保存失败",
+                    "【智能推荐目标】\n" + rec.get("reason").toString()
                     + "\n\n已自动填入: " + goalType + " / " + f1(target) + " kg\n(保存失败: " + err + ")");
         }
     }
@@ -179,7 +180,7 @@ public class GoalPlanPanel extends VBox {
                 alert("目标设置成功!");
                 refresh();
             } else {
-                alert(err);
+                showCopyableDialog("目标保存失败", err);
             }
         } catch (NumberFormatException e) {
             alert("请输入有效数字");
@@ -366,5 +367,22 @@ public class GoalPlanPanel extends VBox {
 
     private void alert(String m) {
         new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK).showAndWait();
+    }
+
+    /** 错误弹窗: 用可选中/复制的 TextArea, 方便把失败原因复制出来排查 */
+    private void showCopyableDialog(String title, String content) {
+        Dialog<Void> d = new Dialog<>();
+        d.setTitle(title);
+        d.setHeaderText(null);
+        TextArea ta = new TextArea(content);
+        ta.setEditable(false);
+        ta.setWrapText(true);
+        ta.setPrefSize(540, 260);
+        VBox box = new VBox(ta);
+        box.setPadding(new Insets(10));
+        d.getDialogPane().setContent(box);
+        d.getDialogPane().setPrefSize(560, 300);
+        d.getDialogPane().getButtonTypes().add(ButtonType.OK);
+        d.showAndWait();
     }
 }

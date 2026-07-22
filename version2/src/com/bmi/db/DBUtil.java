@@ -14,6 +14,22 @@ import java.io.*;
 import java.awt.image.BufferedImage;
 
 public class DBUtil {
+    /** 错误日志文件 (位于程序运行目录, 便于复制排查) */
+    public static final String ERROR_LOG = System.getProperty("user.dir") + File.separator + "bmi_error.log";
+
+    /** 把异常的完整堆栈写入日志文件, 方便用户复制排查 (弹窗文字默认不可选中) */
+    public static void logError(String context, Throwable t) {
+        try (PrintWriter pw = new PrintWriter(new FileWriter(ERROR_LOG, true))) {
+            pw.println("==== " + new Timestamp(System.currentTimeMillis()) + " ====");
+            pw.println("context: " + context);
+            t.printStackTrace(pw);
+            pw.println();
+            pw.flush();
+        } catch (IOException ignore) {
+            ignore.printStackTrace();
+        }
+    }
+
     public static String currentUsername = "";
     public static String currentGender = "";
     public static int currentAge = 0;
@@ -628,7 +644,10 @@ public class DBUtil {
                 }
                 return null;
             } catch (SQLException e) {
-                return "保存目标失败: " + e.getMessage();
+                logError("saveGoal(username=" + currentUsername + ", goalType=" + goalType
+                        + ", target=" + targetValue + ")", e);
+                return "保存目标失败: " + e.getMessage()
+                        + "\n(完整错误已写入 " + ERROR_LOG + ", 可打开复制给我们排查)";
             }
         }
 
