@@ -150,13 +150,19 @@ public class GoalPlanPanel extends VBox {
         cbGoalType.setValue(goalType);
         tfTargetWeight.setText(f1(target));
         // 推荐即采纳: 直接写入 goals 表, 刷新后计划/进度立即生效
-        if (DBUtil.saveGoal(goalType, target)) {
+        if (target < 20 || target > 300) {
+            alert("【智能推荐目标】\n" + rec.get("reason").toString()
+                    + "\n\n推荐目标体重 " + f1(target) + " kg 超出合理范围(20-300), 已填入但未自动保存, 请调整后点「设置目标」");
+            return;
+        }
+        String err = DBUtil.saveGoal(goalType, target);
+        if (err == null) {
             refresh();
             alert("【智能推荐目标】\n" + rec.get("reason").toString()
                     + "\n\n已采纳并保存: " + goalType + " / " + f1(target) + " kg");
         } else {
             alert("【智能推荐目标】\n" + rec.get("reason").toString()
-                    + "\n\n已自动填入: " + goalType + " / " + f1(target) + " kg\n(保存失败, 可手动点「设置目标」)");
+                    + "\n\n已自动填入: " + goalType + " / " + f1(target) + " kg\n(保存失败: " + err + ")");
         }
     }
 
@@ -168,11 +174,12 @@ public class GoalPlanPanel extends VBox {
                 alert("目标体重范围 20-300kg");
                 return;
             }
-            if (DBUtil.saveGoal(goalType, target)) {
+            String err = DBUtil.saveGoal(goalType, target);
+            if (err == null) {
                 alert("目标设置成功!");
                 refresh();
             } else {
-                alert("目标设置失败");
+                alert(err);
             }
         } catch (NumberFormatException e) {
             alert("请输入有效数字");

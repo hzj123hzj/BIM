@@ -598,8 +598,11 @@ public class DBUtil {
 
         // ==================== 目标操作 ====================
 
-        /** 保存或更新目标 */
-        public static boolean saveGoal(String goalType, double targetValue) {
+        /**
+         * 保存或更新目标
+         * @return null 表示成功, 否则返回失败原因 (含 SQLException 信息, 便于界面排查)
+         */
+        public static String saveGoal(String goalType, double targetValue) {
             // 先检查是否已有目标
             String checkSql = "SELECT id FROM goals WHERE username = ?";
             String updateSql = "UPDATE goals SET goal_type = ?, target_value = ?, start_date = CURRENT_DATE, " +
@@ -609,21 +612,23 @@ public class DBUtil {
                 PreparedStatement checkPs = conn.prepareStatement(checkSql);
                 checkPs.setString(1, currentUsername);
                 if (checkPs.executeQuery().next()) {
-                    PreparedStatement ps = conn.prepareStatement(updateSql);
-                    ps.setString(1, goalType);
-                    ps.setDouble(2, targetValue);
-                    ps.setString(3, currentUsername);
-                    return ps.executeUpdate() > 0;
+                    try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                        ps.setString(1, goalType);
+                        ps.setDouble(2, targetValue);
+                        ps.setString(3, currentUsername);
+                        if (ps.executeUpdate() <= 0) return "更新目标失败: 未影响任何行";
+                    }
                 } else {
-                    PreparedStatement ps = conn.prepareStatement(insertSql);
-                    ps.setString(1, currentUsername);
-                    ps.setString(2, goalType);
-                    ps.setDouble(3, targetValue);
-                    return ps.executeUpdate() > 0;
+                    try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                        ps.setString(1, currentUsername);
+                        ps.setString(2, goalType);
+                        ps.setDouble(3, targetValue);
+                        ps.executeUpdate();
+                    }
                 }
+                return null;
             } catch (SQLException e) {
-                e.printStackTrace();
-                return false;
+                return "保存目标失败: " + e.getMessage();
             }
         }
 
