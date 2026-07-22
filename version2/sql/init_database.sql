@@ -61,6 +61,25 @@ CREATE TABLE goals (
     current_stage INT DEFAULT 1
 );
 
+-- ============ 医疗机构表 ============
+CREATE TABLE institutions (
+    id SERIAL PRIMARY KEY,
+    org_name VARCHAR(100) NOT NULL,
+    org_code VARCHAR(50) UNIQUE,                       -- 机构编码 / 统一社会信用代码
+    contact VARCHAR(50),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ============ 机构-病人关系表 (多对多, 行级权限基石) ============
+CREATE TABLE institution_patients (
+    institution_id INT REFERENCES institutions(id) ON DELETE CASCADE,
+    username VARCHAR(50) REFERENCES users(username) ON DELETE CASCADE,
+    relation_type VARCHAR(20) DEFAULT '管理',
+    created_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (institution_id, username)
+);
+CREATE INDEX idx_ip_username ON institution_patients(username);
+
 -- ============ 饮食记录表 ============
 CREATE TABLE diet_records (
     id SERIAL PRIMARY KEY,

@@ -238,6 +238,127 @@ public class DBUtil {
             }
         }
 
+        /** 机构批量导入结果 */
+        public static class ImportResult {
+            public int success = 0;
+            public List<String> errors = new ArrayList<>();
+        }
+
+        /**
+         * 医疗机构批量导入病人健康记录 (落 health_records, 复用与 saveHealthRecord 完全一致的计算路径)。
+         * - 病人账号须已存在, 否则跳过
+         * - 导入成功即建立 机构-病人 归属关系 (institution_patients)
+         * - 不新建数据表, 复用现有 health_records / users
+         * @param institutionId 机构 id
+         * @param rows 每行: username(String) + record_date(java.util.Date, 可空) + 数值字段
+         */
+        public static ImportResult importInstitutionRecords(int institutionId, List<Map<String, Object>> rows) {
+            ImportResult result = new ImportResult();
+            String checkUserSql = "SELECT height, age, gender, activity_level FROM users WHERE username = ?";
+            String linkSql = "INSERT INTO institution_patients (institution_id, username) VALUES (?, ?) " +
+                             "ON CONFLICT (institution_id, username) DO NOTHING";
+            String insertSql = "INSERT INTO health_records (username, weight, body_fat, water_rate, protein_rate, " +
+                               "muscle_rate, visceral_fat, bone_muscle, bone_mass, bmr, tdee, bmi, waist, body_age, body_type, record_date) " +
+                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String updateCheckinSql = "UPDATE users SET checkin_days = (" +
+                    "SELECT COUNT(DISTINCT record_date) FROM health_records WHERE username = ?" +
+                    ") WHERE username = ?";
+            try (Connection conn = getConnection()) {
+                conn.setAutoCommit(false);
+                try (PreparedStatement checkPs = conn.prepareStatement(checkUserSql);
+                     PreparedStatement linkPs = conn.prepareStatement(linkSql);
+                     PreparedStatement insPs = conn.prepareStatement(insertSql);
+                     PreparedStatement chkPs = conn.prepareStatement(updateCheckinSql)) {
+                    for (Map<String, Object> row : rows) {
+                        Object uObj = row.get("username");
+                        String username = uObj == null ? null : uObj.toString().trim();
+                        if (username == null || username.isEmpty()) {
+                            result.errors.add("缺用户名, 已跳过");
+                            continue;
+                        }
+                        double weight = toNum(row.get("weight"));
+                        if (weight <= 0) {
+                            result.errors.add(username + ": 体重无效, 已跳过");
+                            continue;
+                        }
+                        checkPs.setString(1, username);
+                        try (ResultSet rs = checkPs.executeQuery()) {
+                            if (!rs.next()) {
+                                result.errors.add(username + ": 账号不存在, 已跳过");
+                                continue;
+                            }
+                            double height = rs.getDouble("height");
+                            int age = rs.getInt("age");
+                            String gender = rs.getString("gender");
+                            String activity = rs.getString("activity_level");
+                            if (activity == null) activity = "久坐";
+
+                            double bodyFat = toNum(row.get("body_fat"));
+                            double waterRate = toNum(row.get("water_rate"));
+                            double proteinRate = toNum(row.get("protein_rate"));
+                            double muscleRate = toNum(row.get("muscle_rate"));
+                            int visceralFat = (int) toNum(row.get("visceral_fat"));
+                            double boneMuscle = toNum(row.get("bone_muscle"));
+                            double boneMass = toNum(row.get("bone_mass"));
+                            double waist = toNum(row.get("waist"));
+                            Object dObj = row.get("record_date");
+                            java.sql.Date recordDate = (dObj instanceof java.util.Date)
+                                    ? new java.sql.Date(((java.util.Date) dObj).getTime())
+                                    : new java.sql.Date(System.currentTimeMillis());
+
+                            // 复用 saveHealthRecord 同一套计算, 避免算法漂移
+                            double bmi = HealthCalculator.calcBMI(weight, height);
+                            double bmr = HealthCalculator.calcAvgBMR(weight, height, age, gender);
+                            double tdee = HealthCalculator.calcTDEE(bmr, activity);
+                            int bodyAge = HealthCalculator.calcBodyAge(age, bodyFat, muscleRate, visceralFat, gender);
+                            String bodyType = HealthCalculator.classifyBodyType(bmi, bodyFat, gender);
+
+                            insPs.setString(1, username);
+                            insPs.setDouble(2, weight);
+                            insPs.setDouble(3, bodyFat);
+                            insPs.setDouble(4, waterRate);
+                            insPs.setDouble(5, proteinRate);
+                            insPs.setDouble(6, muscleRate);
+                            insPs.setInt(7, visceralFat);
+                            insPs.setDouble(8, boneMuscle);
+                            insPs.setDouble(9, boneMass);
+                            insPs.setDouble(10, bmr);
+                            insPs.setDouble(11, tdee);
+                            insPs.setDouble(12, bmi);
+                            insPs.setDouble(13, waist);
+                            insPs.setInt(14, bodyAge);
+                            insPs.setString(15, bodyType);
+                            insPs.setDate(16, recordDate);
+                            insPs.executeUpdate();
+
+                            linkPs.setInt(1, institutionId);
+                            linkPs.setString(2, username);
+                            linkPs.executeUpdate();
+
+                            chkPs.setString(1, username);
+                            chkPs.setString(2, username);
+                            chkPs.executeUpdate();
+
+                            result.success++;
+                        }
+                    }
+                    conn.commit();
+                } catch (SQLException e) {
+                    try { conn.rollback(); } catch (SQLException ignore) {}
+                    result.errors.add("导入中断: " + e.getMessage());
+                    logError("importInstitutionRecords", e);
+                }
+            } catch (SQLException e) {
+                result.errors.add("连接失败: " + e.getMessage());
+                logError("importInstitutionRecords", e);
+            }
+            return result;
+        }
+
+        private static double toNum(Object v) {
+            return v instanceof Number ? ((Number) v).doubleValue() : 0.0;
+        }
+
         /** 获取最新健康记录 */
         public static Map<String, Object> getLatestHealthRecord() {
             String sql = "SELECT * FROM health_records WHERE username = ? ORDER BY record_date DESC, id DESC LIMIT 1";
