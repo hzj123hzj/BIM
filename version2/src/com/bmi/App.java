@@ -4,6 +4,7 @@ import com.bmi.db.DBUtil;
 import com.bmi.ui.AdminView;
 import com.bmi.ui.LoginView;
 import com.bmi.ui.MainView;
+import com.bmi.ui.user.InstitutionView;
 import com.bmi.util.Theme;
 
 import javafx.application.Application;
@@ -42,6 +43,13 @@ public class App extends Application {
 
     public static void showAdmin() {
         AdminView v = new AdminView();
+        Scene sc = new Scene(v.getRoot(), 1200, 760);
+        Theme.styleScene(sc);
+        stage.setScene(sc);
+    }
+
+    public static void showInstitution() {
+        InstitutionView v = new InstitutionView();
         Scene sc = new Scene(v.getRoot(), 1200, 760);
         Theme.styleScene(sc);
         stage.setScene(sc);

@@ -38,9 +38,11 @@ public class LoginView {
         TabPane tabPane = new TabPane();
         Tab tabLogin = new Tab("登录", createLoginPanel());
         Tab tabReg = new Tab("注册", createRegisterPanel());
+        Tab tabOrg = new Tab("机构登录", createInstitutionPanel());
         tabLogin.setClosable(false);
         tabReg.setClosable(false);
-        tabPane.getTabs().addAll(tabLogin, tabReg);
+        tabOrg.setClosable(false);
+        tabPane.getTabs().addAll(tabLogin, tabReg, tabOrg);
         card.getChildren().add(tabPane);
 
         root.setCenter(card);
@@ -208,6 +210,76 @@ public class LoginView {
         Alert a = new Alert(t, msg, ButtonType.OK);
         a.setTitle(title);
         a.showAndWait();
+    }
+
+    private GridPane createInstitutionPanel() {
+        GridPane p = new GridPane();
+        p.setHgap(10);
+        p.setVgap(10);
+        p.setPadding(new Insets(10, 4, 4, 4));
+        TextField tfCode = new TextField();
+        tfCode.setPromptText("机构编码");
+        PasswordField pfPass = new PasswordField();
+        pfPass.setPromptText("密码");
+        Button btn = new Button("机构登录");
+        btn.getStyleClass().add("button-primary");
+        btn.setMaxWidth(Double.MAX_VALUE);
+        Label hint = new Label("医疗机构请使用机构编码登录");
+
+        // 机构注册(折叠)
+        TextField tfName = new TextField();
+        tfName.setPromptText("机构名称");
+        PasswordField pf1 = new PasswordField();
+        pf1.setPromptText("密码");
+        PasswordField pf2 = new PasswordField();
+        pf2.setPromptText("确认密码");
+        Button btnReg = new Button("注册机构");
+        btnReg.getStyleClass().add("button-accent");
+        btnReg.setMaxWidth(Double.MAX_VALUE);
+
+        p.add(hint, 0, 0, 2, 1);
+        p.add(new Label("机构编码:"), 0, 1);
+        p.add(tfCode, 1, 1);
+        p.add(new Label("密码:"), 0, 2);
+        p.add(pfPass, 1, 2);
+        p.add(btn, 0, 3, 2, 1);
+        p.add(new Label("机构名称:"), 0, 4);
+        p.add(tfName, 1, 4);
+        p.add(new Label("密码:"), 0, 5);
+        p.add(pf1, 1, 5);
+        p.add(new Label("确认密码:"), 0, 6);
+        p.add(pf2, 1, 6);
+        p.add(btnReg, 0, 7, 2, 1);
+
+        btn.setOnAction(e -> doInstitutionLogin(tfCode.getText(), pfPass.getText()));
+        pfPass.setOnAction(e -> doInstitutionLogin(tfCode.getText(), pfPass.getText()));
+        btnReg.setOnAction(e -> doRegisterInstitution(tfName.getText(), tfCode.getText(), pf1.getText(), pf2.getText()));
+        return p;
+    }
+
+    private void doInstitutionLogin(String code, String pwd) {
+        if (DBUtil.loginInstitution(code, pwd)) {
+            App.currentRole = "institution";
+            App.showInstitution();
+        } else {
+            alert(Alert.AlertType.ERROR, "登录失败", "机构编码或密码错误");
+        }
+    }
+
+    private void doRegisterInstitution(String name, String code, String p1, String p2) {
+        if (name == null || name.trim().isEmpty() || code == null || code.trim().isEmpty()) {
+            alert(Alert.AlertType.WARNING, "提示", "机构名称和编码不能为空");
+            return;
+        }
+        if (p1 == null || !p1.equals(p2)) {
+            alert(Alert.AlertType.WARNING, "提示", "两次密码不一致");
+            return;
+        }
+        if (DBUtil.registerInstitution(name, code, p1)) {
+            alert(Alert.AlertType.INFORMATION, "成功", "机构注册成功! 请登录");
+        } else {
+            alert(Alert.AlertType.ERROR, "失败", "注册失败 (机构编码可能已存在)");
+        }
     }
 
     public BorderPane getRoot() {

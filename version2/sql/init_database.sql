@@ -66,6 +66,8 @@ CREATE TABLE institutions (
     id SERIAL PRIMARY KEY,
     org_name VARCHAR(100) NOT NULL,
     org_code VARCHAR(50) UNIQUE,                       -- 机构编码 / 统一社会信用代码
+    password VARCHAR(255) NOT NULL DEFAULT '',         -- SHA-256 加盐哈希
+    salt VARCHAR(64) NOT NULL DEFAULT '',
     contact VARCHAR(50),
     created_at TIMESTAMP DEFAULT NOW()
 );

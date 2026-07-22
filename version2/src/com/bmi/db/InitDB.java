@@ -315,10 +315,19 @@ public class InitDB {
             "  id SERIAL PRIMARY KEY," +
             "  org_name VARCHAR(100) NOT NULL," +
             "  org_code VARCHAR(50) UNIQUE," +
+            "  password VARCHAR(255) NOT NULL DEFAULT ''," +
+            "  salt VARCHAR(64) NOT NULL DEFAULT ''," +
             "  contact VARCHAR(50)," +
             "  created_at TIMESTAMP DEFAULT NOW()" +
             ")");
-        System.out.println("  [OK] institutions 表");
+        // 兼容旧库: 补登录字段
+        try {
+            execUpdate(conn, "ALTER TABLE institutions ADD COLUMN IF NOT EXISTS password VARCHAR(255) NOT NULL DEFAULT ''");
+            execUpdate(conn, "ALTER TABLE institutions ADD COLUMN IF NOT EXISTS salt VARCHAR(64) NOT NULL DEFAULT ''");
+            System.out.println("  [OK] institutions 表 (含登录字段)");
+        } catch (SQLException e) {
+            System.out.println("  [INFO] institutions 登录字段检查: " + e.getMessage());
+        }
 
         // 机构-病人关系表 (多对多)
         execUpdate(conn,

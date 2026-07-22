@@ -31,6 +31,8 @@ public class DBUtil {
     }
 
     public static String currentUsername = "";
+    public static int currentInstitutionId = 0;
+    public static String currentInstitutionName = "";
     public static String currentGender = "";
     public static int currentAge = 0;
     public static double currentHeight = 0;
@@ -359,12 +361,17 @@ public class DBUtil {
             return v instanceof Number ? ((Number) v).doubleValue() : 0.0;
         }
 
-        /** 获取最新健康记录 */
+        /** 获取最新健康记录 (当前登录用户) */
         public static Map<String, Object> getLatestHealthRecord() {
+            return getLatestHealthRecord(currentUsername);
+        }
+
+        /** 获取指定用户的最新健康记录 (机构端查看病人用) */
+        public static Map<String, Object> getLatestHealthRecord(String username) {
             String sql = "SELECT * FROM health_records WHERE username = ? ORDER BY record_date DESC, id DESC LIMIT 1";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, currentUsername);
+                ps.setString(1, username);
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
                     Map<String, Object> map = new HashMap<>();
@@ -1100,6 +1107,84 @@ public class DBUtil {
             } catch (SQLException e) {
                 e.printStackTrace();
             }
+        }
+
+        // ==================== 医疗机构登录 / 注册 ====================
+
+        /** 机构注册 (org_code 唯一) */
+        public static boolean registerInstitution(String orgName, String orgCode, String password) {
+            if (orgName == null || orgName.trim().isEmpty() || orgCode == null || orgCode.trim().isEmpty()
+                    || password == null || password.isEmpty()) return false;
+            String salt = PasswordUtil.generateSalt();
+            String hash = PasswordUtil.hash(password, salt);
+            String sql = "INSERT INTO institutions (org_name, org_code, password, salt) VALUES (?, ?, ?, ?)";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, orgName.trim());
+                ps.setString(2, orgCode.trim());
+                ps.setString(3, hash);
+                ps.setString(4, salt);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 机构登录验证 */
+        public static boolean loginInstitution(String orgCode, String password) {
+            if (orgCode == null || orgCode.trim().isEmpty() || password == null || password.isEmpty()) return false;
+            String sql = "SELECT id, org_name, password, salt FROM institutions WHERE org_code = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, orgCode.trim());
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    String hash = rs.getString("password");
+                    String salt = rs.getString("salt");
+                    if (hash == null || hash.isEmpty()) return false;
+                    if (PasswordUtil.verify(password, salt, hash)) {
+                        currentInstitutionId = rs.getInt("id");
+                        currentInstitutionName = rs.getString("org_name");
+                        return true;
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return false;
+        }
+
+        /** 获取某机构的病人列表 (含最新一次健康记录摘要) */
+        public static List<Map<String, Object>> getInstitutionPatients(int institutionId) {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "SELECT u.username, u.gender, u.age, u.height, " +
+                    "(SELECT weight FROM health_records hr WHERE hr.username=u.username ORDER BY record_date DESC, id DESC LIMIT 1) AS weight, " +
+                    "(SELECT bmi FROM health_records hr WHERE hr.username=u.username ORDER BY record_date DESC, id DESC LIMIT 1) AS bmi, " +
+                    "(SELECT body_type FROM health_records hr WHERE hr.username=u.username ORDER BY record_date DESC, id DESC LIMIT 1) AS body_type, " +
+                    "(SELECT record_date FROM health_records hr WHERE hr.username=u.username ORDER BY record_date DESC, id DESC LIMIT 1) AS last_date " +
+                    "FROM users u JOIN institution_patients ip ON ip.username = u.username " +
+                    "WHERE ip.institution_id = ? ORDER BY u.username";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, institutionId);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("username", rs.getString("username"));
+                    m.put("gender", rs.getString("gender"));
+                    m.put("age", rs.getInt("age"));
+                    m.put("height", rs.getDouble("height"));
+                    m.put("weight", rs.getDouble("weight"));
+                    m.put("bmi", rs.getDouble("bmi"));
+                    m.put("body_type", rs.getString("body_type"));
+                    m.put("last_date", rs.getDate("last_date"));
+                    list.add(m);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
         }
 
         /** 获取所有用户（管理员） */
