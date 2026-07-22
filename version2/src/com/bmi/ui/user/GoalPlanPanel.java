@@ -138,9 +138,19 @@ public class GoalPlanPanel extends VBox {
     }
 
     private void recommendTarget() {
-        double ideal = HealthCalculator.calcIdealWeight(DBUtil.currentHeight);
-        tfTargetWeight.setText(f1(ideal));
-        alert("推荐目标体重: " + f1(ideal) + " kg (身高²×22)");
+        Map<String, Object> latest = DBUtil.getLatestHealthRecord();
+        if (latest == null) {
+            alert("请先录入健康数据后再获取智能推荐目标");
+            return;
+        }
+        Map<String, Object> rec = HealthCalculator.recommendGoal(
+                latest, DBUtil.currentGender, DBUtil.currentAge, DBUtil.currentHeight);
+        String goalType = rec.get("goalType").toString();
+        double target = ((Number) rec.get("targetWeight")).doubleValue();
+        cbGoalType.setValue(goalType);
+        tfTargetWeight.setText(f1(target));
+        alert("【智能推荐目标】\n" + rec.get("reason").toString()
+                + "\n\n已自动填入: " + goalType + " / " + f1(target) + " kg");
     }
 
     private void setGoal() {
@@ -181,8 +191,12 @@ public class GoalPlanPanel extends VBox {
         lblCurrent.setText(f1(currentWeight) + " kg");
 
         if (goal == null) {
-            planContent = "尚未设置目标, 请选择目标类型和目标体重后点击「设置目标」\n\n推荐目标体重: " +
-                    f1(HealthCalculator.calcIdealWeight(DBUtil.currentHeight)) + " kg";
+            Map<String, Object> rec = HealthCalculator.recommendGoal(
+                    latest, DBUtil.currentGender, DBUtil.currentAge, DBUtil.currentHeight);
+            planContent = "尚未设置目标, 点击「推荐目标」可自动填入下方建议。\n\n"
+                    + "【智能推荐】\n" + rec.get("reason").toString()
+                    + "\n\n推荐目标体重: " + f1(((Number) rec.get("targetWeight")).doubleValue())
+                    + " kg (" + rec.get("goalType") + ")";
             lblTarget.setText("未设置");
             lblDiff.setText("--");
             lblDays.setText("--");

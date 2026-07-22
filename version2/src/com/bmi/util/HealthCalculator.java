@@ -166,6 +166,139 @@ public class HealthCalculator {
             return new double[]{ h * h * 18.5, h * h * 23.9 };
         }
 
+        // ==================== 智能目标推荐 (依据身体指标) ====================
+
+        /** 按目标 BMI 反推体重 (kg) */
+        public static double calcBMIWeight(double bmi, double heightCm) {
+            double h = heightCm / 100.0;
+            return h * h * bmi;
+        }
+
+        /**
+         * 依据身体指标智能推荐目标 (目标类型 + 推荐目标体重 + 可解释理由)
+         *
+         * 决策优先级 (按"最该解决的身体问题"排序):
+         *  1. BMI < 18.5             → 增肌 (偏瘦, 需增重增肌)
+         *  2. 体脂率偏高             → 减脂 (保留去脂体重, 体脂回到正常区间)
+         *  3. BMI ≥ 28               → 减脂 (肥胖)
+         *  4. 24 ≤ BMI < 28          → 内脏脂肪过高用减脂, 否则减重 (超重)
+         *  5. BMI 正常:
+         *       - 肌肉型            → 保持健康 (体脂低、肌肉量高)
+         *       - 内脏脂肪过高      → 减脂 (腹型肥胖风险)
+         *       - 肌肉率偏低        → 增肌 (改善体成分)
+         *       - 其余              → 保持健康
+         *
+         * @param rec    最新健康记录 (含 weight/bmi/body_fat/muscle_rate/visceral_fat/waist/body_type)
+         * @param gender "男" / "女"
+         * @param age    年龄
+         * @param heightCm 身高(cm)
+         * @return Map, 含 goalType(String) / targetWeight(double) / reason(String)
+         */
+        public static Map<String, Object> recommendGoal(Map<String, Object> rec, String gender, int age, double heightCm) {
+            boolean male = "男".equals(gender);
+            Map<String, Object> result = new HashMap<>();
+
+            double weight      = num(rec, "weight");
+            double bmi         = num(rec, "bmi");
+            double bodyFat     = num(rec, "body_fat");
+            double muscleRate  = num(rec, "muscle_rate");
+            int    visceralFat = (int) num(rec, "visceral_fat");
+            Object btObj       = rec.get("body_type");
+            String bodyType    = (btObj == null) ? classifyBodyType(bmi, bodyFat, gender) : btObj.toString();
+
+            // 体脂率正常区间与减脂目标值
+            double fatLow    = male ? 12 : 20;
+            double fatHigh   = male ? 25 : 32;
+            double fatTarget = male ? 20 : 30;
+            boolean fatHighFlag = male ? bodyFat > 25 : bodyFat > 32;
+            boolean fatLowFlag  = male ? bodyFat < 12 : bodyFat < 20;
+
+            String goalType;
+            double targetWeight;
+            StringBuilder reason = new StringBuilder();
+
+            if (bmi < 18.5) {
+                // 偏瘦 → 增肌增重
+                goalType = "增肌";
+                targetWeight = Math.max(weight + 1, calcBMIWeight(21.0, heightCm));
+                reason.append("当前 BMI ").append(f1(bmi)).append(" 偏瘦");
+                if (fatLowFlag) reason.append(", 体脂率 ").append(f1(bodyFat)).append("% 也偏低");
+                reason.append(", 建议增肌增重, 把目标体重抬升到 BMI≈21 的健康区间。");
+
+            } else if (fatHighFlag) {
+                // 体脂率偏高 → 减脂 (核心场景)
+                goalType = "减脂";
+                double lean = calcLeanBodyMass(weight, bodyFat);
+                targetWeight = lean / (1 - fatTarget / 100.0);
+                reason.append("体脂率 ").append(f1(bodyFat)).append("% 偏高 (").append(gender)
+                      .append("正常 ").append(f1(fatLow)).append("~").append(f1(fatHigh)).append("%), ");
+                if (bmi >= 28)      reason.append("且 BMI ").append(f1(bmi)).append(" 已达肥胖, ");
+                else if (bmi >= 24) reason.append("且 BMI ").append(f1(bmi)).append(" 超重, ");
+                else                reason.append("属于隐性肥胖(体重正常但脂肪偏高), ");
+                reason.append("建议减脂。按保留肌肉、体脂回到约 ").append(f1(fatTarget))
+                      .append("% 推算, 推荐目标体重 ").append(f1(targetWeight)).append(" kg。");
+
+            } else if (bmi >= 28) {
+                // BMI 肥胖但体脂率未到"高" (多为肌肉型/数据偏差) → 减脂
+                goalType = "减脂";
+                targetWeight = calcBMIWeight(23.0, heightCm);
+                reason.append("BMI ").append(f1(bmi)).append(" 已进入肥胖区间, 建议减脂, 目标体重回到 BMI≈23。");
+
+            } else if (bmi >= 24) {
+                // 超重
+                if (visceralFat > 8) {
+                    goalType = "减脂";
+                    targetWeight = calcBMIWeight(22.5, heightCm);
+                    reason.append("BMI ").append(f1(bmi)).append(" 超重, 且内脏脂肪 ").append(visceralFat)
+                          .append(" 过高, 建议优先减脂以降低内脏脂肪, 目标体重回到 BMI≈22.5。");
+                } else {
+                    goalType = "减重";
+                    targetWeight = calcBMIWeight(22.5, heightCm);
+                    reason.append("BMI ").append(f1(bmi)).append(" 超重, 建议减重, 目标体重回到 BMI≈22.5 正常区间。");
+                }
+
+            } else {
+                // BMI 正常 (18.5 ~ 24)
+                if ("肌肉型".equals(bodyType)) {
+                    goalType = "保持健康";
+                    targetWeight = weight;
+                    reason.append("BMI ").append(f1(bmi)).append(" 正常, 体脂率 ").append(f1(bodyFat))
+                          .append("% 偏低、肌肉量高, 属于肌肉型体型, 建议保持健康并适度塑形, 目标体重维持 ")
+                          .append(f1(weight)).append(" kg。");
+                } else if (visceralFat > 8) {
+                    goalType = "减脂";
+                    double lean = calcLeanBodyMass(weight, bodyFat);
+                    targetWeight = lean / (1 - fatTarget / 100.0);
+                    reason.append("BMI 正常, 但内脏脂肪 ").append(visceralFat)
+                          .append(" 过高(腹型肥胖风险), 建议减脂改善体成分, 推荐目标体重 ")
+                          .append(f1(targetWeight)).append(" kg。");
+                } else if (muscleRate < (male ? 40 : 35) * 0.9) {
+                    goalType = "增肌";
+                    targetWeight = weight + Math.max(1.0, weight * 0.03);
+                    reason.append("BMI 正常, 但肌肉率 ").append(f1(muscleRate))
+                          .append("% 偏低, 建议增肌改善体成分, 目标体重适度提升。");
+                } else {
+                    goalType = "保持健康";
+                    targetWeight = calcBMIWeight(21.5, heightCm);
+                    reason.append("各项指标均在正常范围 (BMI ").append(f1(bmi))
+                          .append(", 体脂率 ").append(f1(bodyFat)).append("%), 建议保持健康, 目标体重维持在 ")
+                          .append(f1(targetWeight)).append(" kg 左右。");
+                }
+            }
+
+            result.put("goalType", goalType);
+            result.put("targetWeight", Math.round(targetWeight * 10.0) / 10.0);
+            result.put("reason", reason.toString());
+            return result;
+        }
+
+        private static double num(Map<String, Object> m, String k) {
+            Object v = m.get(k);
+            return v instanceof Number ? ((Number) v).doubleValue() : 0.0;
+        }
+
+        private static String f1(double v) { return String.format("%.1f", v); }
+
         // ==================== 粗略肥胖/体型分级 (由 BMI 推导, 无需仪器) ====================
 
         /** 粗略肥胖分级 — 复用 BMI 分类 */
@@ -364,8 +497,13 @@ public class HealthCalculator {
             } else if ("增肌".equals(goalType)) {
                 if (diff >= 0) return 0;
                 return (int)Math.ceil((Math.abs(diff) * 5500) / Math.abs(dailyCalorieDeficit));
+            } else {
+                // 保持健康 / 其他: 以维持为目标, 接近当前体重即视为达成
+                if (Math.abs(diff) < 0.5) return 0;
+                // 需要下降按减脂模型, 需要上升按增肌模型
+                double perKg = diff > 0 ? 7700 : 5500;
+                return (int)Math.ceil((Math.abs(diff) * perKg) / Math.abs(dailyCalorieDeficit));
             }
-            return -1;
         }
 
         /**
