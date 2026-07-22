@@ -149,8 +149,15 @@ public class GoalPlanPanel extends VBox {
         double target = ((Number) rec.get("targetWeight")).doubleValue();
         cbGoalType.setValue(goalType);
         tfTargetWeight.setText(f1(target));
-        alert("【智能推荐目标】\n" + rec.get("reason").toString()
-                + "\n\n已自动填入: " + goalType + " / " + f1(target) + " kg");
+        // 推荐即采纳: 直接写入 goals 表, 刷新后计划/进度立即生效
+        if (DBUtil.saveGoal(goalType, target)) {
+            refresh();
+            alert("【智能推荐目标】\n" + rec.get("reason").toString()
+                    + "\n\n已采纳并保存: " + goalType + " / " + f1(target) + " kg");
+        } else {
+            alert("【智能推荐目标】\n" + rec.get("reason").toString()
+                    + "\n\n已自动填入: " + goalType + " / " + f1(target) + " kg\n(保存失败, 可手动点「设置目标」)");
+        }
     }
 
     private void setGoal() {
