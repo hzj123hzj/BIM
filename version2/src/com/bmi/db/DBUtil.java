@@ -74,6 +74,14 @@ public class DBUtil {
                 conn.setAutoCommit(true);
                 // goals: 目标分阶段进度列 (旧库建库脚本缺此列)
                 execDDL(conn, "ALTER TABLE goals ADD COLUMN IF NOT EXISTS current_stage INT DEFAULT 1");
+                // patients: 机构维度病人主表 (与个人 users 登录解耦)。幂等建表, 兼容已存在的旧库。
+                createPatientsTable(conn);
+                // health_records: 机构记录经 patient_id 关联到 patients 表 (与个人 users 解耦)
+                execDDL(conn, "ALTER TABLE health_records ADD COLUMN IF NOT EXISTS patient_id INT");
+                addFkIfMissing(conn, "health_records", "fk_hr_patient",
+                        "FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL");
+                // 旧模型残留的 institution_patients 已废弃 (被 patients 表取代), 清理之
+                execDDL(conn, "DROP TABLE IF EXISTS institution_patients");
                 // 后续若发现其它列漂移, 在此追加 ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... 即可
                 schemaMigrated = true;
             } catch (SQLException e) {
@@ -85,6 +93,45 @@ public class DBUtil {
         private static void execDDL(Connection conn, String sql) throws SQLException {
             try (Statement stmt = conn.createStatement()) {
                 stmt.executeUpdate(sql);
+            }
+        }
+
+        /** 幂等创建 patients 表 (机构维度病人主表, 与个人 users 登录解耦) */
+        private static void createPatientsTable(Connection conn) throws SQLException {
+            execDDL(conn,
+                "CREATE TABLE IF NOT EXISTS patients (" +
+                "  id SERIAL PRIMARY KEY," +
+                "  institution_id INT NOT NULL REFERENCES institutions(id) ON DELETE CASCADE," +
+                "  patient_code VARCHAR(50) NOT NULL," +
+                "  name VARCHAR(100)," +
+                "  gender VARCHAR(10)," +
+                "  age INT," +
+                "  height DECIMAL(5,2)," +
+                "  weight DECIMAL(5,2)," +
+                "  waist DECIMAL(5,2)," +
+                "  activity_level VARCHAR(20) DEFAULT '久坐'," +
+                "  archived BOOLEAN DEFAULT FALSE," +
+                "  created_at TIMESTAMP DEFAULT NOW()," +
+                "  updated_at TIMESTAMP DEFAULT NOW()," +
+                "  UNIQUE (institution_id, patient_code)" +
+                ")");
+            execDDL(conn, "CREATE INDEX IF NOT EXISTS idx_patients_inst ON patients(institution_id, archived)");
+        }
+
+        /** 幂等添加外键: 仅当约束名不存在时才执行, 避免重复添加报错 */
+        private static void addFkIfMissing(Connection conn, String table, String constraint, String def) {
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT 1 FROM information_schema.table_constraints WHERE table_name = ? AND constraint_name = ?")) {
+                ps.setString(1, table);
+                ps.setString(2, constraint);
+                if (ps.executeQuery().next()) return; // 已存在
+            } catch (SQLException ignore) {
+                return; // 查询异常则跳过, 不阻断
+            }
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate("ALTER TABLE " + table + " ADD CONSTRAINT " + constraint + " " + def);
+            } catch (SQLException ignore) {
+                // 添加失败(如脏数据)则忽略, 不阻断业务
             }
         }
 
@@ -247,61 +294,59 @@ public class DBUtil {
         }
 
         // 机构健康记录写库 SQL (导入 / 手动新建病人 共用, 避免算法漂移)
+        // 机构记录: username 为 NULL, patient_id 指向 patients 表 (与个人 users 登录解耦)
         private static final String SQL_INSERT_HEALTH =
-                "INSERT INTO health_records (username, weight, body_fat, water_rate, protein_rate, " +
+                "INSERT INTO health_records (username, patient_id, weight, body_fat, water_rate, protein_rate, " +
                 "muscle_rate, visceral_fat, bone_muscle, bone_mass, bmr, tdee, bmi, waist, body_age, body_type, record_date) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        private static final String SQL_LINK_PATIENT =
-                "INSERT INTO institution_patients (institution_id, username) VALUES (?, ?) " +
-                "ON CONFLICT (institution_id, username) DO NOTHING";
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         private static final String SQL_UPDATE_CHECKIN =
                 "UPDATE users SET checkin_days = (SELECT COUNT(DISTINCT record_date) FROM health_records WHERE username = ?) WHERE username = ?";
 
         /**
-         * 医疗机构批量导入病人健康记录 (落 health_records, 复用与 saveHealthRecord 完全一致的计算路径)。
-         * - 病人账号须已存在, 否则跳过
-         * - 导入成功即建立 机构-病人 归属关系 (institution_patients)
-         * - 不新建数据表, 复用现有 health_records / users
+         * 医疗机构批量导入病人健康记录。
+         * - 按 patient_code(机构内病人编号) 查找或自动建立 patients 行
+         *   (不创建个人登录账号, 故不存在「未经授权替病人建号」的信任/合规问题)
+         * - 写入 health_records (复用与 saveHealthRecord 完全一致的计算路径), patient_id 指向该病人
+         * - 导入模板可含 性别/年龄/身高/活动水平, 用于建立病人档案; 缺省则留空
          * @param institutionId 机构 id
-         * @param rows 每行: username(String) + record_date(java.util.Date, 可空) + 数值字段
+         * @param rows 每行: patient_code(String) + record_date(java.util.Date, 可空) + 数值字段
          */
         public static ImportResult importInstitutionRecords(int institutionId, List<Map<String, Object>> rows) {
             ImportResult result = new ImportResult();
-            String checkUserSql = "SELECT height, age, gender, activity_level FROM users WHERE username = ?";
             try (Connection conn = getConnection()) {
                 conn.setAutoCommit(false);
-                try (PreparedStatement checkPs = conn.prepareStatement(checkUserSql);
-                     PreparedStatement linkPs = conn.prepareStatement(SQL_LINK_PATIENT);
-                     PreparedStatement insPs = conn.prepareStatement(SQL_INSERT_HEALTH);
+                try (PreparedStatement insPs = conn.prepareStatement(SQL_INSERT_HEALTH);
                      PreparedStatement chkPs = conn.prepareStatement(SQL_UPDATE_CHECKIN)) {
                     for (Map<String, Object> row : rows) {
-                        Object uObj = row.get("username");
-                        String username = uObj == null ? null : uObj.toString().trim();
-                        if (username == null || username.isEmpty()) {
-                            result.errors.add("缺用户名, 已跳过");
+                        Object cObj = row.get("patient_code");
+                        String code = cObj == null ? null : cObj.toString().trim();
+                        if (code == null || code.isEmpty()) {
+                            result.errors.add("缺病人编号, 已跳过");
                             continue;
                         }
                         double weight = toNum(row.get("weight"));
                         if (weight <= 0) {
-                            result.errors.add(username + ": 体重无效, 已跳过");
+                            result.errors.add(code + ": 体重无效, 已跳过");
                             continue;
                         }
-                        checkPs.setString(1, username);
-                        try (ResultSet rs = checkPs.executeQuery()) {
-                            if (!rs.next()) {
-                                result.errors.add(username + ": 账号不存在, 已跳过");
-                                continue;
-                            }
-                            double height = rs.getDouble("height");
-                            int age = rs.getInt("age");
-                            String gender = rs.getString("gender");
-                            String activity = rs.getString("activity_level");
-                            if (activity == null) activity = "久坐";
+                        // 读取行内可能的档案字段 (用于建立/更新病人主表)
+                        String gender = row.get("gender") == null ? null : row.get("gender").toString().trim();
+                        if (gender != null && gender.isEmpty()) gender = null;
+                        int age = (int) toNum(row.get("age"));
+                        double height = toNum(row.get("height"));
+                        String activity = row.get("activity") == null ? null : row.get("activity").toString().trim();
+                        if (activity == null || activity.isEmpty()) activity = "久坐";
 
-                            // 复用同一套计算与写库逻辑(含归属与打卡天数更新)
-                            insertHealthRecord(conn, institutionId, username, height, age, gender, activity, row, insPs, linkPs, chkPs);
-                            result.success++;
+                        int patientId = findOrCreatePatient(conn, institutionId, code, null, gender, age, height, activity);
+                        if (patientId <= 0) {
+                            result.errors.add(code + ": 建病人档案失败, 已跳过");
+                            continue;
                         }
+                        updatePatientProfileIfPresent(conn, patientId, gender, age, height, activity, weight, toNum(row.get("waist")));
+
+                        // 复用同一套计算与写库逻辑
+                        insertHealthRecord(conn, patientId, null, height, age, gender, activity, row, insPs, chkPs);
+                        result.success++;
                     }
                     conn.commit();
                 } catch (SQLException e) {
@@ -320,13 +365,73 @@ public class DBUtil {
             return v instanceof Number ? ((Number) v).doubleValue() : 0.0;
         }
 
+        // ---- patients 表辅助方法 ----
+
+        private static Integer findPatientId(Connection conn, int institutionId, String code) throws SQLException {
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT id FROM patients WHERE institution_id = ? AND patient_code = ?")) {
+                ps.setInt(1, institutionId);
+                ps.setString(2, code);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return rs.getInt("id");
+                }
+            }
+            return null;
+        }
+
+        /** 按 (机构, 病人编号) 查找病人, 不存在则新建。返回 patients.id, 失败返回 -1 */
+        private static int findOrCreatePatient(Connection conn, int institutionId, String code, String name,
+                String gender, int age, double height, String activity) throws SQLException {
+            Integer id = findPatientId(conn, institutionId, code);
+            if (id != null) return id;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO patients (institution_id, patient_code, name, gender, age, height, activity_level) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
+                ps.setInt(1, institutionId);
+                ps.setString(2, code);
+                if (name != null) ps.setString(3, name); else ps.setNull(3, Types.VARCHAR);
+                if (gender != null) ps.setString(4, gender); else ps.setNull(4, Types.VARCHAR);
+                if (age > 0) ps.setInt(5, age); else ps.setNull(5, Types.INTEGER);
+                if (height > 0) ps.setDouble(6, height); else ps.setNull(6, Types.DOUBLE);
+                ps.setString(7, activity == null ? "久坐" : activity);
+                ps.executeUpdate();
+                try (ResultSet gk = ps.getGeneratedKeys()) {
+                    if (gk.next()) return gk.getInt(1);
+                }
+            }
+            return -1;
+        }
+
+        /** 用导入行内提供的档案字段(若有)更新病人主表, 缺省字段不覆盖 */
+        private static void updatePatientProfileIfPresent(Connection conn, int patientId,
+                String gender, int age, double height, String activity, double weight, double waist) throws SQLException {
+            if (patientId <= 0) return;
+            StringBuilder sb = new StringBuilder("UPDATE patients SET updated_at = NOW()");
+            List<Object> vals = new ArrayList<>();
+            if (gender != null) { sb.append(", gender = ?"); vals.add(gender); }
+            if (age > 0) { sb.append(", age = ?"); vals.add(age); }
+            if (height > 0) { sb.append(", height = ?"); vals.add(height); }
+            if (activity != null) { sb.append(", activity_level = ?"); vals.add(activity); }
+            if (weight > 0) { sb.append(", weight = ?"); vals.add(weight); }
+            if (waist > 0) { sb.append(", waist = ?"); vals.add(waist); }
+            if (vals.isEmpty()) return;
+            sb.append(" WHERE id = ?");
+            vals.add(patientId);
+            try (PreparedStatement ps = conn.prepareStatement(sb.toString())) {
+                for (int i = 0; i < vals.size() - 1; i++) ps.setObject(i + 1, vals.get(i));
+                ps.setInt(vals.size(), patientId);
+                ps.executeUpdate();
+            }
+        }
+
         /**
-         * 写入一条健康记录 + 建立机构归属 + 更新打卡天数 (导入 / 手动新建病人 共用)。
+         * 写入一条健康记录 (导入 / 手动新建病人 共用)。
          * 计算 BMI/BMR/TDEE/身体年龄/体质类型, 与 saveHealthRecord 完全一致, 避免算法漂移。
+         * 机构记录 username 为 NULL, patient_id 指向 patients; 仅当 username 非空(个人记录)才更新 users.checkin_days。
          */
-        private static void insertHealthRecord(Connection conn, int institutionId, String username,
+        private static void insertHealthRecord(Connection conn, int patientId, String username,
                 double height, int age, String gender, String activity, Map<String, Object> row,
-                PreparedStatement insPs, PreparedStatement linkPs, PreparedStatement chkPs) throws SQLException {
+                PreparedStatement insPs, PreparedStatement chkPs) throws SQLException {
             double weight = toNum(row.get("weight"));
             double bodyFat = toNum(row.get("body_fat"));
             double waterRate = toNum(row.get("water_rate"));
@@ -341,84 +446,82 @@ public class DBUtil {
                     ? new java.sql.Date(((java.util.Date) dObj).getTime())
                     : new java.sql.Date(System.currentTimeMillis());
 
-            double bmi = HealthCalculator.calcBMI(weight, height);
-            double bmr = HealthCalculator.calcAvgBMR(weight, height, age, gender);
-            double tdee = HealthCalculator.calcTDEE(bmr, activity);
+            double bmi = height > 0 ? HealthCalculator.calcBMI(weight, height) : 0;
+            double bmr = (height > 0 && age > 0) ? HealthCalculator.calcAvgBMR(weight, height, age, gender) : 0;
+            double tdee = bmr > 0 ? HealthCalculator.calcTDEE(bmr, activity) : 0;
             int bodyAge = HealthCalculator.calcBodyAge(age, bodyFat, muscleRate, visceralFat, gender);
             String bodyType = HealthCalculator.classifyBodyType(bmi, bodyFat, gender);
 
-            insPs.setString(1, username);
-            insPs.setDouble(2, weight);
-            insPs.setDouble(3, bodyFat);
-            insPs.setDouble(4, waterRate);
-            insPs.setDouble(5, proteinRate);
-            insPs.setDouble(6, muscleRate);
-            insPs.setInt(7, visceralFat);
-            insPs.setDouble(8, boneMuscle);
-            insPs.setDouble(9, boneMass);
-            insPs.setDouble(10, bmr);
-            insPs.setDouble(11, tdee);
-            insPs.setDouble(12, bmi);
-            insPs.setDouble(13, waist);
-            insPs.setInt(14, bodyAge);
-            insPs.setString(15, bodyType);
-            insPs.setDate(16, recordDate);
+            if (username != null && !username.isEmpty()) insPs.setString(1, username);
+            else insPs.setNull(1, Types.VARCHAR);
+            if (patientId > 0) insPs.setInt(2, patientId);
+            else insPs.setNull(2, Types.INTEGER);
+            insPs.setDouble(3, weight);
+            insPs.setDouble(4, bodyFat);
+            insPs.setDouble(5, waterRate);
+            insPs.setDouble(6, proteinRate);
+            insPs.setDouble(7, muscleRate);
+            insPs.setInt(8, visceralFat);
+            insPs.setDouble(9, boneMuscle);
+            insPs.setDouble(10, boneMass);
+            insPs.setDouble(11, bmr);
+            insPs.setDouble(12, tdee);
+            if (height > 0) insPs.setDouble(13, bmi); else insPs.setNull(13, Types.DOUBLE);
+            insPs.setDouble(14, waist);
+            insPs.setInt(15, bodyAge);
+            insPs.setString(16, bodyType);
+            insPs.setDate(17, recordDate);
             insPs.executeUpdate();
 
-            linkPs.setInt(1, institutionId);
-            linkPs.setString(2, username);
-            linkPs.executeUpdate();
-
-            chkPs.setString(1, username);
-            chkPs.setString(2, username);
-            chkPs.executeUpdate();
+            // 仅有个人登录账号时才更新 users.checkin_days
+            if (username != null && !username.isEmpty()) {
+                chkPs.setString(1, username);
+                chkPs.setString(2, username);
+                chkPs.executeUpdate();
+            }
         }
 
         /**
-         * 机构手动新建病人: 若账号不存在则建用户(随机不可登录密码), 再写入一条健康记录并归属本机构。
+         * 机构手动新建病人: 在 patients 表建立机构维度的病人档案 (不创建个人登录账号),
+         * 再写入一条健康记录并归属本机构 (经 patient_id)。
+         * @param patientCode 机构内病人编号/病历号 (本机构内唯一)
          * @param metrics 体征指标 map (key 同健康记录列: body_fat/water_rate/...), 可不含 weight/waist(由形参提供)
-         * @return 是否成功 (false 多为用户名已存在但建号失败, 或数据库异常)
+         * @return 是否成功 (false 多为编号已存在或数据库异常)
          */
-        public static boolean addInstitutionPatient(int institutionId, String username, String gender, int age,
+        public static boolean addInstitutionPatient(int institutionId, String patientCode, String gender, int age,
                 double height, String activity, double weight, Double waist, Map<String, Object> metrics) {
-            username = username == null ? "" : username.trim();
-            if (username.isEmpty() || weight <= 0) return false;
+            patientCode = patientCode == null ? "" : patientCode.trim();
+            if (patientCode.isEmpty() || weight <= 0) return false;
             try (Connection conn = getConnection()) {
                 conn.setAutoCommit(false);
-                // 1. 用户不存在则建号 (机构代管, 置随机密码使其无法自行登录)
-                boolean exists;
-                try (PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM users WHERE username = ?")) {
-                    ps.setString(1, username);
-                    exists = ps.executeQuery().next();
-                }
-                if (!exists) {
-                    String salt = PasswordUtil.generateSalt();
-                    String hash = PasswordUtil.hash(java.util.UUID.randomUUID().toString(), salt);
-                    try (PreparedStatement ps = conn.prepareStatement(
-                            "INSERT INTO users (username, password, salt, gender, age, height, activity_level, weight, waist) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
-                        ps.setString(1, username);
-                        ps.setString(2, hash);
-                        ps.setString(3, salt);
-                        ps.setString(4, gender);
-                        ps.setInt(5, age);
-                        ps.setDouble(6, height);
-                        ps.setString(7, activity);
-                        if (weight > 0) ps.setDouble(8, weight); else ps.setNull(8, Types.DOUBLE);
-                        if (waist != null && waist > 0) ps.setDouble(9, waist); else ps.setNull(9, Types.DOUBLE);
-                        ps.executeUpdate();
+                // 1. 建立病人档案 (机构维度, 无登录账号) — 编号唯一性校验
+                if (findPatientId(conn, institutionId, patientCode) != null) return false;
+                int patientId;
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO patients (institution_id, patient_code, gender, age, height, weight, waist, activity_level) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
+                    ps.setInt(1, institutionId);
+                    ps.setString(2, patientCode);
+                    if (gender != null) ps.setString(3, gender); else ps.setNull(3, Types.VARCHAR);
+                    if (age > 0) ps.setInt(4, age); else ps.setNull(4, Types.INTEGER);
+                    if (height > 0) ps.setDouble(5, height); else ps.setNull(5, Types.DOUBLE);
+                    if (weight > 0) ps.setDouble(6, weight); else ps.setNull(6, Types.DOUBLE);
+                    if (waist != null && waist > 0) ps.setDouble(7, waist); else ps.setNull(7, Types.DOUBLE);
+                    ps.setString(8, activity == null ? "久坐" : activity);
+                    ps.executeUpdate();
+                    try (ResultSet gk = ps.getGeneratedKeys()) {
+                        if (gk.next()) patientId = gk.getInt(1);
+                        else return false;
                     }
                 }
                 // 2. 写入健康记录 (复用同一套计算)
                 Map<String, Object> row = new HashMap<>(metrics == null ? Collections.emptyMap() : metrics);
-                row.put("username", username);
                 row.put("weight", weight);
                 if (waist != null) row.put("waist", waist);
                 if (!row.containsKey("record_date")) row.put("record_date", new java.util.Date());
                 try (PreparedStatement insPs = conn.prepareStatement(SQL_INSERT_HEALTH);
-                     PreparedStatement linkPs = conn.prepareStatement(SQL_LINK_PATIENT);
                      PreparedStatement chkPs = conn.prepareStatement(SQL_UPDATE_CHECKIN)) {
-                    insertHealthRecord(conn, institutionId, username, height, age, gender, activity, row, insPs, linkPs, chkPs);
+                    insertHealthRecord(conn, patientId, null, height, age, gender, activity, row, insPs, chkPs);
                 }
                 conn.commit();
                 return true;
@@ -429,16 +532,17 @@ public class DBUtil {
             }
         }
 
-        /** 批量移出本机构名单 (仅删 institution_patients 归属, 保留病人账号与全部健康记录) */
-        public static int removeInstitutionPatients(int institutionId, List<String> usernames) {
-            if (usernames == null || usernames.isEmpty()) return 0;
+        /** 批量移出本机构名单 (软删除: archived=TRUE, 保留病人档案与全部健康记录) */
+        public static int removeInstitutionPatients(int institutionId, List<String> patientCodes) {
+            if (patientCodes == null || patientCodes.isEmpty()) return 0;
             StringBuilder ph = new StringBuilder();
-            for (int i = 0; i < usernames.size(); i++) ph.append(i == 0 ? "?" : ",?");
-            String sql = "DELETE FROM institution_patients WHERE institution_id = ? AND username IN (" + ph + ")";
+            for (int i = 0; i < patientCodes.size(); i++) ph.append(i == 0 ? "?" : ",?");
+            String sql = "UPDATE patients SET archived = TRUE, updated_at = NOW() " +
+                    "WHERE institution_id = ? AND patient_code IN (" + ph + ")";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setInt(1, institutionId);
-                for (int i = 0; i < usernames.size(); i++) ps.setString(2 + i, usernames.get(i));
+                for (int i = 0; i < patientCodes.size(); i++) ps.setString(2 + i, patientCodes.get(i));
                 int n = ps.executeUpdate();
                 logAction("INSTITUTION", DBUtil.currentInstitutionName, "批量移出病人", "移出 " + n + " 人");
                 return n;
@@ -537,6 +641,82 @@ public class DBUtil {
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, username);
+                ps.setInt(2, limit);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("record_date", rs.getDate("record_date"));
+                    map.put("weight", rs.getDouble("weight"));
+                    map.put("body_fat", rs.getDouble("body_fat"));
+                    map.put("water_rate", rs.getDouble("water_rate"));
+                    map.put("muscle_rate", rs.getDouble("muscle_rate"));
+                    map.put("visceral_fat", rs.getInt("visceral_fat"));
+                    map.put("bone_muscle", rs.getDouble("bone_muscle"));
+                    map.put("bone_mass", rs.getDouble("bone_mass"));
+                    map.put("protein_rate", rs.getDouble("protein_rate"));
+                    map.put("bmr", rs.getDouble("bmr"));
+                    map.put("tdee", rs.getDouble("tdee"));
+                    map.put("bmi", rs.getDouble("bmi"));
+                    map.put("waist", rs.getDouble("waist"));
+                    map.put("body_age", rs.getInt("body_age"));
+                    try {
+                        map.put("body_type", rs.getString("body_type"));
+                    } catch (SQLException ex) {
+                        map.put("body_type", "--");
+                    }
+                    list.add(map);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 获取指定病人的最新健康记录 (机构端查看病人用, 经 patient_id) */
+        public static Map<String, Object> getLatestHealthRecord(int patientId) {
+            String sql = "SELECT * FROM health_records WHERE patient_id = ? ORDER BY record_date DESC, id DESC LIMIT 1";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, patientId);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("weight", rs.getDouble("weight"));
+                    map.put("body_fat", rs.getDouble("body_fat"));
+                    map.put("water_rate", rs.getDouble("water_rate"));
+                    map.put("muscle_rate", rs.getDouble("muscle_rate"));
+                    map.put("visceral_fat", rs.getInt("visceral_fat"));
+                    map.put("bone_muscle", rs.getDouble("bone_muscle"));
+                    map.put("bone_mass", rs.getDouble("bone_mass"));
+                    map.put("protein_rate", rs.getDouble("protein_rate"));
+                    map.put("bmr", rs.getDouble("bmr"));
+                    map.put("tdee", rs.getDouble("tdee"));
+                    map.put("bmi", rs.getDouble("bmi"));
+                    map.put("waist", rs.getDouble("waist"));
+                    map.put("body_age", rs.getInt("body_age"));
+                    try {
+                        map.put("body_type", rs.getString("body_type"));
+                    } catch (SQLException ex) {
+                        map.put("body_type", "--");
+                    }
+                    map.put("record_date", rs.getDate("record_date"));
+                    return map;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        /**
+         * 获取指定病人的历史健康记录 (按时间正序, 用于趋势图)。
+         */
+        public static List<Map<String, Object>> getHealthRecords(int patientId, int limit) {
+            List<Map<String, Object>> list = new ArrayList<>();
+            String sql = "SELECT * FROM health_records WHERE patient_id = ? ORDER BY record_date ASC, id ASC LIMIT ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, patientId);
                 ps.setInt(2, limit);
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
@@ -1407,25 +1587,26 @@ public class DBUtil {
             return false;
         }
 
-        /** 获取某机构的病人列表 (含最新一次健康记录摘要) */
+        /** 获取某机构的病人列表 (含最新一次健康记录摘要, 不含已移出的) */
         public static List<Map<String, Object>> getInstitutionPatients(int institutionId) {
             List<Map<String, Object>> list = new ArrayList<>();
-            String sql = "SELECT u.username, u.gender, u.age, u.height, " +
-                    "(SELECT weight FROM health_records hr WHERE hr.username=u.username ORDER BY record_date DESC, id DESC LIMIT 1) AS weight, " +
-                    "(SELECT bmi FROM health_records hr WHERE hr.username=u.username ORDER BY record_date DESC, id DESC LIMIT 1) AS bmi, " +
-                    "(SELECT body_type FROM health_records hr WHERE hr.username=u.username ORDER BY record_date DESC, id DESC LIMIT 1) AS body_type, " +
-                    "(SELECT record_date FROM health_records hr WHERE hr.username=u.username ORDER BY record_date DESC, id DESC LIMIT 1) AS last_date " +
-                    "FROM users u JOIN institution_patients ip ON ip.username = u.username " +
-                    "WHERE ip.institution_id = ? ORDER BY u.username";
+            String sql = "SELECT p.id, p.patient_code, p.name, p.gender, p.age, p.height, " +
+                    "(SELECT weight FROM health_records hr WHERE hr.patient_id = p.id ORDER BY record_date DESC, id DESC LIMIT 1) AS weight, " +
+                    "(SELECT bmi FROM health_records hr WHERE hr.patient_id = p.id ORDER BY record_date DESC, id DESC LIMIT 1) AS bmi, " +
+                    "(SELECT body_type FROM health_records hr WHERE hr.patient_id = p.id ORDER BY record_date DESC, id DESC LIMIT 1) AS body_type, " +
+                    "(SELECT record_date FROM health_records hr WHERE hr.patient_id = p.id ORDER BY record_date DESC, id DESC LIMIT 1) AS last_date " +
+                    "FROM patients p WHERE p.institution_id = ? AND p.archived = FALSE ORDER BY p.patient_code";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setInt(1, institutionId);
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
                     Map<String, Object> m = new HashMap<>();
-                    m.put("username", rs.getString("username"));
+                    m.put("id", rs.getInt("id"));
+                    m.put("patient_code", rs.getString("patient_code"));
+                    m.put("name", rs.getString("name"));
                     m.put("gender", rs.getString("gender"));
-                    m.put("age", rs.getInt("age"));
+                    m.put("age", rs.getObject("age") == null ? 0 : rs.getInt("age"));
                     m.put("height", rs.getDouble("height"));
                     m.put("weight", rs.getDouble("weight"));
                     m.put("bmi", rs.getDouble("bmi"));

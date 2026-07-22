@@ -329,17 +329,44 @@ public class InitDB {
             System.out.println("  [INFO] institutions 登录字段检查: " + e.getMessage());
         }
 
-        // 机构-病人关系表 (多对多)
+        // 机构维度病人主表 (归属某机构, 不持有登录账号 — 与个人 users 登录解耦)
+        // archived=TRUE 表示已被机构「移出名单」(软删除), 其健康记录仍保留。
         execUpdate(conn,
-            "CREATE TABLE IF NOT EXISTS institution_patients (" +
-            "  institution_id INT REFERENCES institutions(id) ON DELETE CASCADE," +
-            "  username VARCHAR(50) REFERENCES users(username) ON DELETE CASCADE," +
-            "  relation_type VARCHAR(20) DEFAULT '管理'," +
+            "CREATE TABLE IF NOT EXISTS patients (" +
+            "  id SERIAL PRIMARY KEY," +
+            "  institution_id INT NOT NULL REFERENCES institutions(id) ON DELETE CASCADE," +
+            "  patient_code VARCHAR(50) NOT NULL," +
+            "  name VARCHAR(100)," +
+            "  gender VARCHAR(10)," +
+            "  age INT," +
+            "  height DECIMAL(5,2)," +
+            "  weight DECIMAL(5,2)," +
+            "  waist DECIMAL(5,2)," +
+            "  activity_level VARCHAR(20) DEFAULT '久坐'," +
+            "  archived BOOLEAN DEFAULT FALSE," +
             "  created_at TIMESTAMP DEFAULT NOW()," +
-            "  PRIMARY KEY (institution_id, username)" +
+            "  updated_at TIMESTAMP DEFAULT NOW()," +
+            "  UNIQUE (institution_id, patient_code)" +
             ")");
-        execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_ip_username ON institution_patients(username)");
-        System.out.println("  [OK] institution_patients 表");
+        execUpdate(conn, "CREATE INDEX IF NOT EXISTS idx_patients_inst ON patients(institution_id, archived)");
+        System.out.println("  [OK] patients 表 (机构维度病人主表)");
+
+        // health_records 增加 patient_id: 机构记录经此关联到 patients, 与个人 users 解耦。
+        // 个人记录仍用 username, patient_id 为 NULL。
+        try {
+            execUpdate(conn, "ALTER TABLE health_records ADD COLUMN IF NOT EXISTS patient_id INT");
+            // 幂等添加外键(不存在才加), 失败时忽略
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT 1 FROM information_schema.table_constraints WHERE table_name='health_records' AND constraint_name='fk_hr_patient'")) {
+                if (!ps.executeQuery().next()) {
+                    execUpdate(conn, "ALTER TABLE health_records ADD CONSTRAINT fk_hr_patient " +
+                            "FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL");
+                }
+            }
+            System.out.println("  [OK] health_records.patient_id 字段/外键");
+        } catch (SQLException e) {
+            System.out.println("  [INFO] health_records.patient_id: " + e.getMessage());
+        }
 
         // 机构入驻申请表 (待管理员审批)
         execUpdate(conn,

@@ -19,7 +19,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.util.*;
 
-/** 医疗机构端 — 病人列表 + 批量导入(CSV) + 逐人分析 */
+/** 医疗机构端 — 病人列表 + 批量导入(CSV/Excel) + 逐人分析 (机构维度病人, 与个人登录解耦) */
 public class InstitutionView extends VBox {
     private final TableView<Map<String, Object>> patientTable = new TableView<>();
     private Map<String, Object> selectedProfile = null;
@@ -65,8 +65,8 @@ public class InstitutionView extends VBox {
     }
 
     private void buildTable() {
-        String[] cols = {"用户名", "性别", "年龄", "身高(cm)", "最新体重(kg)", "BMI", "体质类型", "最近记录"};
-        String[] keys = {"username", "gender", "age", "height", "weight", "bmi", "body_type", "last_date"};
+        String[] cols = {"病人编号", "性别", "年龄", "身高(cm)", "最新体重(kg)", "BMI", "体质类型", "最近记录"};
+        String[] keys = {"patient_code", "gender", "age", "height", "weight", "bmi", "body_type", "last_date"};
         for (int i = 0; i < cols.length; i++) {
             final int idx = i;
             TableColumn<Map<String, Object>, String> c = new TableColumn<>(cols[i]);
@@ -89,16 +89,16 @@ public class InstitutionView extends VBox {
         patientTable.getItems().setAll(DBUtil.getInstitutionPatients(DBUtil.currentInstitutionId));
     }
 
-    // ==================== 新建病人 (手动录入) ====================
+    // ==================== 新建病人 (手动录入, 机构维度档案, 不创建登录账号) ====================
 
     private void newPatient() {
         Dialog<ButtonType> d = new Dialog<>();
         d.setTitle("新建病人");
-        d.setHeaderText("填写病人基本信息与体征, 系统将建账号(机构代管)并写入一条健康记录");
+        d.setHeaderText("填写病人档案与体征, 系统将在本机构下建立病人健康档案(不创建个人登录账号)并写入一条健康记录");
         GridPane g = new GridPane();
         g.setHgap(10); g.setVgap(8); g.setPadding(new Insets(12));
 
-        TextField tfUser = new TextField(); tfUser.setPromptText("登录用户名/病历号");
+        TextField tfCode = new TextField(); tfCode.setPromptText("机构内病人编号/病历号 (本机构唯一)");
         ComboBox<String> cbGender = new ComboBox<>(); cbGender.getItems().addAll("男", "女"); cbGender.setValue("男");
         Spinner<Integer> spAge = new Spinner<>(1, 120, 40);
         TextField tfHeight = new TextField(); tfHeight.setPromptText("cm");
@@ -115,7 +115,7 @@ public class InstitutionView extends VBox {
         DatePicker dpDate = new DatePicker(); dpDate.setValue(java.time.LocalDate.now());
 
         int r = 0;
-        g.add(new Label("用户名*:"), 0, r); g.add(tfUser, 1, r++);
+        g.add(new Label("病人编号*:"), 0, r); g.add(tfCode, 1, r++);
         g.add(new Label("性别:"), 0, r); g.add(cbGender, 1, r++);
         g.add(new Label("年龄:"), 0, r); g.add(spAge, 1, r++);
         g.add(new Label("身高(cm):"), 0, r); g.add(tfHeight, 1, r++);
@@ -136,8 +136,8 @@ public class InstitutionView extends VBox {
 
         d.showAndWait().ifPresent(bt -> {
             if (bt != ButtonType.OK) return;
-            String username = tfUser.getText() == null ? "" : tfUser.getText().trim();
-            if (username.isEmpty()) { alert("用户名不能为空"); return; }
+            String code = tfCode.getText() == null ? "" : tfCode.getText().trim();
+            if (code.isEmpty()) { alert("病人编号不能为空"); return; }
             double weight = num(tfWeight);
             if (weight <= 0) { alert("体重必须填写且大于 0"); return; }
             double height = num(tfHeight);
@@ -155,34 +155,34 @@ public class InstitutionView extends VBox {
             if (dpDate.getValue() != null)
                 metrics.put("record_date", java.util.Date.from(dpDate.getValue().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()));
 
-            boolean ok = DBUtil.addInstitutionPatient(DBUtil.currentInstitutionId, username,
+            boolean ok = DBUtil.addInstitutionPatient(DBUtil.currentInstitutionId, code,
                     cbGender.getValue(), age, height, cbAct.getValue(), weight, waist, metrics);
             if (ok) {
-                alert("新建病人成功: " + username);
+                alert("新建病人成功: " + code);
                 refresh();
             } else {
-                alert("创建失败 (用户名可能已存在或数据库异常)");
+                alert("创建失败 (该编号可能已存在或数据库异常)");
             }
         });
     }
 
-    // ==================== 批量移出病人 ====================
+    // ==================== 批量移出病人 (软删除, 保留全部健康记录) ====================
 
     private void batchDelete() {
         List<Map<String, Object>> sels = patientTable.getSelectionModel().getSelectedItems();
         if (sels == null || sels.isEmpty()) { alert("请先勾选(多选)要移出的病人"); return; }
-        List<String> names = new ArrayList<>();
+        List<String> codes = new ArrayList<>();
         for (Map<String, Object> m : sels) {
-            Object u = m.get("username");
-            if (u != null) names.add(u.toString());
+            Object c = m.get("patient_code");
+            if (c != null) codes.add(c.toString());
         }
-        if (names.isEmpty()) return;
+        if (codes.isEmpty()) return;
         Alert cf = new Alert(Alert.AlertType.CONFIRMATION,
-                "确认将选中的 " + names.size() + " 个病人移出本机构名单？\n(仅解除归属, 保留其账号与全部健康记录)", ButtonType.OK, ButtonType.CANCEL);
+                "确认将选中的 " + codes.size() + " 个病人移出本机构名单？\n(仅解除归属/软删除, 保留其全部健康记录)", ButtonType.OK, ButtonType.CANCEL);
         cf.setTitle("批量移出确认");
         cf.showAndWait().ifPresent(bt -> {
             if (bt != ButtonType.OK) return;
-            int n = DBUtil.removeInstitutionPatients(DBUtil.currentInstitutionId, names);
+            int n = DBUtil.removeInstitutionPatients(DBUtil.currentInstitutionId, codes);
             alert("已移出 " + n + " 个病人");
             refresh();
         });
@@ -217,7 +217,7 @@ public class InstitutionView extends VBox {
             return;
         }
         if (rows == null || rows.isEmpty()) {
-            alert("文件中没有可导入的数据行\n(表头需含: 用户名/username, 体重/weight, 体脂率/body_fat ...)");
+            alert("文件中没有可导入的数据行\n(表头需含: 病人编号/patient_code, 体重/weight, 体脂率/body_fat ...\n可选: 性别/年龄/身高/活动水平)");
             return;
         }
         DBUtil.ImportResult res = DBUtil.importInstitutionRecords(DBUtil.currentInstitutionId, rows);
@@ -245,20 +245,30 @@ public class InstitutionView extends VBox {
                 if (vals.length < headers.length) continue;
                 Map<String, Object> m = new HashMap<>();
                 for (int i = 0; i < headers.length; i++) {
-                    String h = headers[i].trim();
+                    String h = headers[i].trim().toLowerCase();
                     String v = vals[i].trim();
-                    if ("username".equals(h)) m.put("username", v);
-                    else if ("record_date".equals(h)) {
+                    if (h.contains("病人编号") || h.contains("病历号") || h.equals("patient_code")
+                            || h.equals("username") || h.equals("用户名") || h.contains("姓名")) {
+                        m.put("patient_code", v);
+                    } else if ("record_date".equals(h) || h.contains("日期")) {
                         Date d = null;
                         for (SimpleDateFormat f : fmts) {
                             try { d = f.parse(v); break; } catch (Exception ignore) {}
                         }
                         if (d != null) m.put("record_date", d);
+                    } else if (h.contains("性别") || h.equals("gender")) {
+                        m.put("gender", v.isEmpty() ? null : v);
+                    } else if (h.contains("年龄") || h.equals("age")) {
+                        try { m.put("age", Double.parseDouble(v)); } catch (Exception ignore) {}
+                    } else if (h.contains("身高") || h.equals("height")) {
+                        try { m.put("height", Double.parseDouble(v)); } catch (Exception ignore) {}
+                    } else if (h.contains("活动") || h.equals("activity")) {
+                        m.put("activity", v.isEmpty() ? null : v);
                     } else {
                         try { m.put(h, Double.parseDouble(v)); } catch (Exception ignore) { m.put(h, 0.0); }
                     }
                 }
-                if (m.get("username") != null) rows.add(m);
+                if (m.get("patient_code") != null) rows.add(m);
             }
         } catch (Exception e) {
             DBUtil.logError("InstitutionView.parseCsv", e);
@@ -269,18 +279,21 @@ public class InstitutionView extends VBox {
     private void analyzeSelected() {
         Map<String, Object> row = patientTable.getSelectionModel().getSelectedItem();
         if (row == null) { alert("请先选择一位病人"); return; }
-        String username = (String) row.get("username");
+        Object idObj = row.get("id");
+        if (!(idObj instanceof Number)) { alert("该病人缺少有效标识"); return; }
+        int patientId = ((Number) idObj).intValue();
+        String code = (String) row.get("patient_code");
         String gender = (String) row.get("gender");
         int age = ((Number) row.get("age")).intValue();
         double height = ((Number) row.get("height")).doubleValue();
-        Map<String, Object> rec = DBUtil.getLatestHealthRecord(username);
+        Map<String, Object> rec = DBUtil.getLatestHealthRecord(patientId);
         if (rec == null) { alert("该病人暂无健康记录"); return; }
 
-        List<Map<String, Object>> history = DBUtil.getHealthRecords(username, 200);
-        showAnalysisDialog(username, gender, age, height, rec, history);
+        List<Map<String, Object>> history = DBUtil.getHealthRecords(patientId, 200);
+        showAnalysisDialog(code, gender, age, height, rec, history);
     }
 
-    private void showAnalysisDialog(String username, String gender, int age, double height,
+    private void showAnalysisDialog(String patientCode, String gender, int age, double height,
                                     Map<String, Object> rec, List<Map<String, Object>> history) {
         double weight = ((Number) rec.get("weight")).doubleValue();
         double bmi = HealthCalculator.calcBMI(weight, height);
@@ -301,7 +314,7 @@ public class InstitutionView extends VBox {
         // —— 顶部: 标题 + 综合评分 ——
         HBox head = new HBox(12);
         head.setAlignment(Pos.CENTER_LEFT);
-        Label t = new Label("病人分析 — " + username + "（" + gender + "，" + age + "岁）");
+        Label t = new Label("病人分析 — " + patientCode + "（" + gender + "，" + age + "岁）");
         t.getStyleClass().add("card-title");
         Region sp = new Region(); HBox.setHgrow(sp, Priority.ALWAYS);
         Label score = new Label("健康评分 " + healthScore + " / 100  ·  " + scoreLevel);
@@ -336,7 +349,7 @@ public class InstitutionView extends VBox {
 
         // —— 智能建议 + 趋势预测 ——
         Map<String, Object> rec2 = new HashMap<>(rec);
-        rec2.put("username", username);
+        rec2.put("username", patientCode);
         Map<String, Object> rcm = HealthCalculator.recommendGoal(rec2, gender, age, height);
 
         StringBuilder sb = new StringBuilder();
@@ -363,7 +376,7 @@ public class InstitutionView extends VBox {
         }
         if (!risks.isEmpty()) {
             sb.append("\n【风险提示】\n");
-            for (String r : risks) sb.append("  ⚠ ").append(r).append("\n");
+            for (String r : risks) sb.append("  ? ").append(r).append("\n");
         }
 
         TextArea ta = new TextArea(sb.toString());
@@ -372,7 +385,7 @@ public class InstitutionView extends VBox {
         root.getChildren().addAll(head, grid, chart, ta);
 
         Dialog<Void> d = new Dialog<>();
-        d.setTitle("病人分析 — " + username);
+        d.setTitle("病人分析 — " + patientCode);
         d.setHeaderText(null);
         d.getDialogPane().setContent(root);
         d.getDialogPane().setPrefSize(620, 640);

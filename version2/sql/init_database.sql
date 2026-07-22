@@ -36,7 +36,8 @@ CREATE TABLE health_records (
     bmi DECIMAL(4,2),
     waist DECIMAL(5,2) CHECK (waist > 0 AND waist < 200),
     body_age INT,
-    body_type VARCHAR(20)
+    body_type VARCHAR(20),
+    patient_id INT                                    -- 机构记录关联到 patients (个人记录为 NULL)
 );
 
 -- ============ 运动记录表 ============
@@ -72,15 +73,27 @@ CREATE TABLE institutions (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- ============ 机构-病人关系表 (多对多, 行级权限基石) ============
-CREATE TABLE institution_patients (
-    institution_id INT REFERENCES institutions(id) ON DELETE CASCADE,
-    username VARCHAR(50) REFERENCES users(username) ON DELETE CASCADE,
-    relation_type VARCHAR(20) DEFAULT '管理',
+-- ============ 机构维度病人主表 (归属某机构, 不持有登录账号 — 与个人 users 解耦) ============
+-- archived=TRUE 表示已被机构「移出名单」(软删除), 其健康记录仍保留。
+CREATE TABLE patients (
+    id SERIAL PRIMARY KEY,
+    institution_id INT NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
+    patient_code VARCHAR(50) NOT NULL,
+    name VARCHAR(100),
+    gender VARCHAR(10),
+    age INT,
+    height DECIMAL(5,2),
+    weight DECIMAL(5,2),
+    waist DECIMAL(5,2),
+    activity_level VARCHAR(20) DEFAULT '久坐',
+    archived BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW(),
-    PRIMARY KEY (institution_id, username)
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (institution_id, patient_code)
 );
-CREATE INDEX idx_ip_username ON institution_patients(username);
+CREATE INDEX idx_patients_inst ON patients(institution_id, archived);
+ALTER TABLE health_records ADD CONSTRAINT fk_hr_patient
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL;
 
 -- ============ 机构入驻申请表 (待管理员审批) ============
 CREATE TABLE institution_requests (
