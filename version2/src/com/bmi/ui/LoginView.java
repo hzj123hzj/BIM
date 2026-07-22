@@ -276,17 +276,38 @@ public class LoginView {
         TextArea taNote = new TextArea();
         taNote.setPromptText("申请说明 (为何需要入驻, 如所属科室/用途)");
         taNote.setPrefRowCount(2);
+        PasswordField tfPwd = new PasswordField();
+        tfPwd.setPromptText("设置登录密码 (至少6位)");
+        PasswordField tfPwd2 = new PasswordField();
+        tfPwd2.setPromptText("确认密码");
         Button btn = new Button("提交申请");
         btn.getStyleClass().add("button-accent");
         btn.setMaxWidth(Double.MAX_VALUE);
-        Label hint = new Label("提交后由管理员审批, 通过后下发机构编码与初始密码");
+        Label hint = new Label("提交后由管理员审批; 通过后向你下发机构编码, 请用「编码 + 你设置的密码」登录");
         hint.getStyleClass().add("hint");
 
-        btn.setOnAction(e -> doSubmitInstitutionRequest(
-                tfName.getText(), tfContact.getText(), tfPhone.getText(), taNote.getText()));
+        btn.setOnAction(e -> {
+            String name = tfName.getText();
+            String pwd = tfPwd.getText();
+            String pwd2 = tfPwd2.getText();
+            if (name == null || name.trim().isEmpty()) {
+                alert(Alert.AlertType.WARNING, "提示", "请填写机构名称");
+                return;
+            }
+            if (pwd == null || pwd.length() < 6) {
+                alert(Alert.AlertType.WARNING, "提示", "密码至少 6 位");
+                return;
+            }
+            if (!pwd.equals(pwd2)) {
+                alert(Alert.AlertType.WARNING, "提示", "两次密码不一致");
+                return;
+            }
+            doSubmitInstitutionRequest(name, tfContact.getText(), tfPhone.getText(), taNote.getText(), pwd);
+        });
         p.getChildren().addAll(hint, labeled("机构名称:", tfName),
                 labeled("联系人:", tfContact), labeled("联系电话:", tfPhone),
-                new Label("申请说明:"), taNote, btn);
+                new Label("申请说明:"), taNote,
+                labeled("登录密码:", tfPwd), labeled("确认密码:", tfPwd2), btn);
         return p;
     }
 
@@ -314,14 +335,11 @@ public class LoginView {
         }
     }
 
-    private void doSubmitInstitutionRequest(String name, String contact, String phone, String note) {
-        if (name == null || name.trim().isEmpty()) {
-            alert(Alert.AlertType.WARNING, "提示", "请填写机构名称");
-            return;
-        }
-        if (DBUtil.submitInstitutionRequest(name, contact, phone, note)) {
+    private void doSubmitInstitutionRequest(String name, String contact, String phone, String note, String pwd) {
+        if (DBUtil.submitInstitutionRequest(name, contact, phone, note, pwd)) {
             alert(Alert.AlertType.INFORMATION, "已提交",
-                    "入驻申请已提交, 状态: 待审批。\n请等待管理员审核, 通过后将以线下方式向您下发机构编码与初始密码。");
+                    "入驻申请已提交, 状态: 待审批。\n请等待管理员审核, 通过后将以线下方式向您下发机构编码;"
+                            + "届时请用「编码 + 你刚才设置的密码」登录。");
         } else {
             alert(Alert.AlertType.ERROR, "提交失败", "申请提交失败, 请稍后重试");
         }

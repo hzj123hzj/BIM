@@ -89,6 +89,8 @@ CREATE TABLE institution_requests (
     contact VARCHAR(50),
     phone VARCHAR(30),
     note TEXT,
+    password VARCHAR(255) NOT NULL DEFAULT '',         -- 机构自设密码的 SHA-256 加盐哈希
+    salt VARCHAR(64) NOT NULL DEFAULT '',
     status VARCHAR(20) NOT NULL DEFAULT 'pending',   -- pending / approved / rejected
     reviewer VARCHAR(50),
     review_note TEXT,

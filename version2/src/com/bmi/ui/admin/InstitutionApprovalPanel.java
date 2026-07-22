@@ -27,7 +27,7 @@ public class InstitutionApprovalPanel extends VBox {
         card.getStyleClass().add("card");
         Label title = new Label("机构入驻审批");
         title.getStyleClass().add("card-title");
-        Label sub = new Label("待审批申请将由管理员审核, 通过后系统自动生成机构编码与初始密码");
+        Label sub = new Label("待审批申请将由管理员审核; 通过后系统生成机构编码并激活, 密码由机构申请时自行设置");
         sub.getStyleClass().add("muted");
 
         HBox ctrl = new HBox(8);
@@ -77,13 +77,13 @@ public class InstitutionApprovalPanel extends VBox {
         Map<String, Object> row = table.getSelectionModel().getSelectedItem();
         if (row == null) { alert(Alert.AlertType.WARNING, "提示", "请先选择一条待审批申请"); return; }
         int id = ((Number) row.get("id")).intValue();
-        String[] cred = DBUtil.approveInstitutionRequest(id, DBUtil.currentUsername);
-        if (cred == null) {
-            alert(Alert.AlertType.ERROR, "失败", "审批失败 (申请可能已被处理或编号冲突)");
+        String code = DBUtil.approveInstitutionRequest(id, DBUtil.currentUsername);
+        if (code == null) {
+            alert(Alert.AlertType.ERROR, "失败", "审批失败 (申请可能已被处理、或机构未设置密码)");
             refresh();
             return;
         }
-        showCredentials((String) row.get("org_name"), cred[0], cred[1]);
+        showCredentials((String) row.get("org_name"), code);
         refresh();
     }
 
@@ -104,18 +104,20 @@ public class InstitutionApprovalPanel extends VBox {
         refresh();
     }
 
-    private void showCredentials(String orgName, String code, String password) {
+    private void showCredentials(String orgName, String code) {
         Dialog<Void> d = new Dialog<>();
-        d.setTitle("审批通过 — 机构凭证");
-        d.setHeaderText("机构「" + orgName + "」已创建, 请线下将以下凭证发给机构");
-        TextArea ta = new TextArea("机构名称: " + orgName + "\n机构编码: " + code + "\n初始密码: " + password);
+        d.setTitle("审批通过 — 机构编码");
+        d.setHeaderText("机构「" + orgName + "」已创建");
+        TextArea ta = new TextArea("机构名称: " + orgName + "\n机构编码: " + code
+                + "\n\n密码由机构申请时自行设置, 无需本系统下发。"
+                + "请线下将该编码告知机构, 机构用「编码 + 其设置的密码」登录。");
         ta.setEditable(false);
         ta.setWrapText(true);
-        ta.setPrefSize(420, 120);
+        ta.setPrefSize(420, 140);
         VBox box = new VBox(ta);
         box.setPadding(new Insets(10));
         d.getDialogPane().setContent(box);
-        d.getDialogPane().setPrefSize(460, 180);
+        d.getDialogPane().setPrefSize(460, 200);
         d.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         d.showAndWait();
     }

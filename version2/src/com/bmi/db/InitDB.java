@@ -349,12 +349,19 @@ public class InitDB {
             "  contact VARCHAR(50)," +
             "  phone VARCHAR(30)," +
             "  note TEXT," +
+            "  password VARCHAR(255) NOT NULL DEFAULT ''," +   // 机构自设密码的哈希(申请时设置)
+            "  salt VARCHAR(64) NOT NULL DEFAULT ''," +
             "  status VARCHAR(20) NOT NULL DEFAULT 'pending'," +
             "  reviewer VARCHAR(50)," +
             "  review_note TEXT," +
             "  created_at TIMESTAMP DEFAULT NOW()," +
             "  reviewed_at TIMESTAMP" +
             ")");
+        // 兼容旧库: 补密码字段
+        try {
+            execUpdate(conn, "ALTER TABLE institution_requests ADD COLUMN IF NOT EXISTS password VARCHAR(255) NOT NULL DEFAULT ''");
+            execUpdate(conn, "ALTER TABLE institution_requests ADD COLUMN IF NOT EXISTS salt VARCHAR(64) NOT NULL DEFAULT ''");
+        } catch (SQLException e) { /* 已存在则忽略 */ }
         System.out.println("  [OK] institution_requests 表");
 
         // 系统配置表

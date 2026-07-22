@@ -1153,25 +1153,6 @@ public class DBUtil {
         // ==================== 医疗机构登录 / 注册 ====================
 
         /** 机构注册 (org_code 唯一) */
-        public static boolean registerInstitution(String orgName, String orgCode, String password) {
-            if (orgName == null || orgName.trim().isEmpty() || orgCode == null || orgCode.trim().isEmpty()
-                    || password == null || password.isEmpty()) return false;
-            String salt = PasswordUtil.generateSalt();
-            String hash = PasswordUtil.hash(password, salt);
-            String sql = "INSERT INTO institutions (org_name, org_code, password, salt) VALUES (?, ?, ?, ?)";
-            try (Connection conn = getConnection();
-                 PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, orgName.trim());
-                ps.setString(2, orgCode.trim());
-                ps.setString(3, hash);
-                ps.setString(4, salt);
-                return ps.executeUpdate() > 0;
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return false;
-            }
-        }
-
         /** 机构登录验证 */
         public static boolean loginInstitution(String orgCode, String password) {
             if (orgCode == null || orgCode.trim().isEmpty() || password == null || password.isEmpty()) return false;
@@ -1198,16 +1179,22 @@ public class DBUtil {
 
         // ==================== 机构入驻申请 / 审批 ====================
 
-        /** 机构提交入驻申请 (状态 pending, 不写入 institutions 表) */
-        public static boolean submitInstitutionRequest(String orgName, String contact, String phone, String note) {
+        /** 机构提交入驻申请 (状态 pending, 含机构自设密码的哈希; 不写入 institutions 表) */
+        public static boolean submitInstitutionRequest(String orgName, String contact, String phone, String note, String password) {
             if (orgName == null || orgName.trim().isEmpty()) return false;
-            String sql = "INSERT INTO institution_requests (org_name, contact, phone, note, status) VALUES (?, ?, ?, ?, 'pending')";
+            if (password == null || password.isEmpty()) return false;
+            String salt = PasswordUtil.generateSalt();
+            String hash = PasswordUtil.hash(password, salt);
+            String sql = "INSERT INTO institution_requests (org_name, contact, phone, note, password, salt, status) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, 'pending')";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, orgName.trim());
                 ps.setString(2, contact == null ? "" : contact.trim());
                 ps.setString(3, phone == null ? "" : phone.trim());
                 ps.setString(4, note == null ? "" : note.trim());
+                ps.setString(5, hash);
+                ps.setString(6, salt);
                 return ps.executeUpdate() > 0;
             } catch (SQLException e) {
                 e.printStackTrace();
@@ -1242,40 +1229,37 @@ public class DBUtil {
             return list;
         }
 
-        /** 审批结果: 成功时返回 [org_code, password], 失败返回 null */
-        public static String[] approveInstitutionRequest(int id, String reviewer) {
-            // 1. 读取申请
-            String orgName = null, contact = "", phone = "";
+        /** 审批通过: 用申请中机构自设的密码哈希建机构, 仅返回生成的 org_code (密码不传递) */
+        public static String approveInstitutionRequest(int id, String reviewer) {
+            // 1. 读取申请 (含机构自设的密码哈希与盐)
+            String orgName = null, contact = "", password = null, salt = null;
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(
-                         "SELECT org_name, contact, phone FROM institution_requests WHERE id = ? AND status = 'pending'")) {
+                         "SELECT org_name, contact, password, salt FROM institution_requests WHERE id = ? AND status = 'pending'")) {
                 ps.setInt(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
                     orgName = rs.getString("org_name");
                     contact = rs.getString("contact");
-                    phone = rs.getString("phone");
+                    password = rs.getString("password");
+                    salt = rs.getString("salt");
                 }
             } catch (SQLException e) { e.printStackTrace(); }
-            if (orgName == null) return null;
+            if (orgName == null || password == null || password.isEmpty()) return null;
 
             // 2. 生成唯一机构编码
             String orgCode = generateUniqueOrgCode();
-            // 3. 生成初始密码并加盐哈希
-            String password = generateRandomPassword(8);
-            String salt = PasswordUtil.generateSalt();
-            String hash = PasswordUtil.hash(password, salt);
 
             Connection conn = null;
             try {
                 conn = getConnection();
                 conn.setAutoCommit(false);
-                // 写入机构
+                // 写入机构 (复用申请时机构自设的密码哈希, 不重新生成)
                 try (PreparedStatement ps = conn.prepareStatement(
                         "INSERT INTO institutions (org_name, org_code, password, salt, contact) VALUES (?, ?, ?, ?, ?)")) {
                     ps.setString(1, orgName);
                     ps.setString(2, orgCode);
-                    ps.setString(3, hash);
+                    ps.setString(3, password);
                     ps.setString(4, salt);
                     ps.setString(5, contact);
                     ps.executeUpdate();
@@ -1289,7 +1273,7 @@ public class DBUtil {
                 }
                 conn.commit();
                 logAction("INSTITUTION", reviewer, "审批通过机构入驻", orgName + " -> " + orgCode);
-                return new String[]{orgCode, password};
+                return orgCode;
             } catch (SQLException e) {
                 e.printStackTrace();
                 if (conn != null) try { conn.rollback(); } catch (SQLException ignore) {}
@@ -1334,15 +1318,6 @@ public class DBUtil {
                 return ps.executeQuery().next();
             } catch (SQLException e) { e.printStackTrace(); }
             return false;
-        }
-
-        /** 生成随机初始密码 (字母+数字) */
-        private static String generateRandomPassword(int len) {
-            final String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-            java.security.SecureRandom rnd = new java.security.SecureRandom();
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < len; i++) sb.append(chars.charAt(rnd.nextInt(chars.length())));
-            return sb.toString();
         }
 
         /** 获取某机构的病人列表 (含最新一次健康记录摘要) */
