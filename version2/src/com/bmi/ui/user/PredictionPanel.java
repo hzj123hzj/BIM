@@ -194,7 +194,8 @@ public class PredictionPanel extends VBox {
         int exerciseCal = DBUtil.getTodayExerciseCalories();
         int[] diet = DBUtil.getTodayDietSummary();
         int intakeCal = diet[0];
-        double dailyDeficit = tdee + exerciseCal - intakeCal;
+        // 热量差 = TDEE - 摄入量 (TDEE 已含活动/运动消耗, 不再叠加运动记录避免重复计算)
+        double dailyDeficit = tdee - intakeCal;
 
         Map<String, Object> goal = DBUtil.getGoal();
         String risk = HealthCalculator.assessRisk(predBMI30);

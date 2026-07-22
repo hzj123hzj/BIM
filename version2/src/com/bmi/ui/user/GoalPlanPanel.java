@@ -297,11 +297,11 @@ public class GoalPlanPanel extends VBox {
 
         sb.append("【预测达成日期】\n");
         double tdee = num(latest, "tdee");
-        int exerciseCal = DBUtil.getTodayExerciseCalories();
         int[] diet = DBUtil.getTodayDietSummary();
         boolean dietLogged = diet[0] > 0;
         // 未记录饮食时不假设摄入=0, 改用目标对应的安全热量差估算
-        double dailyDeficit = HealthCalculator.estimateDailyDeficit(tdee, exerciseCal, diet[0], dietLogged, goalType);
+        // 热量差 = TDEE - 摄入量 (TDEE 已含活动/运动消耗, 不再叠加运动记录)
+        double dailyDeficit = HealthCalculator.estimateDailyDeficit(tdee, diet[0], dietLogged, goalType);
         // 预测前把热量差限制在安全区间, 避免极端值导致荒谬的达成日期
         double effectiveDeficit = HealthCalculator.clampDeficitForPrediction(dailyDeficit, goalType, currentWeight, targetWeight);
         boolean clamped = Math.abs(effectiveDeficit - dailyDeficit) > 0.5;

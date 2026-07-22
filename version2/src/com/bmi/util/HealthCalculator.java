@@ -515,9 +515,10 @@ public class HealthCalculator {
          * @param dietLogged 今日是否已记录饮食
          * @return 正=缺口(减脂/减重), 负=盈余(增肌), 0=维持
          */
-        public static double estimateDailyDeficit(double tdee, int exerciseCal, int dietCal,
+        public static double estimateDailyDeficit(double tdee, int dietCal,
                                                   boolean dietLogged, String goalType) {
-            if (dietLogged) return tdee + exerciseCal - dietCal;
+            // 注意: TDEE 已含日常活动/运动消耗(由活动系数得出), 不可再叠加运动记录, 否则重复计算
+            if (dietLogged) return tdee - dietCal;
             if ("增肌".equals(goalType)) return -300;                       // 增肌: 约 300 kcal 盈余
             if ("减脂".equals(goalType) || "减重".equals(goalType)) return 500; // 减脂/减重: 安全可持续 ~500
             return 0;
