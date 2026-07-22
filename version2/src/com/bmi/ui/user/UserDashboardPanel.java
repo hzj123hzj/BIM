@@ -20,6 +20,9 @@ public class UserDashboardPanel extends VBox {
 
     private final TableView<String[]> recentTable = new TableView<>();
     private final ObservableList<String[]> recentData = FXCollections.observableArrayList();
+    private final GridPane gridProfile = new GridPane();
+    private final GridPane gridCalc = new GridPane();
+    private final VBox trendChartBox = new VBox();
 
     public UserDashboardPanel() {
         setSpacing(16);
@@ -50,38 +53,11 @@ public class UserDashboardPanel extends VBox {
         profileCard.getStyleClass().add("card");
         Label tProfile = new Label("基本信息");
         tProfile.getStyleClass().add("card-title");
-        GridPane gridProfile = new GridPane();
         gridProfile.setHgap(24);
         gridProfile.setVgap(10);
-        gridProfile.addRow(0, kv("用户名", DBUtil.currentUsername), kv("性别", DBUtil.currentGender));
-        gridProfile.addRow(1, kv("年龄", DBUtil.currentAge + " 岁"), kv("身高", f1(DBUtil.currentHeight) + " cm"));
-        gridProfile.addRow(2,
-                kv("体重", DBUtil.currentWeight > 0 ? f1(DBUtil.currentWeight) + " kg" : "未记录"),
-                kv("腰围", DBUtil.currentWaist > 0 ? f1(DBUtil.currentWaist) + " cm" : "未记录"));
-        gridProfile.addRow(3, kv("活动等级", DBUtil.currentActivityLevel), new Label(""));
-
-        // 计算属性 (由必备属性推导)
-        GridPane gridCalc = new GridPane();
         gridCalc.setHgap(24);
         gridCalc.setVgap(10);
         gridCalc.setPadding(new Insets(6, 0, 0, 0));
-        String calcBodyShape = "数据不足";
-        if (DBUtil.currentWeight > 0 && DBUtil.currentHeight > 0) {
-            double bmi = HealthCalculator.calcBMI(DBUtil.currentWeight, DBUtil.currentHeight);
-            double bmr = HealthCalculator.calcAvgBMR(DBUtil.currentWeight, DBUtil.currentHeight,
-                    DBUtil.currentAge, DBUtil.currentGender);
-            double tdee = HealthCalculator.calcTDEE(bmr, DBUtil.currentActivityLevel);
-            double[] range = HealthCalculator.calcStandardWeightRange(DBUtil.currentHeight);
-            calcBodyShape = HealthCalculator.classifyBodyShapeRough(bmi);
-            gridCalc.addRow(0, kv("BMI", f2(bmi) + " (" + HealthCalculator.classifyBMI(bmi) + ")"),
-                    kv("体型(粗略)", calcBodyShape));
-            gridCalc.addRow(1, kv("BMR（基础代谢率）", f0(bmr) + " kcal"),
-                    kv("TDEE（每日总能量消耗）", f0(tdee) + " kcal"));
-            gridCalc.addRow(2, kv("标准体重区间", f1(range[0]) + " ~ " + f1(range[1]) + " kg"), new Label(""));
-        } else {
-            gridCalc.addRow(0, kv("BMI", "数据不足"), kv("BMR（基础代谢率）", "数据不足"));
-            gridCalc.addRow(1, kv("TDEE（每日总能量消耗）", "数据不足"), kv("标准体重区间", "数据不足"));
-        }
         profileCard.getChildren().addAll(tProfile, gridProfile, gridCalc);
 
         // 最近体重趋势
@@ -89,9 +65,7 @@ public class UserDashboardPanel extends VBox {
         trendCard.getStyleClass().add("card");
         Label t3 = new Label("最近体重趋势");
         t3.getStyleClass().add("card-title");
-        LineChart<String, Number> trendChart = buildTrendChart();
-        trendChart.setMinHeight(260);
-        trendCard.getChildren().addAll(t3, trendChart);
+        trendCard.getChildren().addAll(t3, trendChartBox);
 
         // 最近健康记录
         VBox recentCard = new VBox(10);
@@ -105,6 +79,11 @@ public class UserDashboardPanel extends VBox {
         getChildren().addAll(ctrlCard, profileCard, trendCard, recentCard);
         VBox.setVgrow(recentCard, Priority.ALWAYS);
         btnRefresh.setOnAction(e -> refresh());
+
+        // 切换/打开本页时自动从数据库重新拉取，确保「数据录入」等其它页写入的数据即时同步到大屏
+        this.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) refresh();
+        });
         refresh();
     }
 
@@ -120,6 +99,44 @@ public class UserDashboardPanel extends VBox {
     }
 
     private void refresh() {
+        // 当前展示的体重/腰围：优先取最新健康记录，否则回退到登录基线
+        Map<String, Object> latest = DBUtil.getLatestHealthRecord();
+        double dispWeight = (latest != null && toDouble(latest.get("weight")) > 0)
+                ? toDouble(latest.get("weight")) : DBUtil.currentWeight;
+        double dispWaist = (latest != null && toDouble(latest.get("waist")) > 0)
+                ? toDouble(latest.get("waist")) : DBUtil.currentWaist;
+
+        // 基本信息
+        gridProfile.getChildren().clear();
+        gridProfile.addRow(0, kv("用户名", DBUtil.currentUsername), kv("性别", DBUtil.currentGender));
+        gridProfile.addRow(1, kv("年龄", DBUtil.currentAge + " 岁"), kv("身高", f1(DBUtil.currentHeight) + " cm"));
+        gridProfile.addRow(2,
+                kv("体重", dispWeight > 0 ? f1(dispWeight) + " kg" : "未记录"),
+                kv("腰围", dispWaist > 0 ? f1(dispWaist) + " cm" : "未记录"));
+        gridProfile.addRow(3, kv("活动等级", DBUtil.currentActivityLevel), new Label(""));
+
+        // 计算属性（由当前体重/身高推导）
+        gridCalc.getChildren().clear();
+        if (dispWeight > 0 && DBUtil.currentHeight > 0) {
+            double bmi = HealthCalculator.calcBMI(dispWeight, DBUtil.currentHeight);
+            double bmr = HealthCalculator.calcAvgBMR(dispWeight, DBUtil.currentHeight,
+                    DBUtil.currentAge, DBUtil.currentGender);
+            double tdee = HealthCalculator.calcTDEE(bmr, DBUtil.currentActivityLevel);
+            double[] range = HealthCalculator.calcStandardWeightRange(DBUtil.currentHeight);
+            gridCalc.addRow(0, kv("BMI", f2(bmi) + " (" + HealthCalculator.classifyBMI(bmi) + ")"),
+                    kv("体型(粗略)", HealthCalculator.classifyBodyShapeRough(bmi)));
+            gridCalc.addRow(1, kv("BMR（基础代谢率）", f0(bmr) + " kcal"),
+                    kv("TDEE（每日总能量消耗）", f0(tdee) + " kcal"));
+            gridCalc.addRow(2, kv("标准体重区间", f1(range[0]) + " ~ " + f1(range[1]) + " kg"), new Label(""));
+        } else {
+            gridCalc.addRow(0, kv("BMI", "数据不足"), kv("BMR（基础代谢率）", "数据不足"));
+            gridCalc.addRow(1, kv("TDEE（每日总能量消耗）", "数据不足"), kv("标准体重区间", "数据不足"));
+        }
+
+        // 最近体重趋势（重建图表以读取最新数据）
+        trendChartBox.getChildren().setAll(buildTrendChart());
+
+        // 最近健康记录
         recentData.clear();
         List<Map<String, Object>> records = DBUtil.getHealthRecords(10);
         if (records != null) {

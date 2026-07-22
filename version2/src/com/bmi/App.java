@@ -17,7 +17,7 @@ public class App extends Application {
     @Override
     public void start(Stage s) {
         stage = s;
-        s.setTitle("BMI 体质评估与预测系统 (JavaFX)");
+        s.setTitle("BMI 体质评估与预测系统 ");
         s.setMinWidth(1040);
         s.setMinHeight(700);
         showLogin();

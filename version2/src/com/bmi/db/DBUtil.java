@@ -702,6 +702,10 @@ public class DBUtil {
                 int exerciseCount = getExerciseCount(conn);
                 if (exerciseCount >= 20) grantBadge(conn, "运动健将");
 
+                // 累计记录饮水天数
+                int waterDays = getWaterDays(conn);
+                if (waterDays >= 7) grantBadge(conn, "补水达人");
+
                 // 健康评分
                 Map<String, Object> latest = getLatestHealthRecord();
                 if (latest != null) {
@@ -741,6 +745,14 @@ public class DBUtil {
             return rs.next() ? rs.getInt(1) : 0;
         }
 
+        private static int getWaterDays(Connection conn) throws SQLException {
+            String sql = "SELECT COUNT(DISTINCT record_date) FROM water_records WHERE username = ?";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, currentUsername);
+            ResultSet rs = ps.executeQuery();
+            return rs.next() ? rs.getInt(1) : 0;
+        }
+
         /** 授予徽章（不存在才插入） */
         private static void grantBadge(Connection conn, String badgeName) throws SQLException {
             String checkSql = "SELECT 1 FROM achievements WHERE username = ? AND badge_name = ?";
@@ -771,6 +783,48 @@ public class DBUtil {
                 e.printStackTrace();
             }
             return list;
+        }
+
+        /** 各徽章当前进度 {current, target}；布尔型徽章 target=1 */
+        public static Map<String, int[]> getBadgeProgress() {
+            Map<String, int[]> map = new HashMap<>();
+            try (Connection conn = getConnection()) {
+                int streak = getCheckInStreak(conn);
+                int dietDays = getDietDays(conn);
+                int exerciseCount = getExerciseCount(conn);
+                int waterDays = getWaterDays(conn);
+                map.put("毅力之星", new int[]{streak, 7});
+                map.put("坚持达人", new int[]{streak, 30});
+                map.put("美食家", new int[]{dietDays, 30});
+                map.put("运动健将", new int[]{exerciseCount, 20});
+                map.put("补水达人", new int[]{waterDays, 7});
+
+                Map<String, Object> latest = getLatestHealthRecord();
+                if (latest != null) {
+                    int score = HealthCalculator.calcHealthScore(
+                        (double) latest.get("bmi"), (double) latest.get("body_fat"),
+                        (int) latest.get("visceral_fat"), (double) latest.get("muscle_rate"),
+                        (double) latest.get("water_rate"), currentGender);
+                    map.put("健康标兵", new int[]{score, 90});
+                    double bodyFat = (double) latest.get("body_fat");
+                    map.put("蜕变之星", new int[]{isBodyFatNormal(bodyFat, currentGender) ? 1 : 0, 1});
+                } else {
+                    map.put("健康标兵", new int[]{0, 90});
+                    map.put("蜕变之星", new int[]{0, 1});
+                }
+
+                Map<String, Object> goal = getGoal();
+                boolean reached = goal != null && (int) goal.getOrDefault("current_stage", 0) >= 1;
+                map.put("目标达成者", new int[]{reached ? 1 : 0, 1});
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return map;
+        }
+
+        private static boolean isBodyFatNormal(double bodyFat, String gender) {
+            if ("女".equals(gender)) return bodyFat >= 16 && bodyFat <= 28;
+            return bodyFat >= 6 && bodyFat <= 20;
         }
 
         // ==================== AI 报告操作 ====================

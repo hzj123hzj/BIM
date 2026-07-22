@@ -450,3 +450,169 @@
     -fx-background-radius: 12;
     -fx-border-radius: 12;
 }
+
+/* ===== 成就徽章墙（圆形徽章 + 渐变成就卡） ===== */
+.badge-wall {
+    -fx-hgap: 22;
+    -fx-vgap: 22;
+    -fx-padding: 12 8 8 8;
+}
+.badge-card {
+    -fx-pref-width: 214;
+    -fx-min-width: 214;
+    -fx-max-width: 214;
+    -fx-pref-height: 256;
+    -fx-background-radius: 20;
+    -fx-padding: 24 18 18 18;
+    -fx-alignment: center;
+    -fx-cursor: default;
+    -fx-transition: -fx-effect 0.2s, -fx-translate-y 0.2s;
+}
+.badge-card-earned {
+    -fx-background-color: linear-gradient(to bottom right, #FF9646 0%, #E07B2E 60%, #C76A26 100%);
+    -fx-effect: dropshadow(gaussian, rgba(224,123,46,0.34), 18, 0.22, 0, 8);
+}
+.badge-card-earned:hover {
+    -fx-effect: dropshadow(gaussian, rgba(224,123,46,0.46), 26, 0.30, 0, 12);
+    -fx-translate-y: -3;
+}
+.badge-card-locked {
+    -fx-background-color: #F4F7F9;
+    -fx-border-color: #E2EBF0;
+    -fx-border-radius: 20;
+    -fx-border-width: 1.5;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.06), 10, 0.12, 0, 3);
+}
+.badge-card-locked:hover {
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.12), 16, 0.18, 0, 6);
+    -fx-translate-y: -2;
+}
+
+/* 圆形徽章底座 */
+.badge-emblem {
+    -fx-min-width: 74;
+    -fx-min-height: 74;
+    -fx-max-width: 74;
+    -fx-max-height: 74;
+    -fx-background-radius: 1000;
+    -fx-alignment: center;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 6, 0.2, 0, 2);
+}
+.badge-emblem-earned { -fx-background-color: rgba(255,255,255,0.24); }
+.badge-emblem-locked { -fx-background-color: #FFFFFF; }
+
+.badge-icon {
+    -fx-font-size: 36px;
+    -fx-font-family: "Segoe UI Symbol", "Microsoft YaHei", sans-serif;
+}
+.badge-icon-earned { -fx-text-fill: #FFFFFF; }
+.badge-icon-locked { -fx-text-fill: #AEB8C0; -fx-opacity: 0.85; }
+
+.badge-name {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+}
+.badge-name-earned { -fx-text-fill: #FFFFFF; }
+.badge-name-locked { -fx-text-fill: #5A6770; }
+
+.badge-desc {
+    -fx-font-size: 12px;
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    -fx-text-alignment: center;
+    -fx-wrap-text: true;
+}
+.badge-desc-earned { -fx-text-fill: #FFF1E4; }
+.badge-desc-locked { -fx-text-fill: #8A929B; }
+
+.badge-date {
+    -fx-font-size: 11px;
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    -fx-text-fill: #FFF1E4;
+}
+.badge-status {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 10;
+    -fx-padding: 2 10;
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+}
+.badge-status-earned { -fx-background-color: rgba(255,255,255,0.22); -fx-text-fill: #FFFFFF; }
+.badge-status-locked { -fx-background-color: #E2EBF0; -fx-text-fill: #8A929B; }
+
+/* ===== 成就概览（环形进度） ===== */
+.overview-title { -fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #154B5A; }
+.overview-sub { -fx-font-size: 13px; -fx-text-fill: #6B7884; }
+
+/* 未解锁徽章进度条 */
+.badge-progress { -fx-pref-height: 8; -fx-background-radius: 6; -fx-padding: 0; }
+.badge-progress > .track { -fx-background-color: #E2EBF0; -fx-background-radius: 6; }
+.badge-progress > .bar { -fx-background-color: linear-gradient(to right, #4A9FE7, #2D8CA0); -fx-background-radius: 6; }
+.badge-progress-text {
+    -fx-font-size: 11px;
+    -fx-font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    -fx-text-fill: #8A929B;
+}
+
+/* 解锁提示 toast */
+.badge-toast {
+    -fx-background-color: linear-gradient(to right, #FF9646, #E07B2E);
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 10;
+    -fx-padding: 10 16;
+    -fx-alignment: center;
+    -fx-effect: dropshadow(gaussian, rgba(224,123,46,0.30), 12, 0.2, 0, 4);
+}
+
+/* ===== 食物图库（卡片化、留白更舒展） ===== */
+.food-gallery {
+    -fx-hgap: 18;
+    -fx-vgap: 18;
+    -fx-padding: 10 4 4 4;
+}
+.food-card {
+    -fx-pref-width: 160;
+    -fx-min-width: 160;
+    -fx-max-width: 160;
+    -fx-background-color: #FCFDFE;
+    -fx-background-radius: 16;
+    -fx-border-color: #E2EBF0;
+    -fx-border-radius: 16;
+    -fx-border-width: 1;
+    -fx-padding: 14 12 12 12;
+    -fx-alignment: center;
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.08), 12, 0.12, 0, 3);
+    -fx-cursor: default;
+}
+.food-card:hover {
+    -fx-effect: dropshadow(gaussian, rgba(33,80,100,0.16), 18, 0.18, 0, 6);
+    -fx-translate-y: -2;
+    -fx-border-color: #2D8CA0;
+}
+.food-thumb {
+    -fx-background-color: #EAF1F5;
+    -fx-background-radius: 12;
+    -fx-alignment: center;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.10), 6, 0.2, 0, 2);
+}
+.food-name {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1E6478;
+    -fx-text-alignment: center;
+}
+.food-cal {
+    -fx-font-size: 12px;
+    -fx-text-fill: #6B7884;
+}
+.food-chip {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 10;
+    -fx-padding: 2 8;
+}
+.food-chip-p { -fx-background-color: #E7F0F6; -fx-text-fill: #2D8CA0; }
+.food-chip-c { -fx-background-color: #F2EFE0; -fx-text-fill: #9A7B2E; }
+.food-chip-f { -fx-background-color: #FBE9DD; -fx-text-fill: #C76A26; }

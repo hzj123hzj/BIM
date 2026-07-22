@@ -305,18 +305,18 @@ public class WaterPanel extends VBox {
             highlight.setFill(Color.color(1, 1, 1, 0.5));
 
             backWave = new Path();
-            backWave.setClip(buildGlassPath());
-            backWave.setFill(Color.color(0.55, 0.82, 0.96, 0.5));
+            // 后层波改为“描边波纹线”而非填充：避免两层半透明填充在波峰处叠出暗缝
+            backWave.setFill(null);
+            backWave.setStroke(Color.color(0.72, 0.89, 0.99, 0.55));
+            backWave.setStrokeWidth(2);
 
             frontWave = new Path();
-            frontWave.setClip(buildGlassPath());
             LinearGradient water = new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
                     new Stop(0, Color.color(0.45, 0.80, 0.97, 0.92)),
                     new Stop(1, Color.color(0.18, 0.54, 0.90, 0.95)));
             frontWave.setFill(water);
 
             crest = new Path();
-            crest.setClip(buildGlassPath());
             crest.setFill(null);
             crest.setStroke(Color.color(0.88, 0.96, 1.0, 0.75));
             crest.setStrokeWidth(2);
@@ -415,20 +415,38 @@ public class WaterPanel extends VBox {
             double amp = 5.0;
             double freq = 0.045;
             setWave(frontWave, level, amp, freq, phase, true);
-            setWave(backWave, level, amp * 1.4, freq * 0.8, phase * 0.7 + 1.6, true);
+            // 后层波仅作描边波纹（不填充），与前景水体不重叠，杜绝暗缝
+            setWave(backWave, level, amp * 1.4, freq * 0.8, phase * 0.7 + 1.6, false);
             setWave(crest, level, amp, freq, phase, false);
         }
 
+        /**
+         * 绘制水体/波峰。关键：不使用 setClip（在部分渲染后端，对 Path 做 Path 裁剪会整片丢失），
+         * 而是直接把水体多边形沿圆台左右壁闭合，天然贴合杯型轮廓。
+         * @param closeBottom true=闭合到杯底形成填充水体；false=只画波峰亮线
+         */
         private void setWave(Path path, double level, double amp, double freq, double ph, boolean closeBottom) {
+            double botL = (w - botW) / 2.0;             // 杯底左壁 x
+            double botR = (w + botW) / 2.0;             // 杯底右壁 x
+            double xl = botL * (level / h);             // 水位处左壁 x
+            double xr = w - xl;                         // 水位处右壁 x
+            double step = 6;
             List<PathElement> els = new ArrayList<>();
-            els.add(new MoveTo(0, level + amp * Math.sin(0 * freq + ph)));
-            for (double x = 6; x <= w; x += 6) {
-                els.add(new LineTo(x, level + amp * Math.sin(x * freq + ph)));
-            }
             if (closeBottom) {
-                els.add(new LineTo(w, h));
-                els.add(new LineTo(0, h));
-                els.add(new ClosePath());
+                els.add(new MoveTo(botL, h));           // 杯底左下角
+                els.add(new LineTo(xl, level));         // 沿左壁升到水面
+                for (double x = xl; x <= xr; x += step)
+                    els.add(new LineTo(x, level + amp * Math.sin(x * freq + ph)));
+                els.add(new LineTo(xr, level));         // 波峰右端贴右壁
+                els.add(new LineTo(botR, h));           // 沿右壁降到底
+                els.add(new ClosePath());              // 自动回到左下角
+            } else {
+                boolean first = true;
+                for (double x = xl; x <= xr; x += step) {
+                    double y = level + amp * Math.sin(x * freq + ph);
+                    els.add(first ? new MoveTo(x, y) : new LineTo(x, y));
+                    first = false;
+                }
             }
             path.getElements().setAll(FXCollections.observableArrayList(els));
         }

@@ -16,6 +16,7 @@ import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.Node;
+import javafx.scene.input.ScrollEvent;
 
 import com.github.sarxos.webcam.Webcam;
 
@@ -50,8 +51,9 @@ public class DietPanel extends VBox {
     private byte[] lastUploadedImage = null;
 
     // 食物图库（用户端浏览带图食物并一键加入）
-    private final FlowPane galleryPane = new FlowPane(12, 12);
+    private final FlowPane galleryPane = new FlowPane(18, 18);
     private final TextField tfGallerySearch = new TextField();
+    private final Label lblGalleryCount = new Label();
     private final VBox galleryCard = new VBox(10);
     private List<DBUtil.FoodRow> galleryAll = new ArrayList<>();
 
@@ -167,15 +169,38 @@ public class DietPanel extends VBox {
     private void buildFoodGallery() {
         Label title = new Label("食物图库");
         title.getStyleClass().add("card-title");
-        tfGallerySearch.setPromptText("搜索食物名…");
-        tfGallerySearch.setPrefWidth(220);
+
+        tfGallerySearch.setPromptText("搜索食物名称…");
+        tfGallerySearch.setPrefWidth(260);
+        tfGallerySearch.getStyleClass().add("text-field");
         tfGallerySearch.textProperty().addListener((o, ov, nv) -> filterGallery(nv));
-        HBox searchRow = new HBox(10, new Label("搜索:"), tfGallerySearch);
+        lblGalleryCount.getStyleClass().add("text-muted");
+
+        HBox searchRow = new HBox(10);
         searchRow.setAlignment(Pos.CENTER_LEFT);
+        Region sp = new Region();
+        HBox.setHgrow(sp, Priority.ALWAYS);
+        searchRow.getChildren().addAll(new Label("🔍"), tfGallerySearch, sp, lblGalleryCount);
+
         ScrollPane scroll = new ScrollPane(galleryPane);
         scroll.setFitToWidth(true);
-        scroll.setPrefHeight(260);
-        scroll.setStyle("-fx-background: transparent;");
+        scroll.setPrefHeight(300);
+        scroll.setPannable(true); // 支持鼠标拖动滚动图库
+        scroll.setStyle("-fx-background: transparent; -fx-border-width: 0;");
+        // 滚轮滚动图库：固定步长、不与主内容区抢占
+        scroll.addEventFilter(ScrollEvent.SCROLL, e -> {
+            if (e.getDeltaY() == 0) return;
+            double viewportH = scroll.getViewportBounds().getHeight();
+            double contentH = galleryPane.getBoundsInLocal().getHeight();
+            double scrollable = contentH - viewportH;
+            if (scrollable > 0 && viewportH > 0) {
+                double sign = Math.signum(e.getDeltaY());
+                double frac = sign * 64.0 / scrollable;
+                scroll.setVvalue(Math.max(0, Math.min(1, scroll.getVvalue() - frac)));
+                e.consume();
+            }
+        });
+
         galleryCard.getStyleClass().add("card");
         galleryCard.getChildren().addAll(title, searchRow, scroll);
     }
@@ -186,14 +211,17 @@ public class DietPanel extends VBox {
     }
 
     private void renderGallery(List<DBUtil.FoodRow> list) {
+        galleryPane.getStyleClass().add("food-gallery");
         galleryPane.getChildren().clear();
         if (list == null || list.isEmpty()) {
             Label empty = new Label("暂无食物数据");
             empty.getStyleClass().add("hint");
             galleryPane.getChildren().add(empty);
+            lblGalleryCount.setText("");
             return;
         }
         for (DBUtil.FoodRow fr : list) galleryPane.getChildren().add(buildFoodCard(fr));
+        lblGalleryCount.setText("共 " + list.size() + " 项");
     }
 
     private void filterGallery(String kw) {
@@ -210,36 +238,56 @@ public class DietPanel extends VBox {
     }
 
     private VBox buildFoodCard(DBUtil.FoodRow fr) {
-        VBox card = new VBox(6);
+        VBox card = new VBox(8);
         card.setAlignment(Pos.CENTER);
-        card.setPrefWidth(120);
-        card.setPadding(new Insets(8));
-        card.getStyleClass().add("vision-item");
+        card.getStyleClass().add("food-card");
 
-        Node pic;
+        // 圆角缩略图（有图显示图片，无图显示占位）
+        StackPane thumb = new StackPane();
+        thumb.getStyleClass().add("food-thumb");
+        thumb.setPrefSize(120, 120);
+        thumb.setMaxSize(120, 120);
         if (fr.image() != null && fr.image().length > 0) {
             ImageView iv = new ImageView(ImageUtil.byteArrayToImage(fr.image()));
-            iv.setFitWidth(90);
-            iv.setFitHeight(90);
+            iv.setFitWidth(116);
+            iv.setFitHeight(116);
             iv.setPreserveRatio(true);
-            pic = iv;
+            thumb.getChildren().add(iv);
         } else {
-            pic = placeholderNode(90);
+            Label ph = new Label("无图");
+            ph.setStyle("-fx-text-fill:#8A97A5; -fx-font-size:11px;");
+            thumb.getChildren().add(ph);
         }
 
         Label name = new Label(fr.name());
-        name.getStyleClass().add("sub-title");
+        name.getStyleClass().add("food-name");
         name.setWrapText(true);
         name.setAlignment(Pos.CENTER);
-        name.setPrefWidth(110);
-        Label cal = new Label(fr.cal() + " kcal/100g");
-        cal.getStyleClass().add("text-muted");
-        Button add = new Button("加入");
+        name.setMaxWidth(140);
+
+        Label cal = new Label(fr.cal() + " kcal / 100g");
+        cal.getStyleClass().add("food-cal");
+
+        HBox macros = new HBox(6);
+        macros.setAlignment(Pos.CENTER);
+        macros.getChildren().addAll(
+                macroChip("蛋白", f1(fr.protein()), "food-chip-p"),
+                macroChip("碳水", f1(fr.carbs()), "food-chip-c"),
+                macroChip("脂肪", f1(fr.fat()), "food-chip-f"));
+
+        Button add = new Button("＋ 加入");
         add.getStyleClass().add("button-primary");
+        add.setMaxWidth(Double.MAX_VALUE);
         add.setOnAction(e -> addFoodFromGallery(fr));
 
-        card.getChildren().addAll(pic, name, cal, add);
+        card.getChildren().addAll(thumb, name, cal, macros, add);
         return card;
+    }
+
+    private Label macroChip(String tag, String val, String cls) {
+        Label chip = new Label(tag + " " + val);
+        chip.getStyleClass().addAll("food-chip", cls);
+        return chip;
     }
 
     /** 从图库一键加入今日饮食：用量取该食物的标准份量（克）。 */

@@ -182,6 +182,9 @@ public class SideNav {
 
     private static void normalizeScroll(ScrollPane sp, ScrollEvent e) {
         if (e.getDeltaY() != 0) {
+            // 事件落在嵌套的可滚动 ScrollPane（如徽章墙）内：交给它自己处理，
+            // 避免主内容区抢占滚动，导致「在徽章墙上滚动却动了整个页面」
+            if (insideNestedScrollPane(sp, e.getTarget())) return;
             double viewportH = sp.getViewportBounds().getHeight();
             Node c = sp.getContent();
             double contentH = (c != null) ? c.getBoundsInLocal().getHeight() : 0;
@@ -195,6 +198,24 @@ public class SideNav {
                 e.consume();
             }
         }
+    }
+
+    /** 判断滚轮事件目标是否位于 sp 之内的某个「可滚动」嵌套 ScrollPane 中 */
+    private static boolean insideNestedScrollPane(ScrollPane outer, Object target) {
+        if (!(target instanceof Node)) return false;
+        Node n = (Node) target;
+        while (n != null && n != outer) {
+            if (n instanceof ScrollPane) {
+                ScrollPane sp = (ScrollPane) n;
+                Node c = sp.getContent();
+                if (c != null) {
+                    double range = c.getBoundsInLocal().getHeight() - sp.getViewportBounds().getHeight();
+                    if (range > 1) return true;
+                }
+            }
+            n = n.getParent();
+        }
+        return false;
     }
 
     public VBox getSidebar() {
