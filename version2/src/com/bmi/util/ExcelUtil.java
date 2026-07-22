@@ -6,6 +6,7 @@ import org.apache.poi.xssf.usermodel.*;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 /**
@@ -61,6 +62,115 @@ public final class ExcelUtil {
             }
         }
         return all;
+    }
+
+    // ============================================================
+    //  机构病人健康记录读取 (.xlsx / .xls)
+    //  返回与 InstitutionView.parseCsv 相同形状的 List<Map<String,Object>>，
+    //  字段: username(String) / record_date(Date|null) / 其余为 Double。
+    //  表头自动识别(支持中英文列名)，无表头时按默认列序。
+    // ============================================================
+
+    /** 健康记录字段索引: 0用户名 1记录日期 2体重 3体脂 4水分 5蛋白质 6肌肉率 7内脏脂肪 8骨骼肌 9骨量 10腰围 */
+    private static final int H_USER = 0, H_DATE = 1, H_WEIGHT = 2, H_FAT = 3, H_WATER = 4,
+            H_PROTEIN = 5, H_MUSCLE = 6, H_VISC = 7, H_BONE_M = 8, H_BONE = 9, H_WAIST = 10;
+
+    public static List<Map<String, Object>> readHealthRecords(File file) throws Exception {
+        List<Map<String, Object>> all = new ArrayList<>();
+        try (FileInputStream fis = new FileInputStream(file);
+             Workbook wb = WorkbookFactory.create(fis)) {
+            int n = wb.getNumberOfSheets();
+            for (int i = 0; i < n; i++) {
+                Sheet sheet = wb.getSheetAt(i);
+                if (sheet == null) continue;
+                all.addAll(parseHealthSheet(sheet));
+            }
+        }
+        return all;
+    }
+
+    private static List<Map<String, Object>> parseHealthSheet(Sheet sheet) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Iterator<Row> it = sheet.rowIterator();
+        if (!it.hasNext()) return rows;
+        Row first = it.next();
+        int[] map = detectHealthHeader(first);
+        boolean hasHeader = map != null;
+        int[] colMap = hasHeader ? map : new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        if (!hasHeader) {
+            Map<String, Object> r = parseHealthRow(first, colMap);
+            if (r != null && r.get("username") != null) rows.add(r);
+        }
+        while (it.hasNext()) {
+            Map<String, Object> r = parseHealthRow(it.next(), colMap);
+            if (r == null || r.get("username") == null) continue;
+            rows.add(r);
+        }
+        return rows;
+    }
+
+    private static int[] detectHealthHeader(Row row) {
+        int[] map = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+        boolean found = false;
+        for (Cell c : row) {
+            int f = matchHealthField(cellText(c));
+            if (f >= 0 && map[f] < 0) { map[f] = c.getColumnIndex(); found = true; }
+        }
+        return found ? map : null;
+    }
+
+    private static int matchHealthField(String h) {
+        if (h == null) return -1;
+        String s = h.trim().toLowerCase();
+        if (s.contains("用户名") || s.contains("账号") || s.equals("user") || s.equals("username") || s.contains("姓名")) return H_USER;
+        if (s.contains("记录日期") || s.contains("日期") || s.equals("date") || s.contains("record_date")) return H_DATE;
+        if (s.contains("体重") || s.equals("weight")) return H_WEIGHT;
+        if (s.contains("体脂") || s.contains("body_fat") || s.contains("fat%")) return H_FAT;
+        if (s.contains("水分") || s.equals("water")) return H_WATER;
+        if (s.contains("蛋白质") || s.equals("protein")) return H_PROTEIN;
+        if (s.contains("骨骼肌") || s.contains("bone_muscle")) return H_BONE_M;
+        if (s.contains("肌肉") || s.equals("muscle")) return H_MUSCLE;
+        if (s.contains("内脏") || s.contains("visceral")) return H_VISC;
+        if (s.contains("骨量") || s.contains("bone_mass")) return H_BONE;
+        if (s.contains("腰围") || s.equals("waist")) return H_WAIST;
+        return -1;
+    }
+
+    private static Map<String, Object> parseHealthRow(Row row, int[] colMap) {
+        Map<String, Object> m = new HashMap<>();
+        String username = cellText(getCell(row, colMap[H_USER])).trim();
+        if (username.isEmpty()) return null;
+        m.put("username", username);
+        m.put("record_date", parseHealthDate(getCell(row, colMap[H_DATE])));
+        m.put("weight", toDouble(cellText(getCell(row, colMap[H_WEIGHT]))));
+        m.put("body_fat", toDouble(cellText(getCell(row, colMap[H_FAT]))));
+        m.put("water_rate", toDouble(cellText(getCell(row, colMap[H_WATER]))));
+        m.put("protein_rate", toDouble(cellText(getCell(row, colMap[H_PROTEIN]))));
+        m.put("muscle_rate", toDouble(cellText(getCell(row, colMap[H_MUSCLE]))));
+        m.put("visceral_fat", toDouble(cellText(getCell(row, colMap[H_VISC]))));
+        m.put("bone_muscle", toDouble(cellText(getCell(row, colMap[H_BONE_M]))));
+        m.put("bone_mass", toDouble(cellText(getCell(row, colMap[H_BONE]))));
+        m.put("waist", toDouble(cellText(getCell(row, colMap[H_WAIST]))));
+        return m;
+    }
+
+    private static Object parseHealthDate(Cell c) {
+        if (c == null) return null;
+        CellType t = c.getCellType();
+        if (t == CellType.FORMULA) {
+            try { t = c.getCachedFormulaResultType(); } catch (Exception e) { return null; }
+        }
+        if (t == CellType.NUMERIC && DateUtil.isCellDateFormatted(c)) {
+            return c.getDateCellValue();
+        }
+        if (t == CellType.STRING) {
+            String s = c.getStringCellValue().trim();
+            if (s.isEmpty()) return null;
+            for (SimpleDateFormat fmt : new SimpleDateFormat[]{new SimpleDateFormat("yyyy-MM-dd"), new SimpleDateFormat("yyyy/MM/dd")}) {
+                try { return fmt.parse(s); } catch (Exception ignore) {}
+            }
+        }
+        return null;
     }
 
     private static boolean needBrandPrefix(String s) {

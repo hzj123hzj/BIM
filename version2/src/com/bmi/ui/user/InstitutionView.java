@@ -2,6 +2,7 @@ package com.bmi.ui.user;
 
 import com.bmi.App;
 import com.bmi.db.DBUtil;
+import com.bmi.util.ExcelUtil;
 import com.bmi.util.HealthCalculator;
 import com.bmi.util.Theme;
 
@@ -16,7 +17,6 @@ import java.text.SimpleDateFormat;
 import java.io.BufferedReader;
 import java.io.File;
 import java.nio.file.Files;
-import java.text.SimpleDateFormat;
 import java.util.*;
 
 /** 医疗机构端 — 病人列表 + 批量导入(CSV) + 逐人分析 */
@@ -36,21 +36,28 @@ public class InstitutionView extends VBox {
         title.getStyleClass().add("card-title");
         Region sp = new Region();
         HBox.setHgrow(sp, Priority.ALWAYS);
-        Button btnUpload = new Button("上传CSV批量导入");
+        Button btnUpload = new Button("上传表格批量导入");
         btnUpload.getStyleClass().add("button-accent");
+        Button btnNew = new Button("新建病人");
+        btnNew.getStyleClass().add("button-primary");
         Button btnAnalyze = new Button("查看分析");
         btnAnalyze.getStyleClass().add("button-primary");
+        Button btnBatchDel = new Button("批量移出");
+        btnBatchDel.getStyleClass().add("button-ghost");
         Button btnRefresh = new Button("刷新");
         btnRefresh.getStyleClass().add("button-ghost");
         Button btnLogout = new Button("退出");
         btnLogout.getStyleClass().add("button-ghost");
-        top.getChildren().addAll(title, sp, btnUpload, btnAnalyze, btnRefresh, btnLogout);
+        top.getChildren().addAll(title, sp, btnUpload, btnNew, btnAnalyze, btnBatchDel, btnRefresh, btnLogout);
 
         buildTable();
+        patientTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         refresh();
 
-        btnUpload.setOnAction(e -> uploadCsv());
+        btnUpload.setOnAction(e -> uploadFile());
+        btnNew.setOnAction(e -> newPatient());
         btnAnalyze.setOnAction(e -> analyzeSelected());
+        btnBatchDel.setOnAction(e -> batchDelete());
         btnRefresh.setOnAction(e -> refresh());
         btnLogout.setOnAction(e -> App.showLogin());
 
@@ -82,15 +89,135 @@ public class InstitutionView extends VBox {
         patientTable.getItems().setAll(DBUtil.getInstitutionPatients(DBUtil.currentInstitutionId));
     }
 
-    private void uploadCsv() {
+    // ==================== 新建病人 (手动录入) ====================
+
+    private void newPatient() {
+        Dialog<ButtonType> d = new Dialog<>();
+        d.setTitle("新建病人");
+        d.setHeaderText("填写病人基本信息与体征, 系统将建账号(机构代管)并写入一条健康记录");
+        GridPane g = new GridPane();
+        g.setHgap(10); g.setVgap(8); g.setPadding(new Insets(12));
+
+        TextField tfUser = new TextField(); tfUser.setPromptText("登录用户名/病历号");
+        ComboBox<String> cbGender = new ComboBox<>(); cbGender.getItems().addAll("男", "女"); cbGender.setValue("男");
+        Spinner<Integer> spAge = new Spinner<>(1, 120, 40);
+        TextField tfHeight = new TextField(); tfHeight.setPromptText("cm");
+        ComboBox<String> cbAct = new ComboBox<>(); cbAct.getItems().addAll("久坐", "轻度", "中度", "重度", "极重度"); cbAct.setValue("久坐");
+        TextField tfWeight = new TextField(); tfWeight.setPromptText("kg (必填)");
+        TextField tfWaist = new TextField(); tfWaist.setPromptText("cm (可选)");
+        TextField tfFat = new TextField(); tfFat.setPromptText("%");
+        TextField tfWater = new TextField(); tfWater.setPromptText("%");
+        TextField tfProtein = new TextField(); tfProtein.setPromptText("%");
+        TextField tfMuscle = new TextField(); tfMuscle.setPromptText("%");
+        TextField tfVisc = new TextField(); tfVisc.setPromptText("0-30");
+        TextField tfBoneM = new TextField(); tfBoneM.setPromptText("kg");
+        TextField tfBone = new TextField(); tfBone.setPromptText("kg");
+        DatePicker dpDate = new DatePicker(); dpDate.setValue(java.time.LocalDate.now());
+
+        int r = 0;
+        g.add(new Label("用户名*:"), 0, r); g.add(tfUser, 1, r++);
+        g.add(new Label("性别:"), 0, r); g.add(cbGender, 1, r++);
+        g.add(new Label("年龄:"), 0, r); g.add(spAge, 1, r++);
+        g.add(new Label("身高(cm):"), 0, r); g.add(tfHeight, 1, r++);
+        g.add(new Label("活动等级:"), 0, r); g.add(cbAct, 1, r++);
+        g.add(new Label("体重(kg)*:"), 0, r); g.add(tfWeight, 1, r++);
+        g.add(new Label("腰围(cm):"), 0, r); g.add(tfWaist, 1, r++);
+        g.add(new Label("体脂率(%):"), 0, r); g.add(tfFat, 1, r++);
+        g.add(new Label("水分率(%):"), 0, r); g.add(tfWater, 1, r++);
+        g.add(new Label("蛋白质率(%):"), 0, r); g.add(tfProtein, 1, r++);
+        g.add(new Label("肌肉率(%):"), 0, r); g.add(tfMuscle, 1, r++);
+        g.add(new Label("内脏脂肪:"), 0, r); g.add(tfVisc, 1, r++);
+        g.add(new Label("骨骼肌(kg):"), 0, r); g.add(tfBoneM, 1, r++);
+        g.add(new Label("骨量(kg):"), 0, r); g.add(tfBone, 1, r++);
+        g.add(new Label("记录日期:"), 0, r); g.add(dpDate, 1, r++);
+
+        d.getDialogPane().setContent(g);
+        d.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        d.showAndWait().ifPresent(bt -> {
+            if (bt != ButtonType.OK) return;
+            String username = tfUser.getText() == null ? "" : tfUser.getText().trim();
+            if (username.isEmpty()) { alert("用户名不能为空"); return; }
+            double weight = num(tfWeight);
+            if (weight <= 0) { alert("体重必须填写且大于 0"); return; }
+            double height = num(tfHeight);
+            if (height < 50 || height > 300) { alert("身高范围 50-300 cm"); return; }
+            int age = spAge.getValue();
+            Double waist = tfWaist.getText().trim().isEmpty() ? null : num(tfWaist);
+            Map<String, Object> metrics = new HashMap<>();
+            metrics.put("body_fat", num(tfFat));
+            metrics.put("water_rate", num(tfWater));
+            metrics.put("protein_rate", num(tfProtein));
+            metrics.put("muscle_rate", num(tfMuscle));
+            metrics.put("visceral_fat", num(tfVisc));
+            metrics.put("bone_muscle", num(tfBoneM));
+            metrics.put("bone_mass", num(tfBone));
+            if (dpDate.getValue() != null)
+                metrics.put("record_date", java.util.Date.from(dpDate.getValue().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()));
+
+            boolean ok = DBUtil.addInstitutionPatient(DBUtil.currentInstitutionId, username,
+                    cbGender.getValue(), age, height, cbAct.getValue(), weight, waist, metrics);
+            if (ok) {
+                alert("新建病人成功: " + username);
+                refresh();
+            } else {
+                alert("创建失败 (用户名可能已存在或数据库异常)");
+            }
+        });
+    }
+
+    // ==================== 批量移出病人 ====================
+
+    private void batchDelete() {
+        List<Map<String, Object>> sels = patientTable.getSelectionModel().getSelectedItems();
+        if (sels == null || sels.isEmpty()) { alert("请先勾选(多选)要移出的病人"); return; }
+        List<String> names = new ArrayList<>();
+        for (Map<String, Object> m : sels) {
+            Object u = m.get("username");
+            if (u != null) names.add(u.toString());
+        }
+        if (names.isEmpty()) return;
+        Alert cf = new Alert(Alert.AlertType.CONFIRMATION,
+                "确认将选中的 " + names.size() + " 个病人移出本机构名单？\n(仅解除归属, 保留其账号与全部健康记录)", ButtonType.OK, ButtonType.CANCEL);
+        cf.setTitle("批量移出确认");
+        cf.showAndWait().ifPresent(bt -> {
+            if (bt != ButtonType.OK) return;
+            int n = DBUtil.removeInstitutionPatients(DBUtil.currentInstitutionId, names);
+            alert("已移出 " + n + " 个病人");
+            refresh();
+        });
+    }
+
+    private double num(TextField tf) {
+        String s = tf.getText() == null ? "" : tf.getText().trim();
+        if (s.isEmpty()) return 0.0;
+        try { return Double.parseDouble(s); } catch (Exception e) { return 0.0; }
+    }
+
+    private void uploadFile() {
         FileChooser fc = new FileChooser();
-        fc.setTitle("选择病人健康数据 CSV");
-        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV 文件", "*.csv"));
+        fc.setTitle("选择病人健康数据表格 (CSV / Excel)");
+        fc.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("表格文件", "*.csv", "*.xlsx", "*.xls"),
+                new FileChooser.ExtensionFilter("CSV 文件", "*.csv"),
+                new FileChooser.ExtensionFilter("Excel 文件", "*.xlsx", "*.xls"));
         File file = fc.showOpenDialog(getScene() == null ? null : getScene().getWindow());
         if (file == null) return;
-        List<Map<String, Object>> rows = parseCsv(file);
-        if (rows.isEmpty()) {
-            alert("CSV 无有效数据行 (需表头: username,record_date,weight,...)");
+        List<Map<String, Object>> rows;
+        String name = file.getName().toLowerCase();
+        try {
+            if (name.endsWith(".csv")) {
+                rows = parseCsv(file);
+            } else {
+                rows = ExcelUtil.readHealthRecords(file);
+            }
+        } catch (Throwable ex) {
+            ex.printStackTrace();
+            alert("读取文件失败: " + ex.getClass().getSimpleName() + " - " + ex.getMessage());
+            return;
+        }
+        if (rows == null || rows.isEmpty()) {
+            alert("文件中没有可导入的数据行\n(表头需含: 用户名/username, 体重/weight, 体脂率/body_fat ...)");
             return;
         }
         DBUtil.ImportResult res = DBUtil.importInstitutionRecords(DBUtil.currentInstitutionId, rows);
