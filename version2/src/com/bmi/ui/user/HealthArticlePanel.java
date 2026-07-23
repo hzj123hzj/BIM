@@ -25,9 +25,13 @@ public class HealthArticlePanel extends VBox {
         ctrl.setAlignment(Pos.CENTER_LEFT);
         Button btnRefresh = new Button("刷新");
         btnRefresh.getStyleClass().add("button-primary");
+        Button btnSubmit = new Button("我要投稿");
+        Button btnMine = new Button("我的投稿");
+        btnSubmit.getStyleClass().add("button-accent");
+        btnMine.getStyleClass().add("button-ghost");
         Label hint = new Label("点击文章行查看正文");
         hint.getStyleClass().add("hint");
-        ctrl.getChildren().addAll(btnRefresh, hint);
+        ctrl.getChildren().addAll(btnRefresh, btnSubmit, btnMine, hint);
 
         VBox ctrlCard = new VBox(10);
         ctrlCard.getStyleClass().add("card");
@@ -35,13 +39,14 @@ public class HealthArticlePanel extends VBox {
         t1.getStyleClass().add("card-title");
         ctrlCard.getChildren().addAll(t1, ctrl);
 
-        String[] cols = {"ID", "标题", "分类", "发布时间"};
-        for (int i = 0; i < cols.length; i++) {
-            final int idx = i;
-            TableColumn<String[], String> c = new TableColumn<>(cols[i]);
-            c.setCellValueFactory(cb -> new ReadOnlyStringWrapper(cb.getValue()[idx]));
-            table.getColumns().add(c);
-        }
+        table.getColumns().addAll(
+                colA("ID", 0, 60),
+                colA("标题", 1, 240),
+                colA("分类", 2, 110),
+                colA("作者", 3, 110),
+                colTypeLabel(4, 80),
+                colA("发布时间", 5, 150)
+        );
         table.setItems(items);
         table.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2 && table.getSelectionModel().getSelectedItem() != null) {
@@ -57,6 +62,8 @@ public class HealthArticlePanel extends VBox {
 
         getChildren().addAll(ctrlCard, card);
         btnRefresh.setOnAction(e -> loadArticles());
+        btnSubmit.setOnAction(e -> submitArticle());
+        btnMine.setOnAction(e -> showMySubmissions());
         loadArticles();
     }
 
@@ -71,7 +78,10 @@ public class HealthArticlePanel extends VBox {
 
         Label lblTitle = new Label(art.get("title") == null ? "" : art.get("title"));
         lblTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #1E6478;");
+        String srcType = typeLabel(art.get("author_type"));
+        String srcName = art.get("author") == null ? "" : art.get("author");
         Label lblMeta = new Label("分类：" + (art.get("category") == null ? "-" : art.get("category"))
+                + "  ｜  来源：" + srcType + (srcName.isEmpty() ? "" : "(" + srcName + ")")
                 + "  ｜  发布：" + (art.get("published_at") == null ? "-" : art.get("published_at")));
         lblMeta.getStyleClass().add("hint");
 
@@ -91,6 +101,74 @@ public class HealthArticlePanel extends VBox {
         dlg.getDialogPane().setContent(content);
         dlg.setResizable(true);
         dlg.showAndWait();
+    }
+
+    /** 我要投稿：保存为 status=待审核, author_type=user */
+    private void submitArticle() {
+        TextField tfTitle = new TextField();
+        TextField tfCategory = new TextField("健康科普");
+        TextArea ta = new TextArea();
+        ta.setPrefRowCount(6); ta.setWrapText(true);
+        GridPane g = new GridPane();
+        g.setHgap(10); g.setVgap(8);
+        g.addRow(0, new Label("标题"), tfTitle);
+        g.addRow(1, new Label("分类"), tfCategory);
+        g.add(new Label("内容"), 0, 2);
+        g.add(ta, 1, 2);
+        if (confirmDialog("我要投稿", g)) {
+            String t = tfTitle.getText().trim();
+            if (t.isEmpty()) { alert("标题不能为空"); return; }
+            if (DBUtil.saveHealthArticle(0, t, ta.getText(), tfCategory.getText().trim(),
+                    DBUtil.currentUsername, "user", "待审核")) {
+                alert("投稿已提交，等待管理员审核后发布");
+            } else alert("提交失败");
+        }
+    }
+
+    /** 我的投稿：查看本人投稿及状态 */
+    private void showMySubmissions() {
+        List<String[]> rows = DBUtil.getMyArticles(DBUtil.currentUsername, "user");
+        TableView<String[]> t = new TableView<>();
+        t.getColumns().addAll(
+                colA("ID", 0, 60), colA("标题", 1, 240), colA("分类", 2, 110),
+                colA("状态", 3, 90), colA("提交时间", 4, 150));
+        t.setItems(FXCollections.observableArrayList(rows));
+        VBox box = new VBox(10, new Label("我的投稿（状态：待审核/已发布/已驳回）"), t);
+        box.setPadding(new Insets(8));
+        Alert d = new Alert(Alert.AlertType.INFORMATION);
+        d.setTitle("我的投稿");
+        d.setHeaderText(null);
+        d.getDialogPane().setContent(box);
+        d.setResizable(true);
+        d.showAndWait();
+    }
+
+    private boolean confirmDialog(String title, GridPane content) {
+        Alert a = new Alert(Alert.AlertType.CONFIRMATION, "", ButtonType.OK, ButtonType.CANCEL);
+        a.setTitle(title);
+        a.getDialogPane().setContent(content);
+        return a.showAndWait().filter(b -> b == ButtonType.OK).isPresent();
+    }
+
+    private String typeLabel(String t) {
+        if ("user".equals(t)) return "用户";
+        if ("institution".equals(t)) return "机构";
+        if ("admin".equals(t)) return "官方";
+        return "官方";
+    }
+
+    private TableColumn<String[], String> colA(String name, int idx, double w) {
+        TableColumn<String[], String> c = new TableColumn<>(name);
+        c.setCellValueFactory(cb -> new ReadOnlyStringWrapper(cb.getValue()[idx]));
+        c.setPrefWidth(w);
+        return c;
+    }
+
+    private TableColumn<String[], String> colTypeLabel(int idx, double w) {
+        TableColumn<String[], String> c = new TableColumn<>("来源");
+        c.setCellValueFactory(data -> new ReadOnlyStringWrapper(typeLabel(data.getValue()[idx])));
+        c.setPrefWidth(w);
+        return c;
     }
 
     private void alert(String m) {

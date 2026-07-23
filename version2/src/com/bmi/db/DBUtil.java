@@ -88,6 +88,12 @@ public class DBUtil {
                 // patients: 机构维度病人同样需要过敏源 / 慢性病 字段
                 execDDL(conn, "ALTER TABLE patients ADD COLUMN IF NOT EXISTS allergies VARCHAR(255)");
                 execDDL(conn, "ALTER TABLE patients ADD COLUMN IF NOT EXISTS chronic_diseases VARCHAR(255)");
+                // health_articles: 投稿/审核治理字段 (用户/机构投稿→管理员审核→发布)
+                execDDL(conn, "ALTER TABLE health_articles ADD COLUMN IF NOT EXISTS author VARCHAR(100)");
+                execDDL(conn, "ALTER TABLE health_articles ADD COLUMN IF NOT EXISTS author_type VARCHAR(20)");
+                execDDL(conn, "ALTER TABLE health_articles ADD COLUMN IF NOT EXISTS reviewer VARCHAR(100)");
+                execDDL(conn, "ALTER TABLE health_articles ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP");
+                execDDL(conn, "ALTER TABLE health_articles ADD COLUMN IF NOT EXISTS reject_reason TEXT");
                 // 旧模型残留的 institution_patients 已废弃 (被 patients 表取代), 清理之
                 execDDL(conn, "DROP TABLE IF EXISTS institution_patients");
                 // 后续若发现其它列漂移, 在此追加 ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... 即可
@@ -2741,17 +2747,22 @@ public class DBUtil {
         /** 获取所有健康文章 */
         public static List<String[]> getHealthArticles() {
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, title, category, status, published_at FROM health_articles ORDER BY id DESC";
+            String sql = "SELECT id, title, category, status, author, author_type, published_at FROM health_articles ORDER BY id DESC";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
                 while (rs.next()) {
+                    String at = rs.getString("author_type");
+                    String author = rs.getString("author");
+                    if (at == null || at.isEmpty()) { at = "admin"; if (author == null) author = "官方"; }
                     list.add(new String[]{
                             String.valueOf(rs.getInt("id")),
                             rs.getString("title"),
                             rs.getString("category"),
                             rs.getString("status"),
+                            author == null ? "" : author,
+                            at,
                             sdf.format(rs.getTimestamp("published_at"))
                     });
                 }
@@ -2764,9 +2775,150 @@ public class DBUtil {
         /** 获取所有已发布健康文章（用户端展示，仅返回已发布状态） */
         public static List<String[]> getPublishedHealthArticles() {
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, title, category, status, published_at FROM health_articles WHERE status = '已发布' ORDER BY published_at DESC";
+            String sql = "SELECT id, title, category, author, author_type, published_at FROM health_articles WHERE status = '已发布' ORDER BY published_at DESC";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    String at = rs.getString("author_type");
+                    String author = rs.getString("author");
+                    if (at == null || at.isEmpty()) { at = "admin"; if (author == null) author = "官方"; }
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("title"),
+                            rs.getString("category"),
+                            author == null ? "" : author,
+                            at,
+                            sdf.format(rs.getTimestamp("published_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 根据 ID 获取文章正文 */
+        public static Map<String, String> getHealthArticleById(int id) {
+            Map<String, String> map = new HashMap<>();
+            String sql = "SELECT title, content, category, author, author_type, status, published_at FROM health_articles WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, id);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    map.put("title", rs.getString("title"));
+                    map.put("content", rs.getString("content"));
+                    map.put("category", rs.getString("category"));
+                    map.put("author", rs.getString("author"));
+                    map.put("author_type", rs.getString("author_type"));
+                    map.put("status", rs.getString("status"));
+                    map.put("published_at", new SimpleDateFormat("yyyy-MM-dd HH:mm").format(rs.getTimestamp("published_at")));
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return map;
+        }
+
+        /** 保存健康文章 */
+        public static boolean saveHealthArticle(int id, String title, String content, String category,
+                                                String author, String authorType, String status) {
+            try (Connection conn = getConnection()) {
+                String at = (authorType == null || authorType.isEmpty()) ? "admin" : authorType;
+                String st = (status == null || status.isEmpty()) ? "已发布" : status;
+                if (id <= 0) {
+                    String sql = "INSERT INTO health_articles (title, content, category, author, author_type, status) VALUES (?, ?, ?, ?, ?, ?)";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, title);
+                    ps.setString(2, content);
+                    ps.setString(3, category);
+                    ps.setString(4, author);
+                    ps.setString(5, at);
+                    ps.setString(6, st);
+                    return ps.executeUpdate() > 0;
+                } else {
+                    String sql = "UPDATE health_articles SET title = ?, content = ?, category = ?, author = ?, author_type = ?, status = ? WHERE id = ?";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, title);
+                    ps.setString(2, content);
+                    ps.setString(3, category);
+                    ps.setString(4, author);
+                    ps.setString(5, at);
+                    ps.setString(6, st);
+                    ps.setInt(7, id);
+                    return ps.executeUpdate() > 0;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 待审核文章队列（用户/机构投稿，供管理员审核）。返回 id,title,category,author,author_type,submitted_at */
+        public static List<String[]> getPendingArticles() {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, title, category, author, author_type, published_at FROM health_articles WHERE status = '待审核' ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ResultSet rs = ps.executeQuery();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+                while (rs.next()) {
+                    String at = rs.getString("author_type");
+                    if (at == null || at.isEmpty()) at = "user";
+                    list.add(new String[]{
+                            String.valueOf(rs.getInt("id")),
+                            rs.getString("title"),
+                            rs.getString("category"),
+                            rs.getString("author") == null ? "" : rs.getString("author"),
+                            at,
+                            sdf.format(rs.getTimestamp("published_at"))
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return list;
+        }
+
+        /** 审核通过：转为已发布，记录审核人/时间 */
+        public static boolean approveArticle(int id, String reviewer) {
+            String sql = "UPDATE health_articles SET status = '已发布', reviewer = ?, reviewed_at = NOW() WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, reviewer);
+                ps.setInt(2, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 审核驳回：记录审核人/时间/原因，转为已驳回 */
+        public static boolean rejectArticle(int id, String reviewer, String reason) {
+            String sql = "UPDATE health_articles SET status = '已驳回', reviewer = ?, reviewed_at = NOW(), reject_reason = ? WHERE id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, reviewer);
+                ps.setString(2, reason);
+                ps.setInt(3, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /** 某作者(用户/机构)的投稿列表(含状态)，用于「我的投稿」 */
+        public static List<String[]> getMyArticles(String author, String authorType) {
+            List<String[]> list = new ArrayList<>();
+            String sql = "SELECT id, title, category, status, published_at FROM health_articles WHERE author = ? AND author_type = ? ORDER BY id DESC";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, author);
+                ps.setString(2, authorType);
                 ResultSet rs = ps.executeQuery();
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
                 while (rs.next()) {
@@ -2782,51 +2934,6 @@ public class DBUtil {
                 e.printStackTrace();
             }
             return list;
-        }
-
-        /** 根据 ID 获取文章正文 */
-        public static Map<String, String> getHealthArticleById(int id) {
-            Map<String, String> map = new HashMap<>();
-            String sql = "SELECT title, content, category, published_at FROM health_articles WHERE id = ?";
-            try (Connection conn = getConnection();
-                 PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setInt(1, id);
-                ResultSet rs = ps.executeQuery();
-                if (rs.next()) {
-                    map.put("title", rs.getString("title"));
-                    map.put("content", rs.getString("content"));
-                    map.put("category", rs.getString("category"));
-                    map.put("published_at", new SimpleDateFormat("yyyy-MM-dd HH:mm").format(rs.getTimestamp("published_at")));
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            return map;
-        }
-
-        /** 保存健康文章 */
-        public static boolean saveHealthArticle(int id, String title, String content, String category) {
-            try (Connection conn = getConnection()) {
-                if (id <= 0) {
-                    String sql = "INSERT INTO health_articles (title, content, category) VALUES (?, ?, ?)";
-                    PreparedStatement ps = conn.prepareStatement(sql);
-                    ps.setString(1, title);
-                    ps.setString(2, content);
-                    ps.setString(3, category);
-                    return ps.executeUpdate() > 0;
-                } else {
-                    String sql = "UPDATE health_articles SET title = ?, content = ?, category = ? WHERE id = ?";
-                    PreparedStatement ps = conn.prepareStatement(sql);
-                    ps.setString(1, title);
-                    ps.setString(2, content);
-                    ps.setString(3, category);
-                    ps.setInt(4, id);
-                    return ps.executeUpdate() > 0;
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return false;
-            }
         }
 
         /** 获取 AI 模板 */

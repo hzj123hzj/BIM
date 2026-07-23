@@ -11,6 +11,7 @@ import javafx.scene.chart.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
+import javafx.collections.FXCollections;
 
 import java.text.SimpleDateFormat;
 
@@ -44,11 +45,15 @@ public class InstitutionView extends VBox {
         btnAnalyze.getStyleClass().add("button-primary");
         Button btnBatchDel = new Button("批量移出");
         btnBatchDel.getStyleClass().add("button-ghost");
+        Button btnWrite = new Button("写文章");
+        btnWrite.getStyleClass().add("button-accent");
+        Button btnMine = new Button("我的投稿");
+        btnMine.getStyleClass().add("button-ghost");
         Button btnRefresh = new Button("刷新");
         btnRefresh.getStyleClass().add("button-ghost");
         Button btnLogout = new Button("退出");
         btnLogout.getStyleClass().add("button-ghost");
-        top.getChildren().addAll(title, sp, btnUpload, btnNew, btnAnalyze, btnBatchDel, btnRefresh, btnLogout);
+        top.getChildren().addAll(title, sp, btnUpload, btnNew, btnAnalyze, btnBatchDel, btnWrite, btnMine, btnRefresh, btnLogout);
 
         buildTable();
         patientTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
@@ -59,6 +64,8 @@ public class InstitutionView extends VBox {
         btnAnalyze.setOnAction(e -> analyzeSelected());
         btnBatchDel.setOnAction(e -> batchDelete());
         btnRefresh.setOnAction(e -> refresh());
+        btnWrite.setOnAction(e -> submitArticle());
+        btnMine.setOnAction(e -> showMySubmissions());
         btnLogout.setOnAction(e -> App.showLogin());
 
         getChildren().addAll(top, patientTable);
@@ -446,6 +453,59 @@ public class InstitutionView extends VBox {
         }
         chart.getData().addAll(sWeight, sBmi, sFat);
         return chart;
+    }
+
+    /** 机构写文章：保存为待审核投稿, author=机构名, author_type=institution */
+    private void submitArticle() {
+        TextField tfTitle = new TextField();
+        TextField tfCategory = new TextField("健康科普");
+        TextArea ta = new TextArea();
+        ta.setPrefRowCount(6); ta.setWrapText(true);
+        GridPane g = new GridPane();
+        g.setHgap(10); g.setVgap(8);
+        g.addRow(0, new Label("标题"), tfTitle);
+        g.addRow(1, new Label("分类"), tfCategory);
+        g.add(new Label("内容"), 0, 2);
+        g.add(ta, 1, 2);
+        Dialog<ButtonType> d = new Dialog<>();
+        d.setTitle("机构写文章");
+        d.setHeaderText("提交后由管理员审核，通过才会公开发布");
+        d.getDialogPane().setContent(g);
+        d.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        d.showAndWait().ifPresent(bt -> {
+            if (bt != ButtonType.OK) return;
+            String t = tfTitle.getText().trim();
+            if (t.isEmpty()) { alert("标题不能为空"); return; }
+            if (DBUtil.saveHealthArticle(0, t, ta.getText(), tfCategory.getText().trim(),
+                    DBUtil.currentInstitutionName, "institution", "待审核")) {
+                alert("投稿已提交，等待管理员审核");
+            } else alert("提交失败");
+        });
+    }
+
+    /** 我的投稿：查看本机构投稿及状态 */
+    private void showMySubmissions() {
+        List<String[]> rows = DBUtil.getMyArticles(DBUtil.currentInstitutionName, "institution");
+        TableView<String[]> t = new TableView<>();
+        t.getColumns().addAll(
+                colA("ID", 0, 60), colA("标题", 1, 240), colA("分类", 2, 110),
+                colA("状态", 3, 90), colA("提交时间", 4, 150));
+        t.setItems(FXCollections.observableArrayList(rows));
+        VBox box = new VBox(10, new Label("本机构投稿（状态：待审核/已发布/已驳回）"), t);
+        box.setPadding(new Insets(8));
+        Alert d = new Alert(Alert.AlertType.INFORMATION);
+        d.setTitle("我的投稿");
+        d.setHeaderText(null);
+        d.getDialogPane().setContent(box);
+        d.setResizable(true);
+        d.showAndWait();
+    }
+
+    private TableColumn<String[], String> colA(String name, int idx, double w) {
+        TableColumn<String[], String> c = new TableColumn<>(name);
+        c.setCellValueFactory(cb -> new javafx.beans.property.ReadOnlyStringWrapper(cb.getValue()[idx]));
+        c.setPrefWidth(w);
+        return c;
     }
 
     private void alert(String m) {

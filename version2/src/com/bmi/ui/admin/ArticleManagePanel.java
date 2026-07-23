@@ -11,11 +11,12 @@ import java.util.List;
 
 /**
  * 健康文章管理面板（JavaFX 8 重写 version1 ContentManagementPanel 文章部分）
- * 列表、新增/编辑/删除。status 字段只读展示（DBUtil.saveHealthArticle 接口不接收 status）。
- * getHealthArticles() 返回 String[]{id,title,category,status,published_at}。
+ * 列表、新增/编辑/删除（官方直发）。含「投稿审核队列」：用户/机构投稿待管理员审核后发布。
+ * getHealthArticles() 返回 String[]{id,title,category,status,author,author_type,published_at}。
  */
 public class ArticleManagePanel extends VBox {
     private final TableView<String[]> table = new TableView<>();
+    private final TableView<String[]> pendingTable = new TableView<>();
 
     public ArticleManagePanel() {
         setSpacing(16);
@@ -39,16 +40,45 @@ public class ArticleManagePanel extends VBox {
 
         table.getColumns().addAll(
                 colA("ID", 0, 60),
-                colA("标题", 1, 240),
-                colA("分类", 2, 120),
-                colA("状态", 3, 90),
-                colA("发布时间", 4, 160)
+                colA("标题", 1, 220),
+                colA("分类", 2, 100),
+                colA("状态", 3, 80),
+                colA("作者", 4, 100),
+                colTypeLabel(5, 80),
+                colA("发布时间", 6, 150)
         );
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         card.getChildren().add(table);
         getChildren().add(card);
 
+        // 审核队列：用户/机构投稿，待管理员审核
+        VBox reviewCard = new VBox(10);
+        reviewCard.getStyleClass().add("card");
+        Label rTitle = new Label("投稿审核队列（用户/机构投稿，待审核）");
+        rTitle.getStyleClass().add("card-title");
+        HBox rCtrl = new HBox(8);
+        rCtrl.setAlignment(Pos.CENTER_LEFT);
+        Button btnApprove = new Button("通过(发布)");
+        Button btnReject = new Button("驳回");
+        btnApprove.getStyleClass().add("button-primary");
+        btnReject.getStyleClass().add("button-accent");
+        rCtrl.getChildren().addAll(btnApprove, btnReject);
+        reviewCard.getChildren().addAll(rTitle, rCtrl);
+        pendingTable.getColumns().addAll(
+                colA("ID", 0, 60),
+                colA("标题", 1, 220),
+                colA("分类", 2, 100),
+                colA("作者", 3, 100),
+                colTypeLabel(4, 80),
+                colA("提交时间", 5, 150)
+        );
+        pendingTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        reviewCard.getChildren().add(pendingTable);
+        getChildren().add(reviewCard);
+
         btnAdd.setOnAction(e -> editArticle(0));
+        btnApprove.setOnAction(e -> reviewSelected(true));
+        btnReject.setOnAction(e -> reviewSelected(false));
         btnEdit.setOnAction(e -> {
             int id = getSelectedId();
             if (id > 0) editArticle(id);
@@ -69,6 +99,52 @@ public class ArticleManagePanel extends VBox {
         for (String[] row : DBUtil.getHealthArticles()) {
             table.getItems().add(row);
         }
+        pendingTable.getItems().clear();
+        for (String[] row : DBUtil.getPendingArticles()) {
+            pendingTable.getItems().add(row);
+        }
+    }
+
+    /** 审核选中投稿：approve=true 通过发布；false 填原因驳回。 */
+    private void reviewSelected(boolean approve) {
+        String[] sel = pendingTable.getSelectionModel().getSelectedItem();
+        if (sel == null) { warn("请先在审核队列中选择一条投稿"); return; }
+        int id = Integer.parseInt(sel[0]);
+        if (approve) {
+            if (DBUtil.approveArticle(id, DBUtil.currentUsername)) {
+                DBUtil.logAction("ADMIN", DBUtil.currentUsername, "通过文章投稿", sel[1]);
+                loadArticles();
+                alert("已通过并发布：" + sel[1]);
+            } else err("操作失败");
+        } else {
+            TextInputDialog d = new TextInputDialog();
+            d.setTitle("驳回投稿");
+            d.setHeaderText("请填写驳回原因（将记录并通知作者）");
+            d.showAndWait().ifPresent(reason -> {
+                if (reason.trim().isEmpty()) { warn("驳回原因不能为空"); return; }
+                if (DBUtil.rejectArticle(id, DBUtil.currentUsername, reason.trim())) {
+                    DBUtil.logAction("ADMIN", DBUtil.currentUsername, "驳回文章投稿", sel[1] + " 原因:" + reason);
+                    loadArticles();
+                    alert("已驳回：" + sel[1]);
+                } else err("操作失败");
+            });
+        }
+    }
+
+    /** 来源类型中文标签：user=用户, institution=机构, admin/空=官方 */
+    private String typeLabel(String t) {
+        if ("user".equals(t)) return "用户";
+        if ("institution".equals(t)) return "机构";
+        if ("admin".equals(t)) return "官方";
+        return "官方";
+    }
+
+    /** 来源列：将 author_type 映射为中文标签 */
+    private TableColumn<String[], String> colTypeLabel(int idx, double w) {
+        TableColumn<String[], String> c = new TableColumn<>("来源");
+        c.setCellValueFactory(data -> new ReadOnlyStringWrapper(typeLabel(data.getValue()[idx])));
+        c.setPrefWidth(w);
+        return c;
     }
 
     private int getSelectedId() {
@@ -106,7 +182,8 @@ public class ArticleManagePanel extends VBox {
 
         if (confirmDialog(id > 0 ? "编辑文章" : "新增文章", g)) {
             if (DBUtil.saveHealthArticle(id, tfTitle.getText().trim(),
-                    taContent.getText(), tfCategory.getText().trim())) {
+                    taContent.getText(), tfCategory.getText().trim(),
+                    DBUtil.currentUsername, "admin", "已发布")) {
                 DBUtil.logAction("ADMIN", DBUtil.currentUsername, "保存文章", tfTitle.getText());
                 loadArticles();
             } else {
@@ -120,6 +197,10 @@ public class ArticleManagePanel extends VBox {
         a.setTitle(title);
         a.getDialogPane().setContent(content);
         return a.showAndWait().filter(b -> b == ButtonType.OK).isPresent();
+    }
+
+    private void alert(String m) {
+        new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK).showAndWait();
     }
 
     private void warn(String m) {
