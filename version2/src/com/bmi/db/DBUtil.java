@@ -2032,6 +2032,42 @@ public class DBUtil {
             return sb.toString();
         }
 
+        /** 导出指定用户的健康打卡记录为 CSV（用户端导出本人数据，权限边界：仅本人）。 */
+        public static String exportHealthRecordsCSV(String username) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("ID,用户名,记录日期,体重,体脂率,水分率,肌肉率,内脏脂肪,骨量,BMI,腰围,基础代谢,每日消耗,身体年龄,身体类型\n");
+            String sql = "SELECT id, username, record_date, weight, body_fat, water_rate, muscle_rate, " +
+                         "visceral_fat, bone_muscle, bmi, waist, bmr, tdee, body_age, body_type " +
+                         "FROM health_records WHERE username = ? ORDER BY record_date DESC, id DESC";
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, username);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        sb.append(rs.getInt("id")).append(",");
+                        sb.append(rs.getString("username")).append(",");
+                        sb.append(rs.getTimestamp("record_date") == null ? "" : sdf.format(rs.getTimestamp("record_date"))).append(",");
+                        sb.append(rs.getDouble("weight")).append(",");
+                        sb.append(rs.getDouble("body_fat")).append(",");
+                        sb.append(rs.getDouble("water_rate")).append(",");
+                        sb.append(rs.getDouble("muscle_rate")).append(",");
+                        sb.append(rs.getInt("visceral_fat")).append(",");
+                        sb.append(rs.getDouble("bone_muscle")).append(",");
+                        sb.append(rs.getDouble("bmi")).append(",");
+                        sb.append(rs.getDouble("waist")).append(",");
+                        sb.append(rs.getDouble("bmr")).append(",");
+                        sb.append(rs.getDouble("tdee")).append(",");
+                        sb.append(rs.getInt("body_age")).append(",");
+                        sb.append(rs.getString("body_type")).append("\n");
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return sb.toString();
+        }
+
         /** 保存通知消息 */
         public static boolean saveNotification(String sender, String receiver, String title, String content, String type) {
             String sql = "INSERT INTO notifications (sender, receiver, title, content, type) VALUES (?, ?, ?, ?, ?)";

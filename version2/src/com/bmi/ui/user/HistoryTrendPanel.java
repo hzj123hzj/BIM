@@ -18,6 +18,11 @@ import java.util.*;
 import java.util.Map;
 import java.util.List;
 import java.text.SimpleDateFormat;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 /** 历史趋势面板 — 指标选择 + 折线趋势图 + 历史记录明细表 */
 public class HistoryTrendPanel extends VBox {
@@ -73,11 +78,16 @@ public class HistoryTrendPanel extends VBox {
         ScrollPane sp = new ScrollPane(table);
         sp.setFitToWidth(true);
         sp.setPrefHeight(240);
+        Button btnExport = new Button("导出我的健康数据");
+        btnExport.getStyleClass().add("button-ghost");
+        btnExport.setOnAction(e -> exportMyData());
         VBox tableCard = new VBox(10);
         tableCard.getStyleClass().add("card");
         Label t3 = new Label("历史记录明细");
         t3.getStyleClass().add("card-title");
-        tableCard.getChildren().addAll(t3, sp);
+        HBox tableHead = new HBox(10, t3, btnExport);
+        tableHead.setAlignment(Pos.CENTER_LEFT);
+        tableCard.getChildren().addAll(tableHead, sp);
 
         getChildren().addAll(ctrlCard, chartCard, tableCard);
 
@@ -180,5 +190,30 @@ public class HistoryTrendPanel extends VBox {
 
     private void alert(String m) {
         new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK).showAndWait();
+    }
+
+    /** 导出本人健康记录为 CSV（写文件到用户自选路径；数据范围限定 currentUsername，遵循权限边界）。 */
+    private void exportMyData() {
+        String header = "ID,用户名,记录日期,体重,体脂率,水分率,肌肉率,内脏脂肪,骨量,BMI,腰围,基础代谢,每日消耗,身体年龄,身体类型";
+        String csv = DBUtil.exportHealthRecordsCSV(DBUtil.currentUsername);
+        if (csv == null || csv.trim().equals(header)) {
+            alert("暂无健康记录可导出");
+            return;
+        }
+        Window win = getScene() != null ? getScene().getWindow() : null;
+        FileChooser fc = new FileChooser();
+        fc.setTitle("导出我的健康数据");
+        fc.setInitialFileName("我的健康数据_" + DBUtil.currentUsername + ".csv");
+        fc.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("CSV 文件", "*.csv"),
+                new FileChooser.ExtensionFilter("所有文件", "*.*"));
+        File f = fc.showSaveDialog(win);
+        if (f == null) return;
+        try {
+            Files.writeString(f.toPath(), csv, StandardCharsets.UTF_8);
+            alert("导出成功！\n保存路径：\n" + f.getAbsolutePath().replace("\\", "/"));
+        } catch (Exception ex) {
+            alert("导出失败: " + ex.getMessage());
+        }
     }
 }
