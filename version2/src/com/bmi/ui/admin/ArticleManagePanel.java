@@ -8,6 +8,7 @@ import javafx.scene.layout.*;
 import javafx.beans.property.ReadOnlyStringWrapper;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 健康文章管理面板（JavaFX 8 重写 version1 ContentManagementPanel 文章部分）
@@ -58,11 +59,13 @@ public class ArticleManagePanel extends VBox {
         rTitle.getStyleClass().add("card-title");
         HBox rCtrl = new HBox(8);
         rCtrl.setAlignment(Pos.CENTER_LEFT);
+        Button btnView = new Button("查看内容");
         Button btnApprove = new Button("通过(发布)");
         Button btnReject = new Button("驳回");
+        btnView.getStyleClass().add("button-ghost");
         btnApprove.getStyleClass().add("button-primary");
         btnReject.getStyleClass().add("button-accent");
-        rCtrl.getChildren().addAll(btnApprove, btnReject);
+        rCtrl.getChildren().addAll(btnView, btnApprove, btnReject);
         reviewCard.getChildren().addAll(rTitle, rCtrl);
         pendingTable.getColumns().addAll(
                 colA("ID", 0, 60),
@@ -73,12 +76,14 @@ public class ArticleManagePanel extends VBox {
                 colA("提交时间", 5, 150)
         );
         pendingTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        pendingTable.setOnMouseClicked(e -> { if (e.getClickCount() == 2) viewPending(); });
         reviewCard.getChildren().add(pendingTable);
         getChildren().add(reviewCard);
 
         btnAdd.setOnAction(e -> editArticle(0));
         btnApprove.setOnAction(e -> reviewSelected(true));
         btnReject.setOnAction(e -> reviewSelected(false));
+        btnView.setOnAction(e -> viewPending());
         btnEdit.setOnAction(e -> {
             int id = getSelectedId();
             if (id > 0) editArticle(id);
@@ -129,6 +134,34 @@ public class ArticleManagePanel extends VBox {
                 } else err("操作失败");
             });
         }
+    }
+
+    /** 审核时查看投稿正文，避免盲审 */
+    private void viewPending() {
+        String[] sel = pendingTable.getSelectionModel().getSelectedItem();
+        if (sel == null) { warn("请先在审核队列中选择一条投稿"); return; }
+        int id = Integer.parseInt(sel[0]);
+        Map<String, String> art = DBUtil.getHealthArticleById(id);
+        if (art == null || art.isEmpty()) { alert("未找到该文章"); return; }
+        Label lblTitle = new Label(art.get("title") == null ? "" : art.get("title"));
+        lblTitle.setStyle("-fx-font-size:16px; -fx-font-weight:bold; -fx-text-fill:#1E6478;");
+        String srcType = typeLabel(art.get("author_type"));
+        String srcName = art.get("author") == null ? "" : art.get("author");
+        Label lblMeta = new Label("分类：" + (art.get("category") == null ? "-" : art.get("category"))
+                + "  ｜  来源：" + srcType + (srcName.isEmpty() ? "" : "(" + srcName + ")"));
+        lblMeta.getStyleClass().add("hint");
+        TextArea ta = new TextArea(art.get("content") == null ? "" : art.get("content"));
+        ta.setWrapText(true); ta.setEditable(false);
+        ta.setPrefSize(560, 360);
+        ta.setStyle("-fx-font-family:'Microsoft YaHei UI','Microsoft YaHei',sans-serif; -fx-font-size:13px;");
+        VBox content = new VBox(10, lblTitle, lblMeta, ta);
+        content.setPadding(new Insets(10));
+        Alert dlg = new Alert(Alert.AlertType.INFORMATION);
+        dlg.setTitle("查看投稿内容");
+        dlg.setHeaderText(null);
+        dlg.getDialogPane().setContent(content);
+        dlg.setResizable(true);
+        dlg.showAndWait();
     }
 
     /** 来源类型中文标签：user=用户, institution=机构, admin/空=官方 */
