@@ -36,11 +36,14 @@ public class UserDashboardPanel extends VBox {
         Button btnMetrics = new Button("查看核心指标");
         btnMetrics.getStyleClass().add("button-accent");
         btnMetrics.setOnAction(e -> showCoreMetricsDialog());
+        Button btnAllergy = new Button("编辑过敏源/慢性病");
+        btnAllergy.getStyleClass().add("button-accent");
+        btnAllergy.setOnAction(e -> showEditAllergyChronicDialog());
         Label hint = new Label("实时展示您的个人健康数据");
         hint.getStyleClass().add("hint");
         Region sp = new Region();
         HBox.setHgrow(sp, Priority.ALWAYS);
-        ctrl.getChildren().addAll(btnRefresh, btnMetrics, sp, hint);
+        ctrl.getChildren().addAll(btnRefresh, btnMetrics, btnAllergy, sp, hint);
 
         VBox ctrlCard = new VBox(10);
         ctrlCard.getStyleClass().add("card");
@@ -114,6 +117,8 @@ public class UserDashboardPanel extends VBox {
                 kv("体重", dispWeight > 0 ? f1(dispWeight) + " kg" : "未记录"),
                 kv("腰围", dispWaist > 0 ? f1(dispWaist) + " cm" : "未记录"));
         gridProfile.addRow(3, kv("活动等级", DBUtil.currentActivityLevel), new Label(""));
+        gridProfile.addRow(4, kv("过敏源", DBUtil.currentAllergies.isEmpty() ? "无" : DBUtil.currentAllergies), new Label(""));
+        gridProfile.addRow(5, kv("慢性病", DBUtil.currentChronicDiseases.isEmpty() ? "无" : DBUtil.currentChronicDiseases), new Label(""));
 
         // 计算属性（由当前体重/身高推导）
         gridCalc.getChildren().clear();
@@ -194,6 +199,44 @@ public class UserDashboardPanel extends VBox {
         dialog.setHeaderText(null);
         dialog.setResizable(true);
         ReportDialog.show("核心指标详情", pane);
+    }
+
+    private void showEditAllergyChronicDialog() {
+        Dialog<ButtonType> d = new Dialog<>();
+        d.setTitle("编辑过敏源与慢性病");
+        d.setHeaderText("请填写你的过敏源与慢性病信息 (用于饮食推荐时规避风险食物)");
+        d.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        GridPane g = new GridPane();
+        g.setHgap(10);
+        g.setVgap(10);
+        g.setPadding(new Insets(10));
+        TextField tfAllergy = new TextField(DBUtil.currentAllergies);
+        tfAllergy.setPromptText("如 花生,海鲜,芒果");
+        TextField tfChronic = new TextField(DBUtil.currentChronicDiseases);
+        tfChronic.setPromptText("如 高血压,糖尿病");
+        g.add(new Label("过敏源:"), 0, 0);
+        g.add(tfAllergy, 1, 0);
+        g.add(new Label("慢性病:"), 0, 1);
+        g.add(tfChronic, 1, 1);
+        d.getDialogPane().setContent(g);
+        d.setResizable(true);
+        d.showAndWait().ifPresent(bt -> {
+            if (bt == ButtonType.OK) {
+                boolean ok = DBUtil.updateUserAllergyChronic(tfAllergy.getText().trim(), tfChronic.getText().trim());
+                if (ok) {
+                    refresh();
+                    alertInfo("已保存", "过敏源与慢性病信息已更新");
+                } else {
+                    alertInfo("保存失败", "请稍后重试");
+                }
+            }
+        });
+    }
+
+    private void alertInfo(String title, String msg) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK);
+        a.setTitle(title);
+        a.showAndWait();
     }
 
     private VBox metricCard(String title, String value, String colorHex) {

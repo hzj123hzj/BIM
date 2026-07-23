@@ -74,6 +74,8 @@ public class InitDB {
                 "  weight DECIMAL(5,2)," +
                 "  waist DECIMAL(5,2)," +
                 "  activity_level VARCHAR(20) DEFAULT '久坐'," +
+                "  allergies VARCHAR(255)," +
+                "  chronic_diseases VARCHAR(255)," +
                 "  created_at TIMESTAMP DEFAULT NOW()" +
                 ")");
             System.out.println("  [OK] users 表");
@@ -82,7 +84,9 @@ public class InitDB {
             try {
                 execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS weight DECIMAL(5,2)");
                 execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS waist DECIMAL(5,2)");
-                System.out.println("  [OK] users 表 weight/waist 字段已确认");
+                execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS allergies VARCHAR(255)");
+                execUpdate(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS chronic_diseases VARCHAR(255)");
+                System.out.println("  [OK] users 表 weight/waist/allergies/chronic 字段已确认");
             } catch (SQLException e) {
                 System.out.println("  [INFO] users 表 weight/waist 字段检查: " + e.getMessage());
             }
@@ -343,6 +347,8 @@ public class InitDB {
             "  weight DECIMAL(5,2)," +
             "  waist DECIMAL(5,2)," +
             "  activity_level VARCHAR(20) DEFAULT '久坐'," +
+            "  allergies VARCHAR(255)," +
+            "  chronic_diseases VARCHAR(255)," +
             "  archived BOOLEAN DEFAULT FALSE," +
             "  created_at TIMESTAMP DEFAULT NOW()," +
             "  updated_at TIMESTAMP DEFAULT NOW()," +

@@ -39,6 +39,8 @@ public class DBUtil {
     public static double currentWeight = 0;
     public static double currentWaist = 0;
     public static String currentActivityLevel = "久坐";
+    public static String currentAllergies = "";
+    public static String currentChronicDiseases = "";
     private static final String DB_URL = "jdbc:postgresql://localhost:5433/health_db";
     private static final String DB_USER = "postgres";
     private static final String DB_PASS = "12345678";
@@ -80,6 +82,12 @@ public class DBUtil {
                 execDDL(conn, "ALTER TABLE health_records ADD COLUMN IF NOT EXISTS patient_id INT");
                 addFkIfMissing(conn, "health_records", "fk_hr_patient",
                         "FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL");
+                // users: 过敏源 / 慢性病 列 (个人用户健康画像)
+                execDDL(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS allergies VARCHAR(255)");
+                execDDL(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS chronic_diseases VARCHAR(255)");
+                // patients: 机构维度病人同样需要过敏源 / 慢性病 字段
+                execDDL(conn, "ALTER TABLE patients ADD COLUMN IF NOT EXISTS allergies VARCHAR(255)");
+                execDDL(conn, "ALTER TABLE patients ADD COLUMN IF NOT EXISTS chronic_diseases VARCHAR(255)");
                 // 旧模型残留的 institution_patients 已废弃 (被 patients 表取代), 清理之
                 execDDL(conn, "DROP TABLE IF EXISTS institution_patients");
                 // 后续若发现其它列漂移, 在此追加 ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... 即可
@@ -110,6 +118,8 @@ public class DBUtil {
                 "  weight DECIMAL(5,2)," +
                 "  waist DECIMAL(5,2)," +
                 "  activity_level VARCHAR(20) DEFAULT '久坐'," +
+                "  allergies VARCHAR(255)," +
+                "  chronic_diseases VARCHAR(255)," +
                 "  archived BOOLEAN DEFAULT FALSE," +
                 "  created_at TIMESTAMP DEFAULT NOW()," +
                 "  updated_at TIMESTAMP DEFAULT NOW()," +
@@ -149,11 +159,11 @@ public class DBUtil {
         /** 注册用户（含基础属性：性别/年龄/身高/体重/腰围/活动水平） */
         public static boolean registerUser(String username, String password, String gender,
                                      int age, double height, String activityLevel,
-                                     double weight, Double waist) {
+                                     double weight, Double waist, String allergies, String chronicDiseases) {
             String salt = PasswordUtil.generateSalt();
             String hash = PasswordUtil.hash(password, salt);
-            String sql = "INSERT INTO users (username, password, salt, gender, age, height, weight, waist, activity_level) " +
-                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String sql = "INSERT INTO users (username, password, salt, gender, age, height, weight, waist, activity_level, allergies, chronic_diseases) " +
+                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, username);
@@ -165,6 +175,8 @@ public class DBUtil {
                 if (weight > 0) ps.setDouble(7, weight); else ps.setNull(7, Types.DOUBLE);
                 if (waist != null && waist > 0) ps.setDouble(8, waist); else ps.setNull(8, Types.DOUBLE);
                 ps.setString(9, activityLevel);
+                ps.setString(10, allergies != null ? allergies : "");
+                ps.setString(11, chronicDiseases != null ? chronicDiseases : "");
                 return ps.executeUpdate() > 0;
             } catch (SQLException e) {
                 if (e.getSQLState().equals("23505")) {
@@ -178,7 +190,7 @@ public class DBUtil {
 
         /** 验证登录 */
         public static boolean loginUser(String username, String password) {
-            String sql = "SELECT password, salt, gender, age, height, weight, waist, activity_level FROM users WHERE username = ?";
+            String sql = "SELECT password, salt, gender, age, height, weight, waist, activity_level, allergies, chronic_diseases FROM users WHERE username = ?";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, username);
@@ -195,6 +207,10 @@ public class DBUtil {
                         currentWaist = rs.getDouble("waist");
                         currentActivityLevel = rs.getString("activity_level");
                         if (currentActivityLevel == null) currentActivityLevel = "久坐";
+                        currentAllergies = rs.getString("allergies");
+                        currentChronicDiseases = rs.getString("chronic_diseases");
+                        if (currentAllergies == null) currentAllergies = "";
+                        if (currentChronicDiseases == null) currentChronicDiseases = "";
                         return true;
                     }
                 }
@@ -202,6 +218,28 @@ public class DBUtil {
                 e.printStackTrace();
             }
             return false;
+        }
+
+        /** 更新当前用户的过敏源与慢性病信息 (个人健康画像, 仅本人可改) */
+        public static boolean updateUserAllergyChronic(String allergies, String chronicDiseases) {
+            if (currentUsername == null || currentUsername.isEmpty()) return false;
+            String sql = "UPDATE users SET allergies = ?, chronic_diseases = ? WHERE username = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, allergies != null ? allergies : "");
+                ps.setString(2, chronicDiseases != null ? chronicDiseases : "");
+                ps.setString(3, currentUsername);
+                int n = ps.executeUpdate();
+                if (n > 0) {
+                    currentAllergies = allergies != null ? allergies : "";
+                    currentChronicDiseases = chronicDiseases != null ? chronicDiseases : "";
+                    return true;
+                }
+                return false;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
         }
 
         /**
@@ -1720,6 +1758,18 @@ public class DBUtil {
             profile.put("diet_count", countByUser("diet_records", username));
             profile.put("exercise_count", countByUser("exercise_records", username));
             profile.put("achievement_count", countByUser("achievements", username));
+
+            // 过敏源 / 慢性病 (个人健康画像, 来自 users 表)
+            String sql2 = "SELECT allergies, chronic_diseases FROM users WHERE username = ?";
+            try (Connection conn2 = getConnection();
+                 PreparedStatement ps2 = conn2.prepareStatement(sql2)) {
+                ps2.setString(1, username);
+                ResultSet rs2 = ps2.executeQuery();
+                if (rs2.next()) {
+                    profile.put("allergies", rs2.getString("allergies"));
+                    profile.put("chronic_diseases", rs2.getString("chronic_diseases"));
+                }
+            } catch (SQLException e) { e.printStackTrace(); }
 
             return profile;
         }

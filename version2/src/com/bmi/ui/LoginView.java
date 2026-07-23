@@ -118,6 +118,10 @@ public class LoginView {
         tfWeight.setPromptText("如 65");
         TextField tfWaist = new TextField();
         tfWaist.setPromptText("可选，如 80");
+        TextField tfAllergy = new TextField();
+        tfAllergy.setPromptText("可选, 如 花生,海鲜,芒果");
+        TextField tfChronic = new TextField();
+        tfChronic.setPromptText("可选, 如 高血压,糖尿病");
         ComboBox<String> cbAct = new ComboBox<>();
         cbAct.getItems().addAll("久坐", "轻度", "中度", "重度", "极重度");
         cbAct.setValue("久坐");
@@ -144,16 +148,20 @@ public class LoginView {
         p.add(tfWaist, 1, r++);
         p.add(new Label("活动等级:"), 0, r);
         p.add(cbAct, 1, r++);
+        p.add(new Label("过敏源:"), 0, r);
+        p.add(tfAllergy, 1, r++);
+        p.add(new Label("慢性病:"), 0, r);
+        p.add(tfChronic, 1, r++);
         p.add(btn, 0, r, 2, 1);
 
         btn.setOnAction(e -> doRegister(tfUser.getText(), pf1.getText(), pf2.getText(),
                 cbGender.getValue(), spAge.getValue(), tfHeight.getText(), tfWeight.getText(),
-                tfWaist.getText(), cbAct.getValue()));
+                tfWaist.getText(), cbAct.getValue(), tfAllergy.getText(), tfChronic.getText()));
         return p;
     }
 
     private void doRegister(String user, String p1, String p2, String gender, int age, String h,
-                            String w, String waistStr, String act) {
+                            String w, String waistStr, String act, String allergy, String chronic) {
         user = user == null ? "" : user.trim();
         if (user.isEmpty() || p1 == null || p1.isEmpty()) {
             alert(Alert.AlertType.WARNING, "提示", "用户名和密码不能为空");
@@ -198,7 +206,7 @@ public class LoginView {
                 return;
             }
         }
-        if (DBUtil.registerUser(user, p1, gender, age, height, act, weight, waist)) {
+        if (DBUtil.registerUser(user, p1, gender, age, height, act, weight, waist, allergy, chronic)) {
             DBUtil.saveBaselineHealthRecord(user, weight, height, age, gender, act, waist);
             alert(Alert.AlertType.INFORMATION, "成功", "注册成功! 请登录");
         } else {
