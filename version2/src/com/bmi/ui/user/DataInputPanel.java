@@ -6,10 +6,17 @@ import javafx.geometry.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.*;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -85,10 +92,13 @@ public class DataInputPanel extends VBox {
         btnSave.getStyleClass().add("button-primary");
         Button btnScale = new Button("模拟称重");
         btnScale.getStyleClass().add("button-ghost");
-        btns.getChildren().addAll(btnSave, btnScale);
+        Button btnImport = new Button("从设备导入");
+        btnImport.getStyleClass().add("button-ghost");
+        btns.getChildren().addAll(btnSave, btnScale, btnImport);
 
         btnSave.setOnAction(e -> saveHealth());
         btnScale.setOnAction(e -> simulateScale());
+        btnImport.setOnAction(e -> importFromDevice());
 
         VBox box = new VBox(12, g, btns);
         box.setPadding(new Insets(4, 8, 10, 8));
@@ -244,9 +254,17 @@ public class DataInputPanel extends VBox {
         }
     }
 
+    /**
+     * 平替 Tier 1：模拟称重。
+     * 以最近一条记录为基线做 ±1.2kg 小幅抖动，保证连续多次测量数据有连续性，
+     * 而非每次全局随机跳变。无历史记录时回落到 65.0kg 默认基线。
+     */
     private void simulateScale() {
-        double base = 55 + Math.random() * 35;
-        tfWeight.setText(String.format("%.1f", base));
+        Map<String, Object> last = DBUtil.getLatestHealthRecord();
+        double baseW = (last != null && last.get("weight") instanceof Number)
+                ? ((Number) last.get("weight")).doubleValue() : 65.0;
+        double w = baseW + (Math.random() * 2.4 - 1.2);
+        tfWeight.setText(String.format("%.1f", w));
         tfBodyFat.setText(String.format("%.1f", 15 + Math.random() * 15));
         tfWater.setText(String.format("%.1f", 50 + Math.random() * 10));
         tfProtein.setText(String.format("%.1f", 16 + Math.random() * 6));
@@ -255,6 +273,60 @@ public class DataInputPanel extends VBox {
         tfBone.setText(String.format("%.1f", 2 + Math.random() * 2));
         tfBoneMass.setText(String.format("%.1f", 2.5 + Math.random() * 1.5));
         tfWaist.setText(String.format("%.1f", 70 + Math.random() * 20));
+    }
+
+    /**
+     * 平替 Tier 2：从设备文件导入，充当真实电子秤的对接桩。
+     * 约定电子秤 App 导出格式（CSV，9 列，可带表头）：
+     *   weight,body_fat,water,protein,muscle,visceral,bone,bone_mass,waist
+     *   e.g. 68.5,22.3,55.1,18.0,38.2,7,2.3,2.8,82.0
+     * 读入后填充各字段，由用户核对后点「保存记录」持久化。
+     * 将来拿到真实秤授权时，只需替换数据源实现，UI 与存储不动。
+     */
+    private void importFromDevice() {
+        Window owner = getScene() != null ? getScene().getWindow() : null;
+        FileChooser fc = new FileChooser();
+        fc.setTitle("选择电子秤导出文件");
+        fc.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("CSV 文件", "*.csv"),
+                new FileChooser.ExtensionFilter("所有文件", "*.*"));
+        File file = fc.showOpenDialog(owner);
+        if (file == null) return;
+
+        try {
+            double[] v = parseDeviceFile(file.toPath());
+            tfWeight.setText(String.format("%.1f", v[0]));
+            tfBodyFat.setText(String.format("%.1f", v[1]));
+            tfWater.setText(String.format("%.1f", v[2]));
+            tfProtein.setText(String.format("%.1f", v[3]));
+            tfMuscle.setText(String.format("%.1f", v[4]));
+            tfVisceral.setText(String.valueOf((int) Math.round(v[5])));
+            tfBone.setText(String.format("%.1f", v[6]));
+            tfBoneMass.setText(String.format("%.1f", v[7]));
+            tfWaist.setText(String.format("%.1f", v[8]));
+            alert("已从设备文件导入，请核对后点「保存记录」");
+        } catch (Exception ex) {
+            alert("导入失败：" + ex.getMessage() + "\n请确认文件为 9 列 CSV（weight,body_fat,water,protein,muscle,visceral,bone,bone_mass,waist）");
+        }
+    }
+
+    /**
+     * 解析设备导出文件，返回 9 个数值。自动跳过表头行，取首个可解析的数据行。
+     */
+    private double[] parseDeviceFile(java.nio.file.Path path) throws Exception {
+        List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+        for (String raw : lines) {
+            String line = raw.trim();
+            if (line.isEmpty()) continue;
+            // 表头行（含字母表头）跳过
+            if (line.toLowerCase().contains("weight") || line.toLowerCase().contains("body_fat")) continue;
+            String[] parts = line.split("[,\\s]+");
+            if (parts.length < 9) continue;
+            double[] v = new double[9];
+            for (int i = 0; i < 9; i++) v[i] = Double.parseDouble(parts[i].trim());
+            return v;
+        }
+        throw new Exception("未找到有效数据行");
     }
 
     private void refreshLatest() {
