@@ -2415,8 +2415,10 @@ public class DBUtil {
             // 3. 模糊名候选
             List<FoodRow> cands = searchFoodsFuzzy(n);
             if (cands.isEmpty()) {
-                // 名称无候选 → 看图片是否足够相似（原图命中）
-                return (bestImg != null && bestImgDist <= FOOD_PHASH_THRESHOLD) ? bestImg : null;
+                // 名称无候选 → 仅当上传图与库中某原图近乎完全一致(近原图, 汉明≤FOOD_PHASH_EXACT)才按图命中，
+                // 否则视为库中不存在的新食物，交由调用方建草稿。避免"冰红茶被误匹配成苹果"之类
+                // 因松散视觉相似度兜底导致的语义错配（饮料瓶与苹果在 8x8 感知哈希下可能偶然接近）。
+                return (bestImg != null && bestImgDist <= FOOD_PHASH_EXACT) ? bestImg : null;
             }
             if (cands.size() == 1) {
                 // 名称唯一候选：默认信任模型命名。仅当上传图与库中"另一"食物近乎完全一致
@@ -2435,8 +2437,9 @@ public class DBUtil {
                 if (d < bestDist) { bestDist = d; best = fr; }
             }
             if (best != null && bestDist <= FOOD_PHASH_THRESHOLD) return best;
-            // 候选内无法用图消歧，但全局已有强图匹配则采用
-            return (bestImg != null && bestImgDist <= FOOD_PHASH_THRESHOLD) ? bestImg : null;
+            // 候选内无法用图消歧：仅当上传图与库中"另一"食物近乎完全一致(近原图)才以图覆盖，
+            // 否则不采信松散的视觉相似，避免误匹配到语义不同的食物。
+            return (bestImg != null && bestImgDist <= FOOD_PHASH_EXACT) ? bestImg : null;
         }
 
         /** 保存食物（带图）。有图时计算 pHash 一并写入；无图则写 NULL。 */
