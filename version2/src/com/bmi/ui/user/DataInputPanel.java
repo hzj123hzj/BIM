@@ -276,12 +276,14 @@ public class DataInputPanel extends VBox {
     }
 
     /**
-     * 平替 Tier 2：从设备文件导入，充当真实电子秤的对接桩。
-     * 约定电子秤 App 导出格式（CSV，9 列，可带表头）：
+     * 平替 Tier 2（实训演示用桩，非真实电子秤对接）：
+     * 因实训项目无法取得企业电子秤的接入授权，本功能以「读文件」模拟秤 App 的数据导出，
+     * 用于演示"称重数据如何进入系统"的完整链路，并非未完成的真实集成。
+     * 若将来实际接入电子秤，应新增串口/HTTP 等真实数据源实现，本方法仅作占位与演示。
+     * 约定文件格式（CSV，9 列，可带表头）：
      *   weight,body_fat,water,protein,muscle,visceral,bone,bone_mass,waist
      *   e.g. 68.5,22.3,55.1,18.0,38.2,7,2.3,2.8,82.0
      * 读入后填充各字段，由用户核对后点「保存记录」持久化。
-     * 将来拿到真实秤授权时，只需替换数据源实现，UI 与存储不动。
      */
     private void importFromDevice() {
         Window owner = getScene() != null ? getScene().getWindow() : null;
@@ -311,7 +313,8 @@ public class DataInputPanel extends VBox {
     }
 
     /**
-     * 解析设备导出文件，返回 9 个数值。自动跳过表头行，取首个可解析的数据行。
+     * 解析演示用设备文件，返回 9 个数值。自动跳过表头行，取首个可解析的数据行。
+     * 仅用于实训演示桩，不代表真实电子秤的解析逻辑。
      */
     private double[] parseDeviceFile(java.nio.file.Path path) throws Exception {
         List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
