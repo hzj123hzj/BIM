@@ -1,6 +1,7 @@
 package com.bmi.ui.user;
 
 import com.bmi.db.DBUtil;
+import com.bmi.util.AllergenKB;
 
 import javafx.geometry.*;
 import javafx.scene.control.*;
@@ -221,25 +222,26 @@ public class AIDietPanel extends VBox {
     private String analyzeAllergyRisk(String plan) {
         String a = DBUtil.currentAllergies == null ? "" : DBUtil.currentAllergies.trim();
         if (a.isEmpty() || plan == null || plan.isEmpty()) return "";
-        String[] allergens = a.split("[,，/、;；\\s]+");
+        // 借助过敏源知识库把类别词展开为具体食材关键词（如 海鲜→鱼/虾/蟹），再做文本扫描
+        List<String> triggers = AllergenKB.expandTriggers(a);
         LinkedHashSet<String> conflicts = new LinkedHashSet<>();
-        for (String al : allergens) {
-            if (al.isEmpty()) continue;
-            int idx = plan.indexOf(al);
+        for (String kw : triggers) {
+            if (kw.isEmpty()) continue;
+            int idx = plan.indexOf(kw);
             while (idx >= 0) {
                 String pre = idx >= 8 ? plan.substring(idx - 8, idx) : plan.substring(0, idx);
                 if (!pre.contains("避免") && !pre.contains("忌") && !pre.contains("禁")
                         && !pre.contains("不要") && !pre.contains("不宜") && !pre.contains("少吃")
                         && !pre.contains("不含") && !pre.contains("勿") && !pre.contains("远离")
                         && !pre.contains("无")) {
-                    conflicts.add(al);
+                    conflicts.add(kw);
                 }
-                idx = plan.indexOf(al, idx + al.length());
+                idx = plan.indexOf(kw, idx + kw.length());
             }
         }
         if (conflicts.isEmpty()) return "";
         StringBuilder sb = new StringBuilder();
-        sb.append("⚠ 风险提示：推荐方案中提到你的过敏源「").append(String.join("、", conflicts)).append("」，");
+        sb.append("⚠ 风险提示：推荐方案中提到你的过敏相关食材「").append(String.join("、", conflicts)).append("」，");
         sb.append("请务必人工核对，确认未含相关食材后再食用。");
         return sb.toString();
     }
