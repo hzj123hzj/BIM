@@ -114,8 +114,11 @@ public class AIDietPanel extends VBox {
                 plan = "AI 调用失败，已切换本地推荐：\n\n" + generateLocalPlan(query);
             }
         }
-        taPlan.setText(plan);
-        DBUtil.saveAIDietRecord(DBUtil.currentUsername, query, plan);
+        String full = buildHealthConstraintHeader() + "\n\n" + plan;
+        String risk = analyzeAllergyRisk(plan);
+        if (!risk.isEmpty()) full = full + "\n\n" + risk;
+        taPlan.setText(full);
+        DBUtil.saveAIDietRecord(DBUtil.currentUsername, query, full);
         refreshHistory();
     }
 
@@ -131,7 +134,14 @@ public class AIDietPanel extends VBox {
             dataSb.append(String.format("今日已摄入 %d kcal, 蛋白质 %.1fg, 碳水 %.1fg, 脂肪 %.1fg。",
                     diet[0], diet[1] / 100.0, diet[2] / 100.0, diet[3] / 100.0));
         }
-        return dataSb + "\n请为用户制定一份「" + goal + "」的一日三餐饮食方案，给出每餐热量、食材和注意事项，控制在 400 字以内。";
+        String a = DBUtil.currentAllergies == null ? "" : DBUtil.currentAllergies.trim();
+        String c = DBUtil.currentChronicDiseases == null ? "" : DBUtil.currentChronicDiseases.trim();
+        if (!a.isEmpty() || !c.isEmpty()) {
+            dataSb.append("\n用户健康约束：");
+            if (!a.isEmpty()) dataSb.append("过敏源=[").append(a).append("]，严禁推荐含这些食材的食物；");
+            if (!c.isEmpty()) dataSb.append("慢性病=[").append(c).append("]，请针对这些疾病给出饮食禁忌与宜忌提示；");
+        }
+        return dataSb + "\n请为用户制定一份「" + goal + "」的一日三餐饮食方案，给出每餐热量、食材和注意事项，并明确标注与用户过敏源/慢性病相关的禁忌，控制在 400 字以内。";
     }
 
     private String generateLocalPlan(String goal) {
@@ -179,7 +189,58 @@ public class AIDietPanel extends VBox {
         } else {
             sb.append("• 保持当前热量平衡\n• 多样化饮食，避免偏食\n• 规律三餐，少油少盐\n");
         }
+        sb.append("\n【你的健康约束】\n");
+        String la = DBUtil.currentAllergies == null ? "" : DBUtil.currentAllergies.trim();
+        String lc = DBUtil.currentChronicDiseases == null ? "" : DBUtil.currentChronicDiseases.trim();
+        if (la.isEmpty() && lc.isEmpty()) {
+            sb.append("• 你尚未填写过敏源/慢性病，建议在「数据大屏-编辑过敏源/慢性病」补充，以获得规避建议\n");
+        } else {
+            if (!la.isEmpty()) sb.append("• 过敏源：").append(la).append(" —— 本方案已尽量规避，食用前请再次确认食材不含上述成分\n");
+            if (!lc.isEmpty()) sb.append("• 慢性病：").append(lc).append(" —— 请结合疾病饮食原则（如糖尿病控糖、高血压少盐、高血脂少油）选择食材\n");
+        }
+
         sb.append("\n本方案由本地健康规则生成，仅供参考。");
+        return sb.toString();
+    }
+
+    private String buildHealthConstraintHeader() {
+        String a = DBUtil.currentAllergies == null ? "" : DBUtil.currentAllergies.trim();
+        String c = DBUtil.currentChronicDiseases == null ? "" : DBUtil.currentChronicDiseases.trim();
+        StringBuilder sb = new StringBuilder();
+        if (a.isEmpty() && c.isEmpty()) {
+            sb.append("健康档案约束：你尚未填写过敏源/慢性病（可在「数据大屏-编辑过敏源/慢性病」补充）");
+        } else {
+            sb.append("⚠ 健康档案约束");
+            if (!a.isEmpty()) sb.append("　过敏源：").append(a);
+            if (!c.isEmpty()) sb.append("　慢性病：").append(c);
+            sb.append("\n（以下方案已尽量规避你的过敏源；如有疑问请人工核对）");
+        }
+        return sb.toString();
+    }
+
+    private String analyzeAllergyRisk(String plan) {
+        String a = DBUtil.currentAllergies == null ? "" : DBUtil.currentAllergies.trim();
+        if (a.isEmpty() || plan == null || plan.isEmpty()) return "";
+        String[] allergens = a.split("[,，/、;；\\s]+");
+        LinkedHashSet<String> conflicts = new LinkedHashSet<>();
+        for (String al : allergens) {
+            if (al.isEmpty()) continue;
+            int idx = plan.indexOf(al);
+            while (idx >= 0) {
+                String pre = idx >= 8 ? plan.substring(idx - 8, idx) : plan.substring(0, idx);
+                if (!pre.contains("避免") && !pre.contains("忌") && !pre.contains("禁")
+                        && !pre.contains("不要") && !pre.contains("不宜") && !pre.contains("少吃")
+                        && !pre.contains("不含") && !pre.contains("勿") && !pre.contains("远离")
+                        && !pre.contains("无")) {
+                    conflicts.add(al);
+                }
+                idx = plan.indexOf(al, idx + al.length());
+            }
+        }
+        if (conflicts.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        sb.append("⚠ 风险提示：推荐方案中提到你的过敏源「").append(String.join("、", conflicts)).append("」，");
+        sb.append("请务必人工核对，确认未含相关食材后再食用。");
         return sb.toString();
     }
 
