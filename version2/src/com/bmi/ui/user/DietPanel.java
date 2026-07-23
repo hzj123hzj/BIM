@@ -345,7 +345,7 @@ public class DietPanel extends VBox {
         name.setPrefWidth(96);
 
         Label status = new Label(it.matched != null ? "已匹配: " + it.matched.name()
-                : (it.approved ? "已入库" : "新食物(待确认)"));
+                : "待管理员审核");
         status.getStyleClass().add((it.matched != null || it.approved) ? "sub-title" : "text-muted");
 
         TextField gramsTf = new TextField(String.valueOf(it.grams));
@@ -361,32 +361,9 @@ public class DietPanel extends VBox {
 
         row.getChildren().addAll(chk, name, status, new Label("g:"), gramsTf, cal, macro, new Label("餐次:"), meal);
 
-        if (it.matched == null && !it.approved) {
-            Button btnApprove = new Button("确认入库");
-            Button btnReject = new Button("放弃");
-            btnApprove.getStyleClass().add("button-primary");
-            btnReject.getStyleClass().add("button-ghost");
-            btnApprove.setOnAction(ev -> {
-                if (it.draftId > 0) {
-                    DBUtil.approveFood(it.draftId);
-                    it.approved = true;
-                    status.setText("已入库");
-                    btnApprove.setDisable(true);
-                    btnReject.setDisable(true);
-                }
-            });
-            btnReject.setOnAction(ev -> {
-                if (it.draftId > 0) {
-                    DBUtil.rejectFood(it.draftId);
-                    it.selected = false;
-                    chk.setSelected(false);
-                    status.setText("已放弃");
-                    btnApprove.setDisable(true);
-                    btnReject.setDisable(true);
-                }
-            });
-            row.getChildren().addAll(btnApprove, btnReject);
-        }
+        // 注：新食物不再由普通用户在本人界面"确认入库"——写全局食物库属管理动作，
+        // 统一交由管理员在「待确认食物」审核队列中审批（见 FoodManagePanel）。
+        // 用户侧仅可把识别结果加入自己的今日饮食。
         return row;
     }
 
