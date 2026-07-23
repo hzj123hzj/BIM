@@ -2744,10 +2744,10 @@ public class DBUtil {
             }
         }
 
-        /** 获取所有健康文章 */
+        /** 获取所有健康文章（不含待审核投稿；待审核仅在审核队列） */
         public static List<String[]> getHealthArticles() {
             List<String[]> list = new ArrayList<>();
-            String sql = "SELECT id, title, category, status, author, author_type, published_at FROM health_articles ORDER BY id DESC";
+            String sql = "SELECT id, title, category, status, author, author_type, published_at FROM health_articles WHERE status <> '待审核' ORDER BY id DESC";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ResultSet rs = ps.executeQuery();

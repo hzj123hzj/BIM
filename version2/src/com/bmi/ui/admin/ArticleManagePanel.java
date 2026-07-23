@@ -36,7 +36,9 @@ public class ArticleManagePanel extends VBox {
         Button btnEdit = new Button("编辑");
         btnAdd.getStyleClass().add("button-primary");
         btnEdit.getStyleClass().add("button-primary");
-        ctrl.getChildren().addAll(btnAdd, btnEdit);
+        Button btnViewMain = new Button("查看");
+        btnViewMain.getStyleClass().add("button-ghost");
+        ctrl.getChildren().addAll(btnAdd, btnEdit, btnViewMain);
         card.getChildren().add(ctrl);
 
         table.getColumns().addAll(
@@ -49,6 +51,7 @@ public class ArticleManagePanel extends VBox {
                 colA("发布时间", 6, 150)
         );
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setOnMouseClicked(e -> { if (e.getClickCount() == 2) viewManaged(); });
         card.getChildren().add(table);
         getChildren().add(card);
 
@@ -81,6 +84,7 @@ public class ArticleManagePanel extends VBox {
         getChildren().add(reviewCard);
 
         btnAdd.setOnAction(e -> editArticle(0));
+        btnViewMain.setOnAction(e -> viewManaged());
         btnApprove.setOnAction(e -> reviewSelected(true));
         btnReject.setOnAction(e -> reviewSelected(false));
         btnView.setOnAction(e -> viewPending());
@@ -140,6 +144,18 @@ public class ArticleManagePanel extends VBox {
     private void viewPending() {
         String[] sel = pendingTable.getSelectionModel().getSelectedItem();
         if (sel == null) { warn("请先在审核队列中选择一条投稿"); return; }
+        viewArticleContent(sel);
+    }
+
+    /** 主列表双击/查看：阅读已管理文章正文 */
+    private void viewManaged() {
+        String[] sel = table.getSelectionModel().getSelectedItem();
+        if (sel == null) { warn("请先选择一行"); return; }
+        viewArticleContent(sel);
+    }
+
+    /** 按选中行打开正文查看弹窗（只读） */
+    private void viewArticleContent(String[] sel) {
         int id = Integer.parseInt(sel[0]);
         Map<String, String> art = DBUtil.getHealthArticleById(id);
         if (art == null || art.isEmpty()) { alert("未找到该文章"); return; }
@@ -148,7 +164,8 @@ public class ArticleManagePanel extends VBox {
         String srcType = typeLabel(art.get("author_type"));
         String srcName = art.get("author") == null ? "" : art.get("author");
         Label lblMeta = new Label("分类：" + (art.get("category") == null ? "-" : art.get("category"))
-                + "  ｜  来源：" + srcType + (srcName.isEmpty() ? "" : "(" + srcName + ")"));
+                + "  ｜  来源：" + srcType + (srcName.isEmpty() ? "" : "(" + srcName + ")")
+                + "  ｜  状态：" + (art.get("status") == null ? "-" : art.get("status")));
         lblMeta.getStyleClass().add("hint");
         TextArea ta = new TextArea(art.get("content") == null ? "" : art.get("content"));
         ta.setWrapText(true); ta.setEditable(false);
@@ -157,7 +174,7 @@ public class ArticleManagePanel extends VBox {
         VBox content = new VBox(10, lblTitle, lblMeta, ta);
         content.setPadding(new Insets(10));
         Alert dlg = new Alert(Alert.AlertType.INFORMATION);
-        dlg.setTitle("查看投稿内容");
+        dlg.setTitle("查看文章内容");
         dlg.setHeaderText(null);
         dlg.getDialogPane().setContent(content);
         dlg.setResizable(true);
