@@ -74,6 +74,8 @@ public class FoodManagePanel extends VBox {
                 colImage()
         );
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        // 限高使表格自带滚动条（避免表格按行数撑满整块面板、鼠标滚动失效）
+        table.setPrefHeight(420);
         card.getChildren().add(table);
         getChildren().add(card);
 
