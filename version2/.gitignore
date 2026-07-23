@@ -1,0 +1,18 @@
+# 构建/编译产物
+out/
+target/
+*.class
+*.jar
+lib/
+
+# 临时 / 中间产物（编码转换、临时脚本等）
+*.utf8
+create_excel_new*.py
+
+# 系统 / IDE
+.idea/
+.vscode/
+*.iml
+
+# 日志 / 本地配置
+*.log
