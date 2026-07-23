@@ -27,6 +27,8 @@ import java.util.function.Function;
 public class FoodManagePanel extends VBox {
     private final TableView<DBUtil.FoodRow> table = new TableView<>();
     private final TableView<DBUtil.FoodRow> draftTable = new TableView<>();
+    private final TextField tfSearch = new TextField();
+    private final Button btnSearch = new Button("查询");
 
     public FoodManagePanel() {
         setSpacing(16);
@@ -52,6 +54,12 @@ public class FoodManagePanel extends VBox {
         btnBatchDel.getStyleClass().add("button-ghost");
         btnImport.getStyleClass().add("button-primary");
         ctrl.getChildren().addAll(btnAdd, btnEdit, btnDel, btnBatchDel, btnImport);
+        Region sp = new Region();
+        HBox.setHgrow(sp, Priority.ALWAYS);
+        tfSearch.setPromptText("搜索食物名称");
+        tfSearch.setPrefWidth(180);
+        btnSearch.getStyleClass().add("button-ghost");
+        ctrl.getChildren().addAll(sp, tfSearch, btnSearch);
         card.getChildren().add(ctrl);
 
         // 表格支持多选（Ctrl/Shift 多选），便于批量删除
@@ -105,6 +113,8 @@ public class FoodManagePanel extends VBox {
         btnDel.setOnAction(e -> deleteFood());
         btnBatchDel.setOnAction(e -> deleteFoods());
         btnImport.setOnAction(e -> importFromExcel());
+        tfSearch.setOnAction(e -> loadFoods());
+        btnSearch.setOnAction(e -> loadFoods());
         btnApprove.setOnAction(e -> {
             DBUtil.FoodRow sel = draftTable.getSelectionModel().getSelectedItem();
             if (sel == null) { warn("请先选择一条待确认食物"); return; }
@@ -134,7 +144,13 @@ public class FoodManagePanel extends VBox {
 
     private void loadFoods() {
         table.getItems().clear();
-        table.getItems().addAll(DBUtil.getFoodsWithImage());
+        String kw = tfSearch.getText().trim();
+        if (kw.isEmpty()) {
+            table.getItems().addAll(DBUtil.getFoodsWithImage());
+        } else {
+            // 按名称双向模糊匹配（与识图匹配的 searchFoodsFuzzy 同口径，排除待确认草稿）
+            table.getItems().addAll(DBUtil.searchFoodsFuzzy(kw));
+        }
     }
 
     private void loadDrafts() {
