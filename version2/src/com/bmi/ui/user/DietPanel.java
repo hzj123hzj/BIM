@@ -338,14 +338,19 @@ public class DietPanel extends VBox {
         CheckBox chk = new CheckBox();
         chk.setSelected(true);
         it.selected = true;
-        chk.selectedProperty().addListener((o, ov, nv) -> it.selected = nv);
+        chk.selectedProperty().addListener((o, ov, nv) -> {
+            it.selected = nv;
+            if (nv && hitsAllergen(it.name)) it.userOverridden = true;
+        });
 
         Label name = new Label(it.name);
         name.getStyleClass().add("sub-title");
         name.setPrefWidth(96);
 
-        Label status = new Label(it.matched != null ? "已匹配: " + it.matched.name()
-                : "待管理员审核");
+        boolean allergenHit = hitsAllergen(it.name);
+        Label status = new Label(
+                allergenHit ? "⚠ 过敏风险: " + it.name
+                : (it.matched != null ? "已匹配: " + it.matched.name() : "待管理员审核"));
         status.getStyleClass().add((it.matched != null || it.approved) ? "sub-title" : "text-muted");
 
         TextField gramsTf = new TextField(String.valueOf(it.grams));
@@ -360,6 +365,13 @@ public class DietPanel extends VBox {
         it.mealBox = meal;
 
         row.getChildren().addAll(chk, name, status, new Label("g:"), gramsTf, cal, macro, new Label("餐次:"), meal);
+
+        // 过敏源命中：整行标红警示，并默认取消勾选（不静默加入）
+        if (allergenHit) {
+            row.setStyle("-fx-background-color:#FDECEA; -fx-border-color:#E0A9A0; -fx-border-radius:6; -fx-padding:4;");
+            chk.setSelected(false);
+            it.selected = false;
+        }
 
         // 注：新食物不再由普通用户在本人界面"确认入库"——写全局食物库属管理动作，
         // 统一交由管理员在「待确认食物」审核队列中审批（见 FoodManagePanel）。
@@ -546,8 +558,14 @@ public class DietPanel extends VBox {
 
     private void addVisionItems() {
         int added = 0;
+        List<String> blockedAllergen = new ArrayList<>();
         for (FoodItem it : visionItems) {
             if (!it.selected) continue;
+            // 过敏源命中且用户未显式重新勾选 → 拦截，提示人工确认
+            if (hitsAllergen(it.name) && !it.userOverridden) {
+                blockedAllergen.add(it.name);
+                continue;
+            }
             int newGrams;
             try { newGrams = (int) Math.max(1, Double.parseDouble(it.gramsField.getText().trim())); }
             catch (Exception ex) { newGrams = it.grams > 0 ? it.grams : 1; }
@@ -556,6 +574,10 @@ public class DietPanel extends VBox {
             double p = it.protein * ratio, c = it.carbs * ratio, f = it.fat * ratio;
             String meal = it.mealBox != null ? it.mealBox.getValue() : "午餐";
             if (DBUtil.saveDietRecord(meal, it.name + "(" + newGrams + "g)", cal, p, c, f)) added++;
+        }
+        if (!blockedAllergen.isEmpty()) {
+            alert("⚠ 以下食物命中你的过敏源，已阻止加入今日饮食（如确认无误可由你在结果中重新勾选）：\n"
+                    + String.join("、", blockedAllergen));
         }
         if (added > 0) {
             refreshSummary();
@@ -578,6 +600,7 @@ public class DietPanel extends VBox {
         DBUtil.FoodRow matched = null;   // 命中的本地食物（含图）
         int draftId = -1;               // 草稿 id（未命中时新建）
         boolean approved = false;       // 草稿是否已被审核通过
+        boolean userOverridden = false;  // 过敏源命中后用户仍主动勾选（视为已知风险）
     }
 
     // ===================== 原有录入与汇总逻辑 =====================
@@ -694,6 +717,17 @@ public class DietPanel extends VBox {
 
     private void showReportDialog(String title, String content) {
         ReportDialog.showText(title, content);
+    }
+
+    /** 判断食物名是否命中当前用户过敏源（精确子串匹配，忽略"避免/忌/禁"等规避语境）。 */
+    private boolean hitsAllergen(String foodName) {
+        if (foodName == null || foodName.isEmpty()) return false;
+        String a = DBUtil.currentAllergies == null ? "" : DBUtil.currentAllergies.trim();
+        if (a.isEmpty()) return false;
+        for (String al : a.split("[,，/、;；\\s]+")) {
+            if (!al.isEmpty() && foodName.contains(al)) return true;
+        }
+        return false;
     }
 
     private void alert(String m) {
