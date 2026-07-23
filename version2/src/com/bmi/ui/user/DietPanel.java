@@ -527,12 +527,21 @@ public class DietPanel extends VBox {
         }).start();
     }
 
+    /**
+     * 解析视觉模型返回的文本为食物列表。
+     * 原实现要求严格 "名|重|卡|蛋|碳|脂" 且数值必须为纯数字，模型一旦带单位（如 200g/320kcal）
+     * 或加前缀（约/大概），Double.parseDouble 抛异常导致整行被丢弃，表现为"未能识别"。
+     * 现改为：容忍单位/前缀（提取首个数字）、跳过 markdown 表格分隔行（|---|---|）、
+     * 字段数 >=6 即可（多余列忽略），让解析器与具体模型的输出格式解耦。
+     */
     private List<FoodItem> parseVisionResult(String text) {
         List<FoodItem> list = new ArrayList<>();
         if (text == null) return list;
         for (String raw : text.split("\n")) {
             String line = raw.trim();
             if (line.isEmpty() || !line.contains("|")) continue;
+            // 跳过 markdown 表格分隔行 |---|---|
+            if (line.replace("|", "").replace("-", "").trim().isEmpty()) continue;
             String[] p = line.split("\\|");
             if (p.length < 6) continue;
             String name = p[0].trim();
@@ -540,15 +549,22 @@ public class DietPanel extends VBox {
             try {
                 FoodItem it = new FoodItem();
                 it.name = name;
-                it.grams = (int) Math.max(0, Double.parseDouble(p[1].trim()));
-                it.cal = (int) Math.max(0, Double.parseDouble(p[2].trim()));
-                it.protein = Math.max(0, Double.parseDouble(p[3].trim()));
-                it.carbs = Math.max(0, Double.parseDouble(p[4].trim()));
-                it.fat = Math.max(0, Double.parseDouble(p[5].trim()));
+                it.grams = (int) Math.max(0, firstNumber(p[1]));
+                it.cal = (int) Math.max(0, firstNumber(p[2]));
+                it.protein = Math.max(0, firstNumber(p[3]));
+                it.carbs = Math.max(0, firstNumber(p[4]));
+                it.fat = Math.max(0, firstNumber(p[5]));
                 list.add(it);
-            } catch (NumberFormatException ignore) {}
+            } catch (Exception ignore) {}
         }
         return list;
+    }
+
+    /** 从字段文本提取首个数字，容忍 "200g"、"约320kcal"、"15.5" 等带单位/前缀写法；无数字返回 0。 */
+    private static double firstNumber(String s) {
+        if (s == null) return 0;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[-+]?\\d+(\\.\\d+)?").matcher(s);
+        return m.find() ? Double.parseDouble(m.group()) : 0;
     }
 
     private void addVisionItems() {
