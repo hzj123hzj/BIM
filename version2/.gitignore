@@ -7,7 +7,7 @@ lib/
 
 # 临时 / 中间产物（编码转换、临时脚本等）
 *.utf8
-create_excel_new*.py
+create_excel_*.py
 
 # 系统 / IDE
 .idea/
