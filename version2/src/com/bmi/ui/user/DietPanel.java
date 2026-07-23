@@ -4,6 +4,7 @@ import com.bmi.db.DBUtil;
 import com.bmi.ui.ReportDialog;
 import com.bmi.util.ImageUtil;
 import com.bmi.util.AllergenKB;
+import com.bmi.util.FoodAliasKB;
 
 import javafx.geometry.*;
 import javafx.scene.control.*;
@@ -311,6 +312,10 @@ public class DietPanel extends VBox {
             + "严格只按如下格式每行返回一条，不要解释、不要序号、不要 markdown：\n"
             + "食物名|重量克|热量kcal|蛋白质g|碳水g|脂肪g\n"
             + "例如：宫保鸡丁|250|420|28|18|22\n"
+            + "苹果|150|78|0.4|21|0.3\n"
+            + "香蕉|120|107|1.3|27|0.4\n"
+            + "番茄|120|22|1.0|4.5|0.2\n"
+            + "米饭|200|232|4.3|51|0.5\n"
             + "若图中无食物或无法识别，返回一行：未知|0|0|0|0|0\n"
             + "品牌识别：若图片中可见品牌、包装或门店字样（如「塔斯汀」「肯德基」「麦当劳」），请务必保留品牌名，"
             + "例如「塔斯汀香辣鸡腿堡」而非泛化的「鸡肉汉堡」或「汉堡」。";
@@ -495,6 +500,9 @@ public class DietPanel extends VBox {
                 List<FoodItem> items = parseVisionResult(resp);
                 long uploadHash = ImageUtil.perceptualHash(ImageUtil.bufferedImageFromBytes(imageBytes));
                 for (FoodItem it : items) {
+                    // 同物异名归一并统一口径：如 AI 返回"西红柿/马铃薯"归一到库内"番茄/土豆"，
+                    // 提高 matchFood 命中率，避免同一食物因别名被误建草稿（整词精确匹配，绝不子串替换）
+                    it.name = FoodAliasKB.canonical(it.name);
                     DBUtil.FoodRow matched = DBUtil.matchFood(it.name, uploadHash);
                     if (matched != null) {
                         it.matched = matched;

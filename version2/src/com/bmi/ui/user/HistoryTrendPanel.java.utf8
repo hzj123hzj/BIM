@@ -1,0 +1,110 @@
+package com.bmi.ui.user;
+
+import com.bmi.db.DBUtil;
+import com.bmi.util.Theme;
+
+import javafx.geometry.*;
+import javafx.scene.*;
+import javafx.scene.control.*;
+import javafx.scene.chart.*;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.text.*;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
+import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.*;
+import java.util.Map;
+import java.util.List;
+import java.text.SimpleDateFormat;
+
+/** 鍘嗗彶瓒嬪娍闈㈡澘 鈥? 鎸囨爣閫夋嫨 + 鎶樼嚎瓒嬪娍鍥? + 鍘嗗彶璁板綍鏄庣粏琛? */
+public class HistoryTrendPanel extends VBox {
+    private final ComboBox<String> cbMetric = new ComboBox<>();
+    private final LineChart<Number, Number> chart;
+    private final TableView<Map<String, Object>> table = new TableView<>();
+    private final ObservableList<Map<String, Object>> tableData = FXCollections.observableArrayList();
+    private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+
+    public HistoryTrendPanel() {
+        setSpacing(16);
+        setPadding(new Insets(18));
+        setStyle("-fx-background-color: transparent;");
+
+        cbMetric.getItems().addAll("浣撻噸", "浣撹剛鐜?", "鑲岃倝鐜?", "BMI", "鑵板洿", "铔嬬櫧璐ㄧ巼", "楠ㄩ噺", "姘村垎鐜?", "鍐呰剰鑴傝偑");
+        cbMetric.setValue("浣撻噸");
+
+        HBox ctrl = new HBox(10);
+        ctrl.setAlignment(Pos.CENTER_LEFT);
+        Label lbl = new Label("瓒嬪娍鎸囨爣:");
+        lbl.getStyleClass().add("sub-title");
+        Button btnRefresh = new Button("鍒锋柊瓒嬪娍");
+        btnRefresh.getStyleClass().add("button-primary");
+        ctrl.getChildren().addAll(lbl, cbMetric, btnRefresh);
+
+        VBox ctrlCard = new VBox(10);
+        ctrlCard.getStyleClass().add("card");
+        Label t1 = new Label("瓒嬪娍鎸囨爣閫夋嫨");
+        t1.getStyleClass().add("card-title");
+        ctrlCard.getChildren().addAll(t1, ctrl);
+
+        NumberAxis xAxis = new NumberAxis();
+        xAxis.setLabel("璁板綍搴忓彿");
+        xAxis.setTickUnit(1);
+        xAxis.setMinorTickVisible(false);
+        NumberAxis yAxis = new NumberAxis();
+        yAxis.setLabel("鏁板€?");
+        chart = new LineChart<>(xAxis, yAxis);
+        chart.setTitle("鍘嗗彶瓒嬪娍");
+        chart.setPrefHeight(320);
+        chart.setMinHeight(220);
+        chart.setLegendVisible(false);
+        chart.setCreateSymbols(true);
+        chart.setStyle("-fx-series-color: " + Theme.hex(Theme.PRIMARY) + ";");
+
+        VBox chartCard = new VBox(10);
+        chartCard.getStyleClass().add("card");
+        Label t2 = new Label("鍘嗗彶瓒嬪娍鍥?");
+        t2.getStyleClass().add("card-title");
+        chartCard.getChildren().addAll(t2, chart);
+
+        buildTable();
+        ScrollPane sp = new ScrollPane(table);
+        sp.setFitToWidth(true);
+        sp.setPrefHeight(240);
+        Button btnExport = new Button("导出我的健康数据");
+        btnExport.getStyleClass().add("button-ghost");
+        btnExport.setOnAction(e -> exportMyData());
+        VBox tableCard = new VBox(10);
+        tableCard.getStyleClass().add("card");
+        Label t3 = new Label("鍘嗗彶璁板綍鏄庣粏");
+        t3.getStyleClass().add("card-title");
+        HBox tableHead = new HBox(10, t3, btnExport);
+        tableHead.setAlignment(Pos.CENTER_LEFT);
+        tableCard.getChildren().addAll(tableHead, sp);
+
+        getChildren().addAll(ctrlCard, chartCard, tableCard);
+
+        cbMetric.setOnAction(e -> refresh());
+        btnRefresh.setOnAction(e -> refresh());
+        refresh();
+    }
+
+    private void buildTable() {
+        addCol("鏃ユ湡", r -> fmtDate((Date) r.get("record_date")));
+        addCol("浣撻噸", r -> f1(num(r, "weight")) + "kg");
+        addCol("浣撹剛鐜?", r -> f1(num(r, "body_fat")) + "%");
+        addCol("姘村垎鐜?", r -> f1(num(r, "water_rate")) + "%");
+        addCol("鑲岃倝鐜?", r -> f1(num(r, "muscle_rate")) + "%");
+        addCol("鍐呰剰鑴傝偑", r -> r.get("visceral_fat") + "绾?");
+        addCol("BMI", r -> f1(num(r, "bmi")));
+        addCol("鑵板洿", r -> f1(num(r, "waist")) + "cm");
+        addCol("铔嬬櫧璐ㄧ巼", r -> f1(num(r, "protein_rate")) + "%");
+        addCol("楠ㄩ噺", r -> f1(num(r, "bone_mass")) + "kg");
+        addCol("韬
